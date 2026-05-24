@@ -1,0 +1,59 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Console palette — source: openipc-viewer-design-system-ru.md §3.1
+    Brand blues — approximate, from §1.1; replace with exact hex once
+    openipc-logo-*.svg lands in repo.
+  -->
+
+  <!-- Surfaces -->
+  <Color x:Key="Bg0">#0a0d11</Color>
+  <Color x:Key="Bg1">#0f1318</Color>
+  <Color x:Key="Bg2">#171c24</Color>
+  <Color x:Key="Bg3">#1f262f</Color>
+
+  <!-- Borders -->
+  <Color x:Key="BorderWeak">#222831</Color>
+  <Color x:Key="BorderMedium">#2a323d</Color>
+
+  <!-- Text -->
+  <Color x:Key="TextPrimary">#e4e7ec</Color>
+  <Color x:Key="TextSecondary">#8b95a3</Color>
+  <Color x:Key="TextTertiary">#5e6878</Color>
+
+  <!-- Brand (approximate — TODO: extract from openipc-logo-*.svg) -->
+  <Color x:Key="BrandBluePrimary">#2196F3</Color>
+  <Color x:Key="BrandBlueLight">#64B5F6</Color>
+  <Color x:Key="BrandBlueDark">#0D4373</Color>
+  <Color x:Key="BrandBlueDeep">#0F2745</Color>
+  <Color x:Key="BrandBlueContrast">#04284D</Color>
+
+  <!-- Accent & tint -->
+  <Color x:Key="Accent">#2196F3</Color>
+  <Color x:Key="AccentHover">#64B5F6</Color>
+  <Color x:Key="AccentTint">#0F2745</Color>
+
+  <!-- Semantic -->
+  <Color x:Key="Danger">#ef4444</Color>
+  <Color x:Key="Warning">#f59e0b</Color>
+  <Color x:Key="Success">#22c55e</Color>
+
+  <!-- Brushes -->
+  <SolidColorBrush x:Key="Bg0Brush" Color="{StaticResource Bg0}" />
+  <SolidColorBrush x:Key="Bg1Brush" Color="{StaticResource Bg1}" />
+  <SolidColorBrush x:Key="Bg2Brush" Color="{StaticResource Bg2}" />
+  <SolidColorBrush x:Key="Bg3Brush" Color="{StaticResource Bg3}" />
+  <SolidColorBrush x:Key="BorderWeakBrush" Color="{StaticResource BorderWeak}" />
+  <SolidColorBrush x:Key="BorderMediumBrush" Color="{StaticResource BorderMedium}" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}" />
+  <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiary}" />
+  <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource Accent}" />
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHover}" />
+  <SolidColorBrush x:Key="AccentTintBrush" Color="{StaticResource AccentTint}" />
+  <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}" />
+  <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}" />
+  <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}" />
+
+</ResourceDictionary>

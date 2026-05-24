@@ -1,0 +1,9 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Button styles — placeholder. Fleshed out in later phases as primary,
+    secondary, ghost, danger variants converge on the Console spec.
+  -->
+
+</Styles>

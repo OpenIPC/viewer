@@ -1,0 +1,38 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:pages="using:OpenIPC.Viewer.App.Views.Pages"
+             x:Class="OpenIPC.Viewer.App.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://OpenIPC.Viewer.App/Themes/Theme.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:LivePageViewModel">
+      <pages:LivePage />
+    </DataTemplate>
+    <DataTemplate DataType="vm:LibraryPageViewModel">
+      <pages:LibraryPage />
+    </DataTemplate>
+    <DataTemplate DataType="vm:RecordingsPageViewModel">
+      <pages:RecordingsPage />
+    </DataTemplate>
+    <DataTemplate DataType="vm:SettingsPageViewModel">
+      <pages:SettingsPage />
+    </DataTemplate>
+  </Application.DataTemplates>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Sidebar.axaml" />
+    <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Buttons.axaml" />
+    <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Tiles.axaml" />
+  </Application.Styles>
+
+</Application>

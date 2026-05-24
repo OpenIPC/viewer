@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.SettingsPage"
+             x:DataType="vm:SettingsPageViewModel">
+  <StackPanel Spacing="8" VerticalAlignment="Top">
+    <TextBlock Text="{Binding Title}"
+               FontSize="{StaticResource FontSizeXl}"
+               FontWeight="SemiBold"
+               Foreground="{StaticResource TextPrimaryBrush}" />
+    <TextBlock Text="{Binding Subtitle}"
+               FontSize="{StaticResource FontSizeBase}"
+               Foreground="{StaticResource TextSecondaryBrush}" />
+  </StackPanel>
+</UserControl>

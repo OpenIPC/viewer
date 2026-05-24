@@ -1,0 +1,41 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+*.swp
+
+## Build output
+[Bb]uild/
+[Pp]ublish/
+*.binlog
+
+## Test results
+TestResults/
+*.trx
+coverage*.xml
+coverage*.json
+*.coverage
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Local config
+appsettings.Local.json
+appsettings.Development.json
+
+## OpenIPC.Viewer specific
+# native runtime libs not checked in (per Phase 2 plan)
+runtimes/win-x64/native/
+runtimes/linux-x64/native/
+runtimes/osx-x64/native/
+runtimes/osx-arm64/native/

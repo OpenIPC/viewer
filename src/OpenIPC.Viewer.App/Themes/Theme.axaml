@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceInclude Source="avares://OpenIPC.Viewer.App/Themes/Colors.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <!--
+    Spacing & radius — Console variant (design-system §3.2)
+    base grid: 8px (4 / 8 / 12 / 16 / 24 / 32)
+  -->
+  <x:Double x:Key="SpaceXs">4</x:Double>
+  <x:Double x:Key="SpaceSm">8</x:Double>
+  <x:Double x:Key="SpaceMd">12</x:Double>
+  <x:Double x:Key="SpaceLg">16</x:Double>
+  <x:Double x:Key="SpaceXl">24</x:Double>
+  <x:Double x:Key="SpaceXxl">32</x:Double>
+
+  <CornerRadius x:Key="RadiusSm">6</CornerRadius>
+  <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+  <CornerRadius x:Key="RadiusLg">14</CornerRadius>
+
+  <!--
+    Typography (design-system §3.3)
+    base font: 14px, line-height 1.5; mono used point-wise.
+  -->
+  <FontFamily x:Key="FontSans">resm:OpenIPC.Viewer.App.Assets.Fonts.Inter#Inter, Segoe UI, SF Pro Text, Roboto, sans-serif</FontFamily>
+  <FontFamily x:Key="FontMono">Cascadia Code, Consolas, Menlo, monospace</FontFamily>
+
+  <x:Double x:Key="FontSizeSm">12</x:Double>
+  <x:Double x:Key="FontSizeBase">14</x:Double>
+  <x:Double x:Key="FontSizeMd">16</x:Double>
+  <x:Double x:Key="FontSizeLg">18</x:Double>
+  <x:Double x:Key="FontSizeXl">20</x:Double>
+
+</ResourceDictionary>

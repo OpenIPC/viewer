@@ -1,0 +1,9 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Tile styles — placeholder. Camera tiles, status tiles, etc. land here
+    starting Phase 1 (CameraCardView) and Phase 3 (grid tiles).
+  -->
+
+</Styles>
