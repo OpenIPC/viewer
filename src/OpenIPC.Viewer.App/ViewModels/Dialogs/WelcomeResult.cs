@@ -4,5 +4,6 @@ public enum WelcomeResult
 {
     Skip = 0,
     Discover,
+    ScanQr,
     AddManually,
 }

@@ -9,6 +9,7 @@ public sealed partial class WelcomeDialog : Window
     {
         InitializeComponent();
         this.FindControl<Button>("DiscoverButton")!.Click += (_, _) => Close(WelcomeResult.Discover);
+        this.FindControl<Button>("ScanQrButton")!.Click += (_, _) => Close(WelcomeResult.ScanQr);
         this.FindControl<Button>("AddManuallyButton")!.Click += (_, _) => Close(WelcomeResult.AddManually);
         this.FindControl<Button>("SkipButton")!.Click += (_, _) => Close(WelcomeResult.Skip);
     }

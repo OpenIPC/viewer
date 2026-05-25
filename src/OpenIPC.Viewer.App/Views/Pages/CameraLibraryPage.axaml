@@ -49,6 +49,14 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Content="{Binding [Library.ScanQr], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding ScanQrCommand}"
+                Padding="14,8"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Foreground="{StaticResource TextPrimaryBrush}" />
         <Button Content="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding AddCameraCommand}"
                 Padding="14,8"

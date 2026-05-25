@@ -70,6 +70,26 @@ public sealed class DialogService : IDialogService
         return first?.TryGetLocalPath();
     }
 
+    public async Task<string?> PickImageFileAsync(string title)
+    {
+        var owner = ResolveOwner();
+        if (owner is null) return null;
+
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("Image files")
+                {
+                    Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.webp" },
+                },
+            },
+        });
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
     public async Task<string?> PickSaveFileAsync(string suggestedName, string title, string extension)
     {
         var owner = ResolveOwner();

@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj" />
+    <Project Path="src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj">
+      <Deploy Solution="Debug|*" />
+    </Project>
     <Project Path="src/OpenIPC.Viewer.App/OpenIPC.Viewer.App.csproj" />
     <Project Path="src/OpenIPC.Viewer.Composition/OpenIPC.Viewer.Composition.csproj" />
     <Project Path="src/OpenIPC.Viewer.Core/OpenIPC.Viewer.Core.csproj" />

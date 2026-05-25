@@ -144,6 +144,9 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
             case WelcomeResult.Discover:
                 await DiscoverCameraAsync().ConfigureAwait(true);
                 break;
+            case WelcomeResult.ScanQr:
+                await ScanQrAsync().ConfigureAwait(true);
+                break;
             case WelcomeResult.AddManually:
                 await AddCameraAsync().ConfigureAwait(true);
                 break;
@@ -256,6 +259,77 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add discovered camera {Host}", req.Host);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ScanQrAsync()
+    {
+        // Desktop-only flow: pick a saved QR image, decode it via ZXing, parse
+        // one of the three supported payload shapes, pre-fill CameraEditor so
+        // the user reviews + confirms before save. Mobile in-camera scan is a
+        // follow-up (phase-11.2 spec).
+        var path = await _dialogs.PickImageFileAsync(Localizer.Instance["Library.ScanQr.PickerTitle"]).ConfigureAwait(true);
+        if (string.IsNullOrEmpty(path)) return;
+
+        string? text;
+        try
+        {
+            text = await QrImageDecoder.DecodeAsync(path, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "QR decode failed");
+            await _dialogs.ConfirmAsync(
+                title: Localizer.Instance["Library.ScanQr.DecodeFailedTitle"],
+                message: string.Format(Localizer.Instance["Library.ScanQr.DecodeFailedFormat"], ex.Message),
+                confirmLabel: Localizer.Instance["Common.Cancel"],
+                cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(text))
+        {
+            await _dialogs.ConfirmAsync(
+                title: Localizer.Instance["Library.ScanQr.NoQrTitle"],
+                message: Localizer.Instance["Library.ScanQr.NoQrMessage"],
+                confirmLabel: Localizer.Instance["Common.Cancel"],
+                cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            return;
+        }
+
+        var payload = QrPayloadParser.TryParse(text);
+        if (payload is null)
+        {
+            await _dialogs.ConfirmAsync(
+                title: Localizer.Instance["Library.ScanQr.UnsupportedTitle"],
+                message: Localizer.Instance["Library.ScanQr.UnsupportedMessage"],
+                confirmLabel: Localizer.Instance["Common.Cancel"],
+                cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            return;
+        }
+
+        var editor = _editorFactory.CreateForNew();
+        if (!string.IsNullOrEmpty(payload.Name)) editor.Name = payload.Name!;
+        else if (!string.IsNullOrEmpty(payload.Host)) editor.Name = payload.Host!;
+        if (!string.IsNullOrEmpty(payload.Host)) editor.Host = payload.Host!;
+        if (!string.IsNullOrEmpty(payload.RtspMain)) editor.RtspMainText = payload.RtspMain!;
+        if (payload.OnvifPort is { } op) editor.OnvifPortText = op.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (payload.HttpPort is { } hp) editor.HttpPort = hp;
+        if (!string.IsNullOrEmpty(payload.Username)) editor.Username = payload.Username!;
+        if (!string.IsNullOrEmpty(payload.Password)) editor.Password = payload.Password!;
+
+        var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
+        if (result?.NewRequest is not { } req) return;
+
+        try
+        {
+            await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add QR-scanned camera {Host}", req.Host);
         }
     }
 

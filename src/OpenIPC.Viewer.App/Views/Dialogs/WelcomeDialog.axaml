@@ -3,7 +3,7 @@
         xmlns:svc="using:OpenIPC.Viewer.App.Services"
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.WelcomeDialog"
         Title="{Binding [Welcome.WindowTitle], Source={x:Static svc:Localizer.Instance}}"
-        Width="480" Height="360"
+        Width="480" Height="420"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
         Background="{StaticResource Bg1Brush}"
@@ -36,6 +36,16 @@
             Padding="14,12"
             Background="{StaticResource AccentBrush}"
             Foreground="White"
+            CornerRadius="8" />
+
+    <Button Name="ScanQrButton"
+            Content="{Binding [Welcome.ScanQr], Source={x:Static svc:Localizer.Instance}}"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Left"
+            Padding="14,12"
+            Background="Transparent"
+            BorderBrush="{StaticResource BorderMediumBrush}"
+            BorderThickness="1"
             CornerRadius="8" />
 
     <Button Name="AddManuallyButton"

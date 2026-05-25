@@ -17,6 +17,8 @@ public interface IDialogService
 
     Task<string?> PickSaveFileAsync(string suggestedName, string title, string extension);
 
+    Task<string?> PickImageFileAsync(string title);
+
     Task CopyFileToClipboardAsync(string path);
 
     Task ShowManageGroupsAsync(ManageGroupsViewModel viewModel);
