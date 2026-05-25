@@ -78,6 +78,11 @@ public static class SharedComposition
         services.AddSingleton<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>(
             sp => sp.GetRequiredService<UserSettingsService>());
 
+        // Cross-cuts: subscribes UserSettings → LiveStreamCoordinator. Platform
+        // hosts must eagerly resolve it once so its ctor runs and the event
+        // subscription is wired up (singletons are lazy by default).
+        services.AddSingleton<LiveStreamSettingsBridge>();
+
         // ViewModels — singletons so navigation preserves state across
         // sidebar/tab switches and messenger registrations stay alive.
         services.AddSingleton<MainWindowViewModel>();

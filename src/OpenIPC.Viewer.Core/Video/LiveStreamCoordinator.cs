@@ -17,6 +17,12 @@ public sealed class LiveStreamCoordinator : IAsyncDisposable
 
     public int MaxConcurrentSessions { get; set; } = 16;
 
+    // Fires after InvalidateAllAsync clears the cache. Consumers (tiles, the
+    // single-camera page) hold their own IVideoSession references; when this
+    // fires their refs are pointing at disposed objects, so they must drop +
+    // re-Acquire to pick up the new config (e.g. RtspTransport switch).
+    public event EventHandler? Invalidated;
+
     public LiveStreamCoordinator(IVideoEngine engine)
     {
         _engine = engine;
@@ -80,6 +86,16 @@ public sealed class LiveStreamCoordinator : IAsyncDisposable
             try { await s.DisposeAsync().ConfigureAwait(false); }
             catch { /* swallow during teardown */ }
         }
+    }
+
+    // Same teardown as ReleaseAllAsync but raises Invalidated after. Use this
+    // when a global setting changes (e.g. RtspTransport) and existing sessions
+    // need to be replaced under the consumers' feet — the event tells them
+    // their cached IVideoSession is now disposed.
+    public async Task InvalidateAllAsync()
+    {
+        await ReleaseAllAsync().ConfigureAwait(false);
+        Invalidated?.Invoke(this, EventArgs.Empty);
     }
 
     public ValueTask DisposeAsync() => new(ReleaseAllAsync());

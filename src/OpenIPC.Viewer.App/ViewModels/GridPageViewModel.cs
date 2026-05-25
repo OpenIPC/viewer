@@ -112,7 +112,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         {
             if (Tiles.Any(t => t.Camera.Id == camera.Id))
                 continue;
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate tile for {Camera}", camera.Name); }

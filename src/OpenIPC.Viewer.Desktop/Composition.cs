@@ -51,6 +51,9 @@ internal static class Composition
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         HookUserSettingsToLogLevel(provider, levelSwitch);
+        // Eager resolve: the bridge subscribes in its ctor, so without this it
+        // would never wire up (singletons are lazy).
+        _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
         return provider;
     }
 

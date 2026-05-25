@@ -134,6 +134,20 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         // Telemetry overlay visibility is a user pref — re-raise PropertyChanged
         // when the Settings page toggles it so the badges hide/show live.
         _userSettings.Changed += OnUserSettingsChanged;
+
+        // RtspTransport switch from Settings drops every cached session via
+        // LiveStreamSettingsBridge; we re-pull our own stream so the camera
+        // page keeps showing video after the swap.
+        _coordinator.Invalidated += OnCoordinatorInvalidated;
+    }
+
+    private void OnCoordinatorInvalidated(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(async () =>
+        {
+            try { await ReloadStreamAsync().ConfigureAwait(true); }
+            catch (Exception ex) { _logger.LogWarning(ex, "SingleCamera reload after invalidation failed"); }
+        });
     }
 
     // Combined visibility — both the user setting is on AND the session has
@@ -634,6 +648,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
         _recordings.StateChanged -= OnRecordingsStateChanged;
+        _userSettings.Changed -= OnUserSettingsChanged;
+        _coordinator.Invalidated -= OnCoordinatorInvalidated;
         StopRecTimer();
         if (Ptz is not null)
         {
