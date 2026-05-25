@@ -244,14 +244,51 @@
     </Border>
 
     <!-- Bottom bar -->
-    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
-      <TextBlock Grid.Column="0"
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,0">
+
+      <!-- REC indicator (visible while recording) -->
+      <Border Grid.Column="0"
+              IsVisible="{Binding IsRecording}"
+              Background="{StaticResource DangerBrush}"
+              CornerRadius="4"
+              Padding="8,4"
+              Margin="0,0,12,0"
+              VerticalAlignment="Center">
+        <TextBlock Text="{Binding RecordingElapsed}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="11"
+                   Foreground="White" />
+      </Border>
+
+      <TextBlock Grid.Column="1"
                  Text="{Binding SnapshotPath, StringFormat='Snapshot saved to {0}'}"
                  IsVisible="{Binding SnapshotPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="{StaticResource TextSecondaryBrush}"
                  FontSize="{StaticResource FontSizeSm}"
                  VerticalAlignment="Center" />
-      <Button Grid.Column="1"
+
+      <Button Grid.Column="2"
+              Command="{Binding ToggleRecordingCommand}"
+              IsVisible="{Binding !IsRecording}"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              Padding="14,8"
+              CornerRadius="6"
+              Foreground="{StaticResource DangerBrush}"
+              Content="● REC"
+              Margin="0,0,8,0" />
+      <Button Grid.Column="2"
+              Command="{Binding ToggleRecordingCommand}"
+              IsVisible="{Binding IsRecording}"
+              Background="{StaticResource DangerBrush}"
+              Foreground="White"
+              Padding="14,8"
+              CornerRadius="6"
+              Content="■ Stop"
+              Margin="0,0,8,0" />
+
+      <Button Grid.Column="3"
               Content="Snapshot"
               Command="{Binding SnapshotCommand}"
               Background="{StaticResource AccentBrush}"

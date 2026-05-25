@@ -12,8 +12,10 @@ using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
+using Avalonia.Threading;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
@@ -23,9 +25,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly RecordingService _recordings;
     private readonly IFileSystem _fs;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
+    private DispatcherTimer? _recTimer;
 
     private readonly StreamQuality _quality = StreamQuality.Main;
     private IDisposable? _stateSub;
@@ -60,6 +64,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private string? _applyStatus;
     [ObservableProperty] private bool _showRawJson;
 
+    [ObservableProperty] private bool _isRecording;
+    [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
+
     // Hardcoded option lists. Phase-05 risk §"Кривой conf": free-input on res/codec
     // can brick the camera, so dropdowns only.
     public System.Collections.Generic.IReadOnlyList<string> CodecOptions { get; } = new[] { "h264", "h265" };
@@ -81,6 +88,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        RecordingService recordings,
         IFileSystem fs,
         ILogger<SingleCameraPageViewModel> logger)
     {
@@ -89,8 +97,59 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _recordings = recordings;
         _fs = fs;
         _logger = logger;
+
+        IsRecording = _recordings.IsRecording(_camera.Id);
+        _recordings.StateChanged += OnRecordingsStateChanged;
+        if (IsRecording) StartRecTimer();
+    }
+
+    private void OnRecordingsStateChanged(object? sender, CameraId cam)
+    {
+        if (cam != _camera.Id) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            IsRecording = _recordings.IsRecording(_camera.Id);
+            if (IsRecording) StartRecTimer();
+            else StopRecTimer();
+        });
+    }
+
+    private void StartRecTimer()
+    {
+        _recTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateRecElapsed());
+        UpdateRecElapsed();
+        _recTimer.Start();
+    }
+
+    private void StopRecTimer()
+    {
+        _recTimer?.Stop();
+        RecordingElapsed = "REC 00:00:00";
+    }
+
+    private void UpdateRecElapsed()
+    {
+        var start = _recordings.StartedAt(_camera.Id);
+        if (start is null) return;
+        var elapsed = DateTime.UtcNow - start.Value;
+        RecordingElapsed = $"REC {(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+    }
+
+    [RelayCommand]
+    private async Task ToggleRecordingAsync()
+    {
+        try
+        {
+            await _recordings.ToggleAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Toggle recording failed for {CameraId}", _camera.Id);
+            ErrorMessage = $"Recording failed: {ex.Message}";
+        }
     }
 
     public async Task ActivateAsync(CancellationToken ct)
@@ -389,6 +448,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _recordings.StateChanged -= OnRecordingsStateChanged;
+        StopRecTimer();
         if (Ptz is not null)
         {
             await Ptz.DisposeAsync().ConfigureAwait(false);
@@ -399,6 +460,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             Session = null;
             await _coordinator.ReleaseAsync(_camera.Id, _quality).ConfigureAwait(false);
         }
+        // NOTE: we deliberately do NOT stop the recording on page close —
+        // the camera keeps recording in the background until the user
+        // explicitly stops it (or app exits, see RecordingService.DisposeAsync).
     }
 
     private static string SafeFileName(string name)

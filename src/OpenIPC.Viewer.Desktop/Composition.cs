@@ -11,11 +11,13 @@ using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
 using OpenIPC.Viewer.Devices.Onvif.Discovery;
+using OpenIPC.Viewer.Video.Recording;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 using OpenIPC.Viewer.Infrastructure.Secrets;
 using OpenIPC.Viewer.Video;
@@ -59,6 +61,7 @@ internal static class Composition
         services.AddSingleton<IMigrationRunner, MigrationRunner>();
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
+        services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
 
         // Domain services
         services.AddSingleton<CameraDirectoryService>();
@@ -77,6 +80,15 @@ internal static class Composition
         // Majestic HTTP API (Phase 5). Single shared HttpClient inside —
         // safe because creds are attached per-request.
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+
+        // Recording (Phase 6). ffmpeg subprocess; one IRecordingSession per camera.
+        // Path resolves bundled → "ffmpeg" on PATH; user can pin via appsettings.
+        services.AddSingleton<IRecorder>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            return new FfmpegSubprocessRecorder(sp.GetRequiredService<ILoggerFactory>(), cfg["Recording:FfmpegPath"]);
+        });
+        services.AddSingleton<RecordingService>();
 
         // UI services
         services.AddSingleton<IDialogService, DialogService>();

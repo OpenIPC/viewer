@@ -4,6 +4,7 @@ using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
 
@@ -15,6 +16,7 @@ public sealed class SingleCameraPageFactory
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly RecordingService _recordings;
     private readonly IFileSystem _fs;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -23,6 +25,7 @@ public sealed class SingleCameraPageFactory
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        RecordingService recordings,
         IFileSystem fs,
         ILoggerFactory loggerFactory)
     {
@@ -30,10 +33,11 @@ public sealed class SingleCameraPageFactory
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _recordings = recordings;
         _fs = fs;
         _loggerFactory = loggerFactory;
     }
 
     public SingleCameraPageViewModel Create(Camera camera) =>
-        new(camera, _coordinator, _directory, _onvif, _majestic, _fs, _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
+        new(camera, _coordinator, _directory, _onvif, _majestic, _recordings, _fs, _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
 }

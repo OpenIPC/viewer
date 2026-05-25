@@ -3,13 +3,95 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingsPage"
              x:DataType="vm:RecordingsPageViewModel">
-  <StackPanel Spacing="8" VerticalAlignment="Top">
-    <TextBlock Text="{Binding Title}"
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Header -->
+    <TextBlock Grid.Row="0"
+               Text="{Binding Title}"
                FontSize="{StaticResource FontSizeXl}"
                FontWeight="SemiBold"
-               Foreground="{StaticResource TextPrimaryBrush}" />
-    <TextBlock Text="{Binding Subtitle}"
-               FontSize="{StaticResource FontSizeBase}"
-               Foreground="{StaticResource TextSecondaryBrush}" />
-  </StackPanel>
+               Foreground="{StaticResource TextPrimaryBrush}"
+               Margin="0,0,0,24" />
+
+    <!-- Empty state -->
+    <TextBlock Grid.Row="1"
+               IsVisible="{Binding IsEmpty}"
+               Text="No recordings yet. Hit ● REC on a camera page to start."
+               Foreground="{StaticResource TextSecondaryBrush}"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+
+    <!-- List -->
+    <ScrollViewer Grid.Row="1"
+                  IsVisible="{Binding !IsEmpty}">
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:RecordingRowViewModel">
+            <Border Background="{StaticResource Bg2Brush}"
+                    BorderBrush="{StaticResource BorderWeakBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,10">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                <StackPanel Grid.Column="0" Spacing="2">
+                  <TextBlock Text="{Binding FileName}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="{StaticResource FontSizeBase}"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                  <TextBlock Text="{Binding CameraName}"
+                             FontSize="{StaticResource FontSizeSm}"
+                             Foreground="{StaticResource TextSecondaryBrush}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding StartedAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="16,0,16,0" />
+
+                <TextBlock Grid.Column="2"
+                           Text="{Binding Duration}"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0" />
+
+                <TextBlock Grid.Column="3"
+                           Text="{Binding SizeLabel}"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"
+                           MinWidth="70" />
+
+                <Button Grid.Column="4"
+                        Content="Delete"
+                        Padding="10,4"
+                        FontSize="11"
+                        Background="Transparent"
+                        BorderBrush="{StaticResource BorderMediumBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Foreground="{StaticResource DangerBrush}"
+                        Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).DeleteCommand}"
+                        CommandParameter="{Binding}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+  </Grid>
+
 </UserControl>
