@@ -14,6 +14,11 @@ public interface IMajesticClient
     Task<MajesticConfig> GetConfigAsync(MajesticEndpoint endpoint, CancellationToken ct);
     Task<MajesticInfo> GetInfoAsync(MajesticEndpoint endpoint, CancellationToken ct);
 
+    // Read-modify-write: client fetches current config, merges non-null patch
+    // fields, POSTs full JSON. Camera typically restarts streaming for video
+    // changes — UI should be prepared to reconnect (LiveStreamCoordinator).
+    Task UpdateConfigAsync(MajesticEndpoint endpoint, MajesticConfigPatch patch, CancellationToken ct);
+
     Task SetNightModeAsync(MajesticEndpoint endpoint, NightMode mode, CancellationToken ct);
 
     // Returns the JPEG bytes from /image.jpg — caller decides where to write.

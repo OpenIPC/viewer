@@ -49,6 +49,25 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private NightMode _currentNightMode = NightMode.Unknown;
     [ObservableProperty] private string? _majesticError;
 
+    // Editable drafts for Apply (Phase 5c). Hydrated from MajesticConfig on load
+    // and after each successful Apply.
+    [ObservableProperty] private string? _draftCodec;
+    [ObservableProperty] private string? _draftResolution;
+    [ObservableProperty] private int? _draftFps;
+    [ObservableProperty] private int? _draftBitrate;
+    [ObservableProperty] private string? _draftProfile;
+    [ObservableProperty] private bool _applyInProgress;
+    [ObservableProperty] private string? _applyStatus;
+    [ObservableProperty] private bool _showRawJson;
+
+    // Hardcoded option lists. Phase-05 risk §"Кривой conf": free-input on res/codec
+    // can brick the camera, so dropdowns only.
+    public System.Collections.Generic.IReadOnlyList<string> CodecOptions { get; } = new[] { "h264", "h265" };
+    public System.Collections.Generic.IReadOnlyList<string> ResolutionOptions { get; } =
+        new[] { "640x480", "1280x720", "1920x1080", "2560x1440", "3840x2160" };
+    public System.Collections.Generic.IReadOnlyList<int> FpsOptions { get; } = new[] { 10, 15, 20, 25, 30 };
+    public System.Collections.Generic.IReadOnlyList<string> ProfileOptions { get; } = new[] { "baseline", "main", "high" };
+
     public bool HasPtz => _camera.HasPtz && !string.IsNullOrEmpty(_camera.OnvifProfileToken);
     public bool IsMajestic => MajesticReady;
     public ObservableCollection<PtzPreset> Presets { get; } = new();
@@ -143,6 +162,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             MajesticConfig = cfg;
             MajesticInfo = info;
             CurrentNightMode = cfg.NightMode;
+            HydrateDrafts();
         }
         catch (Exception ex)
         {
@@ -150,6 +170,75 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             MajesticError = ex.Message;
         }
     }
+
+    private void HydrateDrafts()
+    {
+        if (MajesticConfig is null) return;
+        DraftCodec = MajesticConfig.Codec;
+        DraftResolution = MajesticConfig.Resolution;
+        DraftFps = MajesticConfig.Fps;
+        DraftBitrate = MajesticConfig.Bitrate;
+        DraftProfile = MajesticConfig.Profile;
+    }
+
+    [RelayCommand]
+    private async Task ApplyConfigAsync()
+    {
+        if (!IsMajestic || MajesticConfig is null) return;
+        ApplyInProgress = true;
+        ApplyStatus = "Applying…";
+
+        try
+        {
+            var patch = new MajesticConfigPatch(
+                Codec: DraftCodec != MajesticConfig.Codec ? DraftCodec : null,
+                Fps: DraftFps != MajesticConfig.Fps ? DraftFps : null,
+                Resolution: DraftResolution != MajesticConfig.Resolution ? DraftResolution : null,
+                Bitrate: DraftBitrate != MajesticConfig.Bitrate ? DraftBitrate : null,
+                Profile: DraftProfile != MajesticConfig.Profile ? DraftProfile : null);
+
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            await _majestic.UpdateConfigAsync(endpoint, patch, cts.Token).ConfigureAwait(true);
+
+            ApplyStatus = "Applied. Restarting stream…";
+            // ReloadStreamAsync -> ActivateAsync -> InitMajesticAsync refreshes
+            // config + drafts in one pass, so no extra fetch needed here.
+            await ReloadStreamAsync().ConfigureAwait(true);
+            ApplyStatus = "Done.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Apply Majestic config failed");
+            ApplyStatus = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            ApplyInProgress = false;
+        }
+    }
+
+    // After Apply the camera restarts its streamer; our existing session sees a
+    // disconnect anyway, so we release proactively and re-acquire to skip the
+    // reconnect-backoff wait inside AutoReconnectingVideoSession.
+    private async Task ReloadStreamAsync()
+    {
+        _stateSub?.Dispose();
+        _telemetrySub?.Dispose();
+        if (Session is not null)
+        {
+            Session = null;
+            await _coordinator.ReleaseAsync(_camera.Id, _quality).ConfigureAwait(true);
+        }
+        // Empirically camera takes 2–5s to come back; phase-05 risks §"Apply ломает поток".
+        try { await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(true); }
+        catch (OperationCanceledException) { return; }
+        await ActivateAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private void ToggleRawJson() => ShowRawJson = !ShowRawJson;
 
     private async Task<(MajesticConfig config, MajesticInfo info)> GetMajesticStateAsync(MajesticEndpoint ep, CancellationToken ct)
     {

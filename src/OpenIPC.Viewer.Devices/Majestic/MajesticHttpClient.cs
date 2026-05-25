@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -73,6 +74,35 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
             Uptime: TryGetString(root, "uptime"));
     }
 
+    public async Task UpdateConfigAsync(MajesticEndpoint endpoint, MajesticConfigPatch patch, CancellationToken ct)
+    {
+        // Read current config so we POST a full payload (read-modify-write).
+        // Partial POSTs work on some Majestic builds and break others; safer
+        // to send the merged whole.
+        using var getResp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/config.json", ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(getResp, ct).ConfigureAwait(false);
+        var rawJson = await getResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+        var root = JsonNode.Parse(rawJson) as JsonObject
+            ?? throw new InvalidOperationException("Majestic config root is not a JSON object");
+
+        var video = (root["video0"] ?? root["video"]) as JsonObject;
+        if (video is not null)
+        {
+            if (patch.Codec is { } codec) video["codec"] = codec;
+            if (patch.Fps is { } fps) video["fps"] = fps;
+            if (patch.Resolution is { } size) video["size"] = size;
+            if (patch.Bitrate is { } br) video["bitrate"] = br;
+            if (patch.Profile is { } prof) video["profile"] = prof;
+        }
+
+        var body = root.ToJsonString();
+        using var postReq = BuildRequest(endpoint, HttpMethod.Post, "api/v1/config.json");
+        postReq.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        using var postResp = await _http.SendAsync(postReq, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(postResp, ct).ConfigureAwait(false);
+    }
+
     public async Task SetNightModeAsync(MajesticEndpoint endpoint, NightMode mode, CancellationToken ct)
     {
         var path = mode switch
@@ -99,7 +129,7 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
         return await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task<HttpResponseMessage> SendAsync(MajesticEndpoint ep, HttpMethod method, string relativePath, CancellationToken ct)
+    private HttpRequestMessage BuildRequest(MajesticEndpoint ep, HttpMethod method, string relativePath)
     {
         var uri = new Uri(ep.BaseUri, relativePath);
         var req = new HttpRequestMessage(method, uri);
@@ -108,6 +138,12 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
             var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{c.Username}:{c.Password}"));
             req.Headers.Authorization = new AuthenticationHeaderValue("Basic", token);
         }
+        return req;
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(MajesticEndpoint ep, HttpMethod method, string relativePath, CancellationToken ct)
+    {
+        using var req = BuildRequest(ep, method, relativePath);
         return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
     }
 
