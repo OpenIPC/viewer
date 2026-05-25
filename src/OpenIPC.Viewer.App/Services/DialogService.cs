@@ -14,14 +14,18 @@ namespace OpenIPC.Viewer.App.Services;
 
 public sealed class DialogService : IDialogService
 {
-    public async Task<CameraEditorResult?> ShowCameraEditorAsync(CameraEditorViewModel viewModel)
+    public Task<CameraEditorResult?> ShowCameraEditorAsync(CameraEditorViewModel viewModel)
     {
-        var owner = ResolveOwner();
-        if (owner is null)
-            return null;
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new CameraEditorContent { DataContext = viewModel };
+            return OverlayDialogPresenter.ShowAsync(content, content.Completion);
+        }
 
+        var owner = ResolveOwner();
+        if (owner is null) return Task.FromResult<CameraEditorResult?>(null);
         var dlg = new CameraEditorWindow { DataContext = viewModel };
-        return await dlg.ShowDialog<CameraEditorResult?>(owner);
+        return dlg.ShowDialog<CameraEditorResult?>(owner);
     }
 
     public async Task<DiscoveryDialogResult?> ShowDiscoveryDialogAsync(DiscoveryDialogViewModel viewModel)
@@ -36,6 +40,13 @@ public sealed class DialogService : IDialogService
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirmLabel = "Delete", string cancelLabel = "Cancel")
     {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new ConfirmDialogContent();
+            content.Configure(title, message, confirmLabel, cancelLabel);
+            return await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+        }
+
         var owner = ResolveOwner();
         if (owner is null)
             return false;

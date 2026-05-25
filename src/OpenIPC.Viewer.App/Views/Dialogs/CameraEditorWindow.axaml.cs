@@ -1,6 +1,5 @@
-using System.Threading;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
+using Avalonia.Threading;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
@@ -11,23 +10,13 @@ public sealed partial class CameraEditorWindow : Window
     {
         InitializeComponent();
 
-        this.FindControl<Button>("CancelButton")!.Click += (_, _) => Close(null);
-        this.FindControl<Button>("SaveButton")!.Click += OnSave;
-        Opened += async (_, _) =>
-        {
-            if (DataContext is CameraEditorViewModel vm)
-                await vm.LoadGroupsAsync(CancellationToken.None);
-        };
-    }
-
-    private void OnSave(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is not CameraEditorViewModel vm)
-            return;
-
-        if (!vm.TryBuildRequest(out var newRequest, out var updateRequest))
-            return;
-
-        Close(new CameraEditorResult(newRequest, updateRequest));
+        // Bridge the embedded content's TCS to Window.Close so desktop's
+        // ShowDialog<TResult> still returns when the user picks Save/Cancel.
+        // Inner DataContext inherits from this Window's DataContext implicitly,
+        // so callers only set DataContext on the window.
+        var content = this.FindControl<CameraEditorContent>("InnerContent")!;
+        _ = content.Completion.ContinueWith(t =>
+            Dispatcher.UIThread.Post(() => Close(t.Result)),
+            System.Threading.Tasks.TaskScheduler.Default);
     }
 }

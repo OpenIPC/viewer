@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.CameraEditorContent"
+             x:DataType="vm:CameraEditorViewModel"
+             Width="520" MaxHeight="700"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+    <TextBlock Grid.Row="0"
+               Text="{Binding Title}"
+               FontSize="{StaticResource FontSizeLg}"
+               FontWeight="SemiBold"
+               Margin="0,0,0,20" />
+
+    <ScrollViewer Grid.Row="1">
+      <StackPanel Spacing="14">
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.Name], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <TextBox Text="{Binding Name, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Name], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,12,140">
+          <StackPanel Grid.Column="0" Spacing="6">
+            <TextBlock Text="{Binding [CameraEditor.Label.Host], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <TextBox Text="{Binding Host, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Host], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="6">
+            <TextBlock Text="{Binding [CameraEditor.Label.HttpPort], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <NumericUpDown Value="{Binding HttpPort, Mode=TwoWay}" Minimum="1" Maximum="65535" Increment="1" FormatString="0" />
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.OnvifPort], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <TextBox Text="{Binding OnvifPortText, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.OnvifPort], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="{Binding [CameraEditor.Label.RtspMain], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <Button Grid.Column="1"
+                    Content="{Binding [CameraEditor.Button.AutoDeriveRtsp], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding AutoDeriveRtspCommand}"
+                    Background="Transparent"
+                    Foreground="{StaticResource AccentBrush}"
+                    Padding="0"
+                    FontSize="{StaticResource FontSizeSm}" />
+          </Grid>
+          <TextBox Text="{Binding RtspMainText, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.RtspMain], Source={x:Static svc:Localizer.Instance}}" FontFamily="{StaticResource FontMono}" />
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.RtspSub], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <TextBox Text="{Binding RtspSubText, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.RtspSub], Source={x:Static svc:Localizer.Instance}}" FontFamily="{StaticResource FontMono}" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,12,*">
+          <StackPanel Grid.Column="0" Spacing="6">
+            <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="6">
+            <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.Group], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <ComboBox ItemsSource="{Binding AvailableGroups}"
+                    SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
+                    PlaceholderText="{Binding [CameraEditor.NoGroup], Source={x:Static svc:Localizer.Instance}}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Name, FallbackValue='(no group)', TargetNullValue='(no group)'}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <TextBlock Text="{Binding ErrorMessage}"
+                   Foreground="{StaticResource DangerBrush}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   TextWrapping="Wrap" />
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,20,0,0">
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <Button Content="{Binding [CameraEditor.Button.TestConnection], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding TestConnectionCommand}"
+                Padding="12,8"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding TestStatus}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding TestStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+      <Button Grid.Column="2"
+              Name="CancelButton"
+              Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
+              Padding="14,8"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="6"
+              Foreground="{StaticResource TextPrimaryBrush}"
+              Margin="0,0,8,0" />
+      <Button Grid.Column="3"
+              Name="SaveButton"
+              Content="{Binding [Common.Save], Source={x:Static svc:Localizer.Instance}}"
+              Padding="14,8"
+              Background="{StaticResource AccentBrush}"
+              Foreground="White"
+              CornerRadius="6"
+              IsDefault="True" />
+    </Grid>
+
+  </Grid>
+
+</UserControl>
