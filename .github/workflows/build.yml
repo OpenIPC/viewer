@@ -82,6 +82,9 @@ jobs:
   android:
     runs-on: ubuntu-latest
     name: build (android)
+    env:
+      FFMPEG_VERSION: n7.1
+      NDK_VERSION: r27c
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +101,36 @@ jobs:
 
       - name: Install android workload
         run: dotnet workload install android
+
+      # FFmpeg .so build is the long pole (~15 min) — cache the output dir.
+      # Key on FFmpeg version + NDK version + the build script hash so any of
+      # those changing invalidates the cache and forces a rebuild.
+      - name: Cache FFmpeg android-arm64 build
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: runtimes/android-arm64/native
+          key: ffmpeg-android-arm64-${{ env.FFMPEG_VERSION }}-ndk${{ env.NDK_VERSION }}-${{ hashFiles('tools/build-ffmpeg-android.sh') }}
+
+      - name: Set up Android NDK
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: false
+
+      - name: Install FFmpeg build deps
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yasm nasm pkg-config
+
+      - name: Cross-compile FFmpeg for android-arm64
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: bash tools/build-ffmpeg-android.sh
 
       - name: Restore
         run: dotnet restore src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj

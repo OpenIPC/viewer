@@ -57,4 +57,18 @@
     <AndroidResource Include="Resources\**\*.xml" />
   </ItemGroup>
 
+  <!--
+    FFmpeg natives for android-arm64. Built in CI by tools/build-ffmpeg-android.sh
+    (cross-compile from source, see script header for FFmpeg version pin). The
+    Condition guards against contributors without local NDK builds — empty
+    directory means the APK ships without FFmpeg natives and video playback
+    silently fails at runtime, but the build still succeeds. CI cache hits the
+    same path; misses run the build script.
+  -->
+  <ItemGroup>
+    <AndroidNativeLibrary Include="..\..\runtimes\android-arm64\native\*.so"
+                          Abi="arm64-v8a"
+                          Condition="Exists('..\..\runtimes\android-arm64\native')" />
+  </ItemGroup>
+
 </Project>

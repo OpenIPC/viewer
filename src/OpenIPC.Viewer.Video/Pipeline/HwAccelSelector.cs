@@ -61,6 +61,7 @@ public static class HwAccelSelector
             HwAccelHint.D3d11Va => (AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA, AVPixelFormat.AV_PIX_FMT_D3D11),
             HwAccelHint.VaApi => (AVHWDeviceType.AV_HWDEVICE_TYPE_VAAPI, AVPixelFormat.AV_PIX_FMT_VAAPI),
             HwAccelHint.VideoToolbox => (AVHWDeviceType.AV_HWDEVICE_TYPE_VIDEOTOOLBOX, AVPixelFormat.AV_PIX_FMT_VIDEOTOOLBOX),
+            HwAccelHint.MediaCodec => (AVHWDeviceType.AV_HWDEVICE_TYPE_MEDIACODEC, AVPixelFormat.AV_PIX_FMT_MEDIACODEC),
             _ => throw new ArgumentOutOfRangeException(nameof(hint), hint, "Not a hardware hint"),
         };
 }
