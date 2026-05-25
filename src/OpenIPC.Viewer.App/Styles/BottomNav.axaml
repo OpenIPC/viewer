@@ -1,0 +1,50 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Mobile / narrow-viewport tab strip — mirrors the sidebar's RadioButton
+    bindings (Classes="bottomnav") so the same nav semantics work without
+    a separate ViewModel. Active tab gets the accent tint pill, same as
+    sidebar — visual continuity is intentional.
+  -->
+  <Style Selector="RadioButton.bottomnav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+    <Setter Property="MinHeight" Value="56" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="root"
+                Background="{TemplateBinding Background}"
+                CornerRadius="{StaticResource RadiusSm}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="RadioButton.bottomnav:pointerover /template/ Border#root">
+    <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+  </Style>
+
+  <Style Selector="RadioButton.bottomnav:checked /template/ Border#root">
+    <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
+  </Style>
+
+  <Style Selector="RadioButton.bottomnav:checked">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+</Styles>

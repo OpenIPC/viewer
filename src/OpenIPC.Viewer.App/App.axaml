@@ -37,6 +37,7 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Sidebar.axaml" />
+    <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/BottomNav.axaml" />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Buttons.axaml" />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Tiles.axaml" />
   </Application.Styles>

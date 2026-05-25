@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             x:Class="OpenIPC.Viewer.App.Views.BottomNavBar"
+             x:DataType="vm:MainWindowViewModel"
+             Background="{StaticResource Bg2Brush}">
+
+  <Border BorderBrush="{StaticResource BorderWeakBrush}"
+          BorderThickness="0,1,0,0"
+          Padding="8,4">
+
+    <UniformGrid Rows="1" Columns="5">
+
+      <RadioButton Classes="bottomnav" GroupName="MobileNav"
+                   Content="Live"
+                   IsChecked="{Binding IsLiveSelected, Mode=OneWay}"
+                   Command="{Binding NavigateCommand}"
+                   CommandParameter="live" />
+      <RadioButton Classes="bottomnav" GroupName="MobileNav"
+                   Content="Library"
+                   IsChecked="{Binding IsLibrarySelected, Mode=OneWay}"
+                   Command="{Binding NavigateCommand}"
+                   CommandParameter="library" />
+      <RadioButton Classes="bottomnav" GroupName="MobileNav"
+                   Content="Records"
+                   IsChecked="{Binding IsRecordingsSelected, Mode=OneWay}"
+                   Command="{Binding NavigateCommand}"
+                   CommandParameter="recordings" />
+      <RadioButton Classes="bottomnav" GroupName="MobileNav"
+                   Content="Events"
+                   IsChecked="{Binding IsEventsSelected, Mode=OneWay}"
+                   Command="{Binding NavigateCommand}"
+                   CommandParameter="events" />
+      <RadioButton Classes="bottomnav" GroupName="MobileNav"
+                   Content="Settings"
+                   IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                   Command="{Binding NavigateCommand}"
+                   CommandParameter="settings" />
+
+    </UniformGrid>
+
+  </Border>
+
+</UserControl>

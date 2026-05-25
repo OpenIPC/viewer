@@ -1,64 +1,85 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:views="using:OpenIPC.Viewer.App.Views"
              x:Class="OpenIPC.Viewer.App.Views.MainView"
+             x:Name="Root"
              x:DataType="vm:MainWindowViewModel"
              Background="{StaticResource Bg1Brush}"
              FontFamily="{StaticResource FontSans}"
              FontSize="{StaticResource FontSizeBase}"
              Foreground="{StaticResource TextPrimaryBrush}">
 
-  <Grid ColumnDefinitions="200,*">
+  <!--
+    Responsive layout. The split happens at 700px:
+      wide  → desktop sidebar on the left, content fills the rest
+      narrow → bottom-nav under the content (mobile / pinned-narrow window)
+    IsWideLayout is updated by code-behind on every SizeChanged.
+  -->
 
-    <!-- Sidebar -->
-    <Border Grid.Column="0"
-            Background="{StaticResource Bg2Brush}"
-            BorderBrush="{StaticResource BorderWeakBrush}"
-            BorderThickness="0,0,1,0">
-      <DockPanel LastChildFill="True" Margin="12">
+  <Grid>
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="OpenIPC Viewer"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}"
-                   Margin="8,8,8,20" />
+    <!-- Wide / desktop layout -->
+    <Grid ColumnDefinitions="200,*"
+          IsVisible="{Binding #Root.IsWideLayout}">
 
-        <StackPanel Spacing="2" VerticalAlignment="Top">
-          <RadioButton Classes="sidebar" GroupName="Nav"
-                       Content="Live"
-                       IsChecked="{Binding IsLiveSelected, Mode=OneWay}"
-                       Command="{Binding NavigateCommand}"
-                       CommandParameter="live" />
-          <RadioButton Classes="sidebar" GroupName="Nav"
-                       Content="Library"
-                       IsChecked="{Binding IsLibrarySelected, Mode=OneWay}"
-                       Command="{Binding NavigateCommand}"
-                       CommandParameter="library" />
-          <RadioButton Classes="sidebar" GroupName="Nav"
-                       Content="Recordings"
-                       IsChecked="{Binding IsRecordingsSelected, Mode=OneWay}"
-                       Command="{Binding NavigateCommand}"
-                       CommandParameter="recordings" />
-          <RadioButton Classes="sidebar" GroupName="Nav"
-                       Content="Events"
-                       IsChecked="{Binding IsEventsSelected, Mode=OneWay}"
-                       Command="{Binding NavigateCommand}"
-                       CommandParameter="events" />
-          <RadioButton Classes="sidebar" GroupName="Nav"
-                       Content="Settings"
-                       IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                       Command="{Binding NavigateCommand}"
-                       CommandParameter="settings" />
-        </StackPanel>
+      <Border Grid.Column="0"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderWeakBrush}"
+              BorderThickness="0,0,1,0">
+        <DockPanel LastChildFill="True" Margin="12">
 
-      </DockPanel>
-    </Border>
+          <TextBlock DockPanel.Dock="Top"
+                     Text="OpenIPC Viewer"
+                     FontSize="{StaticResource FontSizeMd}"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource TextPrimaryBrush}"
+                     Margin="8,8,8,20" />
 
-    <!-- Content -->
-    <ContentControl Grid.Column="1"
-                    Content="{Binding CurrentPage}"
-                    Padding="24" />
+          <StackPanel Spacing="2" VerticalAlignment="Top">
+            <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                         Content="Live"
+                         IsChecked="{Binding IsLiveSelected, Mode=OneWay}"
+                         Command="{Binding NavigateCommand}"
+                         CommandParameter="live" />
+            <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                         Content="Library"
+                         IsChecked="{Binding IsLibrarySelected, Mode=OneWay}"
+                         Command="{Binding NavigateCommand}"
+                         CommandParameter="library" />
+            <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                         Content="Recordings"
+                         IsChecked="{Binding IsRecordingsSelected, Mode=OneWay}"
+                         Command="{Binding NavigateCommand}"
+                         CommandParameter="recordings" />
+            <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                         Content="Events"
+                         IsChecked="{Binding IsEventsSelected, Mode=OneWay}"
+                         Command="{Binding NavigateCommand}"
+                         CommandParameter="events" />
+            <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                         Content="Settings"
+                         IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                         Command="{Binding NavigateCommand}"
+                         CommandParameter="settings" />
+          </StackPanel>
+
+        </DockPanel>
+      </Border>
+
+      <ContentControl Grid.Column="1"
+                      Content="{Binding CurrentPage}"
+                      Padding="24" />
+
+    </Grid>
+
+    <!-- Narrow / mobile layout -->
+    <DockPanel IsVisible="{Binding #Root.IsNarrowLayout}"
+               LastChildFill="True">
+      <views:BottomNavBar DockPanel.Dock="Bottom" />
+      <ContentControl Content="{Binding CurrentPage}"
+                      Padding="12" />
+    </DockPanel>
 
   </Grid>
 
