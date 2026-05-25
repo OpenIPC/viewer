@@ -17,6 +17,7 @@ public sealed record Camera(
     string? OnvifProfileToken,
     string? ChipModel,
     string? FirmwareVersion,
+    bool IncludedInGrid,
     int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt);

@@ -32,6 +32,9 @@ coverage*.json
 Thumbs.db
 .DS_Store
 
+## Claude Code harness local state
+.claude/
+
 ## Local config
 appsettings.Local.json
 appsettings.Development.json

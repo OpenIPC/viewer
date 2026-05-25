@@ -13,6 +13,13 @@ public sealed class FfmpegVideoEngine : IVideoEngine
         _loggerFactory = loggerFactory;
     }
 
-    public IVideoSession CreateSession(VideoSessionOptions options) =>
-        new FfmpegVideoSession(options, _loggerFactory.CreateLogger<FfmpegVideoSession>());
+    public IVideoSession CreateSession(VideoSessionOptions options)
+    {
+        IVideoSession Create() => new FfmpegVideoSession(options, _loggerFactory.CreateLogger<FfmpegVideoSession>());
+
+        if (!options.AutoReconnect)
+            return Create();
+
+        return new AutoReconnectingVideoSession(Create, _loggerFactory.CreateLogger<AutoReconnectingVideoSession>());
+    }
 }

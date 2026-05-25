@@ -14,8 +14,8 @@
   </Application.Resources>
 
   <Application.DataTemplates>
-    <DataTemplate DataType="vm:LivePageViewModel">
-      <pages:LivePage />
+    <DataTemplate DataType="vm:GridPageViewModel">
+      <pages:GridPage />
     </DataTemplate>
     <DataTemplate DataType="vm:CameraLibraryPageViewModel">
       <pages:CameraLibraryPage />

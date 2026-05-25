@@ -54,7 +54,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         var cameras = await _directory.ListAsync(ct).ConfigureAwait(true);
         Cameras.Clear();
         foreach (var camera in cameras)
-            Cameras.Add(new CameraRowViewModel(camera));
+            Cameras.Add(new CameraRowViewModel(camera, _directory, _logger));
         IsLoaded = true;
     }
 
@@ -133,13 +133,44 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     }
 }
 
-public sealed class CameraRowViewModel
+public sealed partial class CameraRowViewModel : ViewModelBase
 {
+    private readonly CameraDirectoryService? _directory;
+    private readonly ILogger? _logger;
+
     public Camera Camera { get; }
     public string Name => Camera.Name;
     public string HostAndPort => Camera.HttpPort == 80
         ? Camera.Host
         : $"{Camera.Host}:{Camera.HttpPort}";
 
-    public CameraRowViewModel(Camera camera) => Camera = camera;
+    [ObservableProperty] private bool _isIncludedInGrid;
+
+    public CameraRowViewModel(Camera camera) : this(camera, null, null) { }
+
+    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, ILogger? logger)
+    {
+        Camera = camera;
+        _directory = directory;
+        _logger = logger;
+        _isIncludedInGrid = camera.IncludedInGrid;
+    }
+
+    partial void OnIsIncludedInGridChanged(bool value)
+    {
+        if (_directory is null) return;
+        _ = PersistGridFlagAsync(value);
+    }
+
+    private async Task PersistGridFlagAsync(bool value)
+    {
+        try
+        {
+            await _directory!.SetIncludedInGridAsync(Camera.Id, value, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to persist IncludedInGrid for {CameraId}", Camera.Id);
+        }
+    }
 }

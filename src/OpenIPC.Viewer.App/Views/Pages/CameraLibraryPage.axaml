@@ -101,6 +101,11 @@
                             Orientation="Horizontal"
                             Spacing="8"
                             VerticalAlignment="Center">
+                  <CheckBox IsChecked="{Binding IsIncludedInGrid, Mode=TwoWay}"
+                            Content="Show in grid"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            FontSize="{StaticResource FontSizeSm}"
+                            VerticalAlignment="Center" />
                   <Button Content="Edit"
                           Padding="10,6"
                           Background="Transparent"

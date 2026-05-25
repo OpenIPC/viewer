@@ -16,12 +16,13 @@ namespace OpenIPC.Viewer.App.ViewModels;
 
 public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDisposable
 {
-    private readonly IVideoEngine _engine;
+    private readonly LiveStreamCoordinator _coordinator;
     private readonly CameraDirectoryService _directory;
     private readonly IFileSystem _fs;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private readonly Camera _camera;
 
+    private readonly StreamQuality _quality = StreamQuality.Main;
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
 
@@ -36,13 +37,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     public SingleCameraPageViewModel(
         Camera camera,
-        IVideoEngine engine,
+        LiveStreamCoordinator coordinator,
         CameraDirectoryService directory,
         IFileSystem fs,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
-        _engine = engine;
+        _coordinator = coordinator;
         _directory = directory;
         _fs = fs;
         _logger = logger;
@@ -53,22 +54,23 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         if (Session is not null)
             return;
 
-        var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(false);
+        var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(true);
         var options = VideoSessionOptions.Default(_camera.RtspMainUri, creds);
-        var session = _engine.CreateSession(options);
 
-        _stateSub = session.StateChanged.Subscribe(s =>
-        {
-            State = s;
-            if (s == SessionState.Failed)
-                ErrorMessage = session.LastError;
-        });
-        _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
-
-        Session = session;
         try
         {
-            await session.StartAsync(ct).ConfigureAwait(false);
+            var session = _coordinator.Acquire(_camera.Id, _quality, options);
+            _stateSub = session.StateChanged.Subscribe(s =>
+            {
+                State = s;
+                if (s == SessionState.Failed)
+                    ErrorMessage = session.LastError;
+            });
+            _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
+            Session = session;
+
+            if (session.State == SessionState.Idle)
+                await session.StartAsync(ct).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -86,11 +88,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
         try
         {
-            var bytes = await Session.SnapshotAsync(SnapshotFormat.Jpeg, CancellationToken.None).ConfigureAwait(false);
+            var bytes = await Session.SnapshotAsync(SnapshotFormat.Jpeg, CancellationToken.None).ConfigureAwait(true);
             var dir = Path.Combine(_fs.SnapshotsDir.FullName, SafeFileName(_camera.Name));
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, $"{DateTime.Now:yyyy-MM-dd-HHmmss}.jpg");
-            await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(true);
             SnapshotPath = path;
             _logger.LogInformation("Snapshot saved {Path}", path);
         }
@@ -111,8 +113,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _telemetrySub?.Dispose();
         if (Session is not null)
         {
-            await Session.DisposeAsync().ConfigureAwait(false);
             Session = null;
+            await _coordinator.ReleaseAsync(_camera.Id, _quality).ConfigureAwait(false);
         }
     }
 

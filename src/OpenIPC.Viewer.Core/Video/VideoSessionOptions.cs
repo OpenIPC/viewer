@@ -8,7 +8,8 @@ public sealed record VideoSessionOptions(
     CameraCredentials? Credentials,
     RtspTransport Transport,
     HwAccelHint HwAccel,
-    TimeSpan NetworkCaching)
+    TimeSpan NetworkCaching,
+    bool AutoReconnect = true)
 {
     public static VideoSessionOptions Default(Uri uri, CameraCredentials? creds = null) =>
         new(uri, creds, RtspTransport.Tcp, HwAccelHint.Auto, TimeSpan.FromMilliseconds(150));

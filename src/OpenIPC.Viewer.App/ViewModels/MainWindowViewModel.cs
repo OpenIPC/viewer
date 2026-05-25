@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
-using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -20,7 +19,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
 
     private SingleCameraPageViewModel? _activeSingleCamera;
 
-    public LivePageViewModel Live { get; }
+    public GridPageViewModel Live { get; }
     public CameraLibraryPageViewModel Library { get; }
     public RecordingsPageViewModel Recordings { get; }
     public SettingsPageViewModel Settings { get; }
@@ -32,13 +31,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     [NotifyPropertyChangedFor(nameof(IsSettingsSelected))]
     private ViewModelBase _currentPage;
 
-    public bool IsLiveSelected => CurrentPage is LivePageViewModel;
+    public bool IsLiveSelected => CurrentPage is GridPageViewModel;
     public bool IsLibrarySelected => CurrentPage is CameraLibraryPageViewModel or SingleCameraPageViewModel;
     public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel;
     public bool IsSettingsSelected => CurrentPage is SettingsPageViewModel;
 
     public MainWindowViewModel(
-        LivePageViewModel live,
+        GridPageViewModel live,
         CameraLibraryPageViewModel library,
         RecordingsPageViewModel recordings,
         SettingsPageViewModel settings,

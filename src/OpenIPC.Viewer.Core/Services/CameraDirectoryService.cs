@@ -46,6 +46,7 @@ public sealed class CameraDirectoryService
             OnvifProfileToken: null,
             ChipModel: null,
             FirmwareVersion: null,
+            IncludedInGrid: true,
             SortOrder: 0,
             CreatedAt: now,
             UpdatedAt: now);
@@ -76,6 +77,14 @@ public sealed class CameraDirectoryService
             UpdatedAt = DateTime.UtcNow,
         };
 
+        await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
+    }
+
+    public async Task SetIncludedInGridAsync(CameraId id, bool included, CancellationToken ct)
+    {
+        var existing = await _cameras.GetAsync(id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Camera {id} not found");
+        var updated = existing with { IncludedInGrid = included, UpdatedAt = DateTime.UtcNow };
         await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
     }
 

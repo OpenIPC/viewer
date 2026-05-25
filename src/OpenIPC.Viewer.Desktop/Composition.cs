@@ -59,18 +59,20 @@ internal static class Composition
 
         // Video
         services.AddSingleton<IVideoEngine, FfmpegVideoEngine>();
+        services.AddSingleton<LiveStreamCoordinator>();
 
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<SingleCameraPageFactory>();
         services.AddSingleton<CameraEditorFactory>();
 
-        // ViewModels
-        services.AddTransient<MainWindowViewModel>();
-        services.AddTransient<LivePageViewModel>();
-        services.AddTransient<CameraLibraryPageViewModel>();
-        services.AddTransient<RecordingsPageViewModel>();
-        services.AddTransient<SettingsPageViewModel>();
+        // ViewModels — singletons so navigation preserves their state across
+        // sidebar switches and so messenger registrations stay alive.
+        services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<GridPageViewModel>();
+        services.AddSingleton<CameraLibraryPageViewModel>();
+        services.AddSingleton<RecordingsPageViewModel>();
+        services.AddSingleton<SettingsPageViewModel>();
 
         return services.BuildServiceProvider(validateScopes: true);
     }

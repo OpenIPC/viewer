@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.GridPage"
+             x:DataType="vm:GridPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Toolbar -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding Title}"
+                 FontSize="{StaticResource FontSizeXl}"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource TextPrimaryBrush}"
+                 VerticalAlignment="Center" />
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+        <Button Content="1×1" Command="{Binding SetLayoutCommand}" CommandParameter="1"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Content="2×2" Command="{Binding SetLayoutCommand}" CommandParameter="2"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Content="3×3" Command="{Binding SetLayoutCommand}" CommandParameter="3"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Grid -->
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding Slots}" x:CompileBindings="False">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="{Binding Columns}" Rows="{Binding Rows}" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Margin="4"
+                  Background="{StaticResource Bg0Brush}"
+                  CornerRadius="6"
+                  ClipToBounds="True">
+            <Grid>
+              <!-- Empty placeholder -->
+              <Border IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNull}}"
+                      Background="{StaticResource Bg1Brush}">
+                <TextBlock Text="no camera"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           FontSize="{StaticResource FontSizeSm}" />
+              </Border>
+
+              <!-- Tile -->
+              <ContentControl Content="{Binding}"
+                              IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate DataType="vm:CameraTileViewModel">
+                    <Grid Cursor="Hand"
+                          Background="Transparent"
+                          Tapped="OnTileTapped">
+                      <controls:RtspVideoView Session="{Binding Session}" />
+
+                      <!-- Top-left: name -->
+                      <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
+                              Background="#90000000" CornerRadius="3" Padding="6,2">
+                        <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="Medium" />
+                      </Border>
+
+                      <!-- Top-right: state badge -->
+                      <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                              CornerRadius="3" Padding="6,2"
+                              Background="{Binding State, Converter={x:Static conv:StateColorConverter.Instance}}">
+                        <TextBlock Text="{Binding StateLabel}" Foreground="White"
+                                   FontFamily="{StaticResource FontMono}" FontSize="10" />
+                      </Border>
+
+                      <!-- Bottom-right: fps -->
+                      <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8"
+                              Background="#80000000" CornerRadius="3" Padding="6,2"
+                              IsVisible="{Binding Telemetry, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <TextBlock FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="White">
+                          <Run Text="{Binding Telemetry.Fps, StringFormat={}{0:F0} fps}" />
+                        </TextBlock>
+                      </Border>
+                    </Grid>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+  </Grid>
+
+</UserControl>

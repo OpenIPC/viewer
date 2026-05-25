@@ -7,4 +7,5 @@ public enum SessionState
     Playing,
     Paused,
     Failed,
+    Reconnecting,
 }

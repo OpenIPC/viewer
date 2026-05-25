@@ -12,6 +12,12 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+#if DEBUG
+        // Route System.Diagnostics.Trace (and Avalonia's LogToTrace) to the console
+        // so binding warnings and view-layer Trace.WriteLine show up next to Serilog.
+        System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.ConsoleTraceListener());
+#endif
+
         var services = Composition.Build();
 
         var logger = services.GetRequiredService<ILogger<App.App>>();
@@ -37,7 +43,10 @@ internal static class Program
         {
             logger.LogInformation("OpenIPC.Viewer shutting down");
             Serilog.Log.CloseAndFlush();
-            services.Dispose();
+            // ServiceProvider.Dispose throws on services that only implement
+            // IAsyncDisposable (LiveStreamCoordinator, GridPageViewModel, etc.).
+            // DisposeAsync handles both shapes.
+            services.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 
@@ -46,5 +55,5 @@ internal static class Program
             .Configure(() => new App.App(services))
             .UsePlatformDetect()
             .WithInterFont()
-            .LogToTrace();
+            .LogToTrace(Avalonia.Logging.LogEventLevel.Warning);
 }
