@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia.Controls;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using OpenIPC.Viewer.App.Services;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
 
@@ -29,7 +30,7 @@ public sealed partial class RawConfigEditorDialog : Window
             }
             catch (JsonException ex)
             {
-                error.Text = "Invalid JSON: " + ex.Message;
+                error.Text = string.Format(Localizer.Instance["RawConfigEditor.InvalidJsonFormat"], ex.Message);
                 error.IsVisible = true;
                 return;
             }

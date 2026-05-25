@@ -1,9 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+        xmlns:svc="using:OpenIPC.Viewer.App.Services"
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.DiscoveryDialogWindow"
         x:DataType="vm:DiscoveryDialogViewModel"
-        Title="Discover cameras"
+        Title="{Binding [Discovery.Title], Source={x:Static svc:Localizer.Instance}}"
         Width="560" Height="620"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
@@ -17,7 +18,7 @@
     <!-- Header + scan button -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
       <StackPanel Grid.Column="0" Spacing="4">
-        <TextBlock Text="Discover ONVIF cameras"
+        <TextBlock Text="{Binding [Discovery.Header], Source={x:Static svc:Localizer.Instance}}"
                    FontSize="{StaticResource FontSizeLg}"
                    FontWeight="SemiBold" />
         <TextBlock Text="{Binding StatusText}"
@@ -26,7 +27,7 @@
                    TextWrapping="Wrap" />
       </StackPanel>
       <Button Grid.Column="1"
-              Content="Scan"
+              Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding ScanCommand}"
               Padding="14,8"
               Background="{StaticResource AccentBrush}"
@@ -73,11 +74,11 @@
     <Grid Grid.Row="2" ColumnDefinitions="*,12,*" Margin="0,16,0,0"
           IsVisible="{Binding IsRowSelected}">
       <StackPanel Grid.Column="0" Spacing="6">
-        <TextBlock Text="Username" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-        <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="admin" />
+        <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+        <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="6">
-        <TextBlock Text="Password" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+        <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
         <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
       </StackPanel>
     </Grid>
@@ -86,7 +87,7 @@
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
       <Button Grid.Column="1"
               Name="CancelButton"
-              Content="Cancel"
+              Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
               Padding="14,8"
               Background="Transparent"
               BorderBrush="{StaticResource BorderMediumBrush}"
@@ -96,7 +97,7 @@
               Margin="0,0,8,0" />
       <Button Grid.Column="2"
               Name="AddButton"
-              Content="Add selected"
+              Content="{Binding [Discovery.Button.AddSelected], Source={x:Static svc:Localizer.Instance}}"
               IsEnabled="{Binding CanAdd}"
               Padding="14,8"
               Background="{StaticResource AccentBrush}"

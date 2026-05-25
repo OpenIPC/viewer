@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
@@ -21,7 +22,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     private GroupId? _pendingGroupId;
 
     public CameraId? EditingId { get; }
-    public string Title => EditingId is null ? "Add camera" : "Edit camera";
+    public string Title => Localizer.Instance[EditingId is null ? "CameraEditor.Title.Add" : "CameraEditor.Title.Edit"];
 
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _host = "";
@@ -105,7 +106,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         }
 
         TestInProgress = true;
-        TestStatus = "Connecting...";
+        TestStatus = Localizer.Instance["CameraEditor.Status.Connecting"];
         TestConnectionCommand.NotifyCanExecuteChanged();
 
         var creds = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
@@ -119,16 +120,16 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             await session.StartAsync(cts.Token).ConfigureAwait(true);
             var frame = await session.Frames.Take(1).ToTask(cts.Token).ConfigureAwait(true);
-            TestStatus = $"OK — {frame.Width}x{frame.Height}";
+            TestStatus = string.Format(Localizer.Instance["CameraEditor.Status.OkFormat"], frame.Width, frame.Height);
         }
         catch (OperationCanceledException)
         {
-            TestStatus = "Timeout (8s)";
+            TestStatus = Localizer.Instance["CameraEditor.Status.Timeout"];
         }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Test connection failed");
-            TestStatus = $"Failed: {ex.Message}";
+            TestStatus = string.Format(Localizer.Instance["CameraEditor.Status.FailedFormat"], ex.Message);
         }
         finally
         {
@@ -188,12 +189,12 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(Name))
         {
-            ErrorMessage = "Name is required.";
+            ErrorMessage = Localizer.Instance["CameraEditor.Error.NameRequired"];
             return false;
         }
         if (string.IsNullOrWhiteSpace(Host))
         {
-            ErrorMessage = "Host is required.";
+            ErrorMessage = Localizer.Instance["CameraEditor.Error.HostRequired"];
             return false;
         }
 
@@ -203,7 +204,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 
         if (!Uri.TryCreate(rtspMainSource, UriKind.Absolute, out rtspMain!))
         {
-            ErrorMessage = "RTSP main URI is not a valid absolute URI.";
+            ErrorMessage = Localizer.Instance["CameraEditor.Error.RtspMainInvalid"];
             return false;
         }
 
@@ -211,7 +212,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         {
             if (!Uri.TryCreate(RtspSubText.Trim(), UriKind.Absolute, out rtspSub))
             {
-                ErrorMessage = "RTSP sub URI is not a valid absolute URI.";
+                ErrorMessage = Localizer.Instance["CameraEditor.Error.RtspSubInvalid"];
                 return false;
             }
         }
@@ -220,7 +221,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         {
             if (!int.TryParse(OnvifPortText.Trim(), out var port) || port < 1 || port > 65535)
             {
-                ErrorMessage = "ONVIF port must be between 1 and 65535.";
+                ErrorMessage = Localizer.Instance["CameraEditor.Error.OnvifPortInvalid"];
                 return false;
             }
             onvifPort = port;
@@ -228,7 +229,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 
         if (HttpPort < 1 || HttpPort > 65535)
         {
-            ErrorMessage = "HTTP port must be between 1 and 65535.";
+            ErrorMessage = Localizer.Instance["CameraEditor.Error.HttpPortInvalid"];
             return false;
         }
 

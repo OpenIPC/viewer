@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Events;
 using OpenIPC.Viewer.Core.Services;
@@ -27,7 +28,7 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<CameraId, string> _cameraNames = new();
     private readonly IDisposable _liveSub;
 
-    public string Title => "Events";
+    public string Title => Localizer.Instance["Nav.Events"];
 
     public ObservableCollection<EventRowViewModel> Items { get; } = new();
     public ObservableCollection<CameraOption> CameraOptions { get; } = new();
@@ -64,7 +65,7 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         var cams = await _cameras.ListAsync(ct).ConfigureAwait(true);
         _cameraNames.Clear();
         CameraOptions.Clear();
-        CameraOptions.Add(new CameraOption(null, "All cameras"));
+        CameraOptions.Add(new CameraOption(null, Localizer.Instance["Events.AllCameras"]));
         foreach (var c in cams)
         {
             _cameraNames[c.Id] = c.Name;
@@ -135,7 +136,7 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
 
     private EventRowViewModel BuildRow(CameraEvent e)
     {
-        var name = _cameraNames.TryGetValue(e.CameraId, out var n) ? n : "(unknown)";
+        var name = _cameraNames.TryGetValue(e.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
         return new EventRowViewModel(e, name);
     }
 
@@ -177,6 +178,6 @@ public sealed class EventRowViewModel
         OccurredAtLocal = ev.OccurredAt.ToLocalTime();
         Duration = ev.EndedAt is { } end
             ? $"{(int)(end - ev.OccurredAt).TotalSeconds}s"
-            : "open";
+            : Localizer.Instance["Events.Open"];
     }
 }

@@ -116,10 +116,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
             _logger.LogInformation("Auto-scan: {Count} new camera(s) on the LAN: {Hosts}", found.Count, string.Join(", ", found));
 
             var open = await _dialogs.ConfirmAsync(
-                title: "New cameras found",
-                message: $"Auto-scan found {found.Count} new camera(s) on the LAN ({string.Join(", ", found)}). Open Discovery to add them?",
-                confirmLabel: "Open Discovery",
-                cancelLabel: "Not now").ConfigureAwait(true);
+                title: Localizer.Instance["Library.Dialog.NewCamerasTitle"],
+                message: string.Format(Localizer.Instance["Library.Dialog.NewCamerasMessage"], found.Count),
+                confirmLabel: Localizer.Instance["Library.Dialog.OpenDiscovery"],
+                cancelLabel: Localizer.Instance["Library.Dialog.NotNow"]).ConfigureAwait(true);
 
             if (open)
                 await DiscoverCameraAsync().ConfigureAwait(true);
@@ -289,8 +289,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
             return;
 
         var confirmed = await _dialogs.ConfirmAsync(
-            title: "Delete camera",
-            message: $"Delete '{row.Camera.Name}'? This cannot be undone.").ConfigureAwait(true);
+            title: Localizer.Instance["Library.Dialog.DeleteTitle"],
+            message: string.Format(Localizer.Instance["Library.Dialog.DeleteMessage"], row.Camera.Name),
+            confirmLabel: Localizer.Instance["Common.Delete"],
+            cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
 
         if (!confirmed)
             return;

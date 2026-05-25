@@ -1,8 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ae="using:AvaloniaEdit"
+        xmlns:svc="using:OpenIPC.Viewer.App.Services"
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.RawConfigEditorDialog"
-        Title="Edit raw Majestic config"
+        Title="{Binding [RawConfigEditor.Title], Source={x:Static svc:Localizer.Instance}}"
         Width="780" Height="560"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Bg1Brush}"
@@ -13,7 +14,7 @@
   <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="20">
 
     <TextBlock Grid.Row="0"
-               Text="Edit raw Majestic config"
+               Text="{Binding [RawConfigEditor.Title], Source={x:Static svc:Localizer.Instance}}"
                FontSize="{StaticResource FontSizeLg}"
                FontWeight="SemiBold"
                Margin="0,0,0,8" />
@@ -43,7 +44,7 @@
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
       <Button Grid.Column="1"
               Name="CancelButton"
-              Content="Cancel"
+              Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
               Padding="14,8"
               Background="Transparent"
               BorderBrush="{StaticResource BorderMediumBrush}"
@@ -53,7 +54,7 @@
               Margin="0,0,8,0" />
       <Button Grid.Column="2"
               Name="ApplyButton"
-              Content="Apply"
+              Content="{Binding [Common.Apply], Source={x:Static svc:Localizer.Instance}}"
               Padding="14,8"
               Background="{StaticResource AccentBrush}"
               Foreground="White"

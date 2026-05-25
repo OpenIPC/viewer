@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingsPage"
              x:DataType="vm:RecordingsPageViewModel">
 
@@ -17,7 +18,7 @@
     <!-- Empty state -->
     <TextBlock Grid.Row="1"
                IsVisible="{Binding IsEmpty}"
-               Text="No recordings yet. Hit ● REC on a camera page to start."
+               Text="{Binding [Recordings.Empty], Source={x:Static svc:Localizer.Instance}}"
                Foreground="{StaticResource TextSecondaryBrush}"
                HorizontalAlignment="Center"
                VerticalAlignment="Center" />
@@ -75,7 +76,7 @@
                            MinWidth="70" />
 
                 <Button Grid.Column="4"
-                        Content="Delete"
+                        Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
                         Padding="10,4"
                         FontSize="11"
                         Background="Transparent"

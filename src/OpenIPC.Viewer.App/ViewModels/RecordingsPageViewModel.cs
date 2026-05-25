@@ -21,7 +21,7 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly ILogger<RecordingsPageViewModel> _logger;
 
-    public string Title => "Recordings";
+    public string Title => Localizer.Instance["Nav.Recordings"];
 
     public ObservableCollection<RecordingRowViewModel> Items { get; } = new();
 
@@ -53,7 +53,7 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         Items.Clear();
         foreach (var r in recordings)
         {
-            var name = nameById.TryGetValue(r.CameraId, out var n) ? n : "(unknown)";
+            var name = nameById.TryGetValue(r.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
             Items.Add(new RecordingRowViewModel(r, name));
         }
         IsLoaded = true;
@@ -65,8 +65,10 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     {
         if (row is null) return;
         var confirmed = await _dialogs.ConfirmAsync(
-            title: "Delete recording",
-            message: $"Delete {Path.GetFileName(row.FilePath)}? The MP4 file will be removed.").ConfigureAwait(true);
+            title: Localizer.Instance["Recordings.Dialog.DeleteTitle"],
+            message: string.Format(Localizer.Instance["Recordings.Dialog.DeleteMessageFormat"], Path.GetFileName(row.FilePath)),
+            confirmLabel: Localizer.Instance["Common.Delete"],
+            cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
         if (!confirmed) return;
 
         try
@@ -95,7 +97,7 @@ public sealed class RecordingRowViewModel
     public DateTime StartedAtLocal => Recording.StartedAt.ToLocalTime();
     public string Duration => Recording.EndedAt is { } end
         ? FormatDuration(end - Recording.StartedAt)
-        : "live";
+        : Localizer.Instance["Recordings.Live"];
     public string SizeLabel => Recording.SizeBytes <= 0
         ? "—"
         : Recording.SizeBytes > 1024 * 1024

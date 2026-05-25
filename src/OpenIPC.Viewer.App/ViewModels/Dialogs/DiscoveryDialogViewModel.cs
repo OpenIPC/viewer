@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
@@ -26,7 +27,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
 
     public ObservableCollection<DiscoveredCameraRowVm> Cameras { get; } = new();
 
-    [ObservableProperty] private string _statusText = "Click Scan to find ONVIF cameras on the LAN.";
+    [ObservableProperty] private string _statusText = Localizer.Instance["Discovery.Status.Initial"];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRowSelected))]
@@ -65,7 +66,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     {
         Cameras.Clear();
         Selected = null;
-        StatusText = "Scanning…";
+        StatusText = Localizer.Instance["Discovery.Status.Scanning"];
         ScanInProgress = true;
 
         _scanCts?.Cancel();
@@ -80,17 +81,17 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
                 Cameras.Add(new DiscoveredCameraRowVm(cam));
             }
             StatusText = Cameras.Count == 0
-                ? "No cameras responded. Check multicast / firewall."
-                : $"Found {Cameras.Count} camera{(Cameras.Count == 1 ? "" : "s")}.";
+                ? Localizer.Instance["Discovery.Status.NoResponse"]
+                : string.Format(Localizer.Instance["Discovery.Status.FoundFormat"], Cameras.Count);
         }
         catch (OperationCanceledException)
         {
-            StatusText = "Scan cancelled.";
+            StatusText = Localizer.Instance["Discovery.Status.Cancelled"];
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Discovery scan failed");
-            StatusText = $"Scan failed: {ex.Message}";
+            StatusText = string.Format(Localizer.Instance["Discovery.Status.ScanFailedFormat"], ex.Message);
         }
         finally
         {
@@ -106,7 +107,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         if (row is null) return null;
 
         AddInProgress = true;
-        StatusText = $"Probing {row.HostPort}…";
+        StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbingFormat"], row.HostPort);
 
         try
         {
@@ -118,13 +119,13 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var probeResult = await _probe.ProbeAsync(endpoint, cts.Token).ConfigureAwait(true);
 
-            StatusText = $"OK — {probeResult.Manufacturer ?? "?"} {probeResult.Model ?? ""}".Trim();
+            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeOkFormat"], probeResult.Manufacturer ?? "?", probeResult.Model ?? "").TrimEnd();
             return new DiscoveryDialogResult(row.Camera, probeResult, creds);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ONVIF probe failed for {Host}", row.HostPort);
-            StatusText = $"Probe failed: {ex.Message}";
+            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeFailedFormat"], ex.Message);
             return null;
         }
         finally
