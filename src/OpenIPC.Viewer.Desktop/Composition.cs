@@ -21,6 +21,7 @@ using OpenIPC.Viewer.Devices.Onvif.Discovery;
 using OpenIPC.Viewer.Video.Recording;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 using OpenIPC.Viewer.Infrastructure.Secrets;
+using OpenIPC.Viewer.Infrastructure.Video.Decoders;
 using OpenIPC.Viewer.Video;
 using Serilog;
 
@@ -43,15 +44,47 @@ internal static class Composition
             b.AddSerilog(serilog, dispose: true);
         });
 
-        // Platform
-        services.AddSingleton<IFileSystem, DesktopFileSystem>();
-        services.AddSingleton<ISecretsStore>(sp =>
+        // Platform — one trio of IFileSystem / ISecretsStore / IHwDecoderFactory
+        // per OS. Selection happens once at startup; downstream services see a
+        // single registration each. The IsX checks inside each factory lambda
+        // are what teaches the platform-compatibility analyzer that the call
+        // site is guarded (CA1416).
+        if (OperatingSystem.IsWindows())
         {
-            if (!OperatingSystem.IsWindows())
-                throw new PlatformNotSupportedException(
-                    "DPAPI secret store is Windows-only; Linux/macOS stores land in Phase 8.");
-            return new DpapiSecretsStore(sp.GetRequiredService<IFileSystem>().AppDataDir);
-        });
+            services.AddSingleton<IFileSystem, WindowsFileSystem>();
+            services.AddSingleton<ISecretsStore>(sp =>
+            {
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+                return new DpapiSecretsStore(sp.GetRequiredService<IFileSystem>().AppDataDir);
+            });
+            services.AddSingleton<IHwDecoderFactory, D3d11VaDecoderFactory>();
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.AddSingleton<IFileSystem, LinuxFileSystem>();
+            services.AddSingleton<ISecretsStore>(sp =>
+            {
+                if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
+                return new LibSecretSecretsStore(
+                    sp.GetRequiredService<IFileSystem>().AppDataDir,
+                    sp.GetRequiredService<ILoggerFactory>());
+            });
+            services.AddSingleton<IHwDecoderFactory, VaapiDecoderFactory>();
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            services.AddSingleton<IFileSystem, MacOsFileSystem>();
+            services.AddSingleton<ISecretsStore>(sp =>
+            {
+                if (!OperatingSystem.IsMacOS()) throw new PlatformNotSupportedException();
+                return new KeychainSecretsStore(sp.GetRequiredService<ILoggerFactory>());
+            });
+            services.AddSingleton<IHwDecoderFactory, VideoToolboxDecoderFactory>();
+        }
+        else
+        {
+            throw new PlatformNotSupportedException();
+        }
 
         // Persistence
         services.AddSingleton<IDbConnectionFactory>(sp =>

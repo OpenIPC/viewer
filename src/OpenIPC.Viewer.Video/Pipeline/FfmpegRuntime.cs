@@ -23,11 +23,16 @@ internal static class FfmpegRuntime
     private static string ResolveNativeDir()
     {
         var baseDir = AppContext.BaseDirectory;
-        var candidate = Path.Combine(baseDir, "runtimes", "win-x64", "native");
-        if (Directory.Exists(candidate))
-            return candidate;
+        var (rid, _) = RuntimeIds.Current();
+        if (rid is not null)
+        {
+            var candidate = Path.Combine(baseDir, "runtimes", rid, "native");
+            if (Directory.Exists(candidate))
+                return candidate;
+        }
 
-        // Fall back to baseDir — FFmpeg.AutoGen tolerates DLLs sitting next to the exe.
-        return baseDir;
+        // Fall back to "" — FFmpeg.AutoGen then uses the platform loader path
+        // (apt/brew-installed libs on Linux/macOS, DLLs next to the exe on Windows).
+        return "";
     }
 }

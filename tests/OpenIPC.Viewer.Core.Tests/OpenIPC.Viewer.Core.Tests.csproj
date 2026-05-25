@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
+    <ProjectReference Include="..\..\src\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

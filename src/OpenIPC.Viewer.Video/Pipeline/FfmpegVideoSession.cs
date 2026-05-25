@@ -15,6 +15,7 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 internal sealed class FfmpegVideoSession : IVideoSession
 {
     private readonly VideoSessionOptions _options;
+    private readonly IHwDecoderFactory? _hwFactory;
     private readonly ILogger<FfmpegVideoSession> _logger;
 
     private readonly Subject<VideoFrame> _frames = new();
@@ -36,15 +37,21 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private int _width;
     private int _height;
 
+    // Held for the lifetime of the codec context to keep the unmanaged
+    // function pointer alive — FFmpeg invokes it via the AVCodecContext.
+    private AVCodecContext_get_format? _getFormatDelegate;
+    private AVPixelFormat _selectedHwPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
+
     // Snapshot of the most recently decoded frame, kept around for SnapshotAsync.
     private byte[]? _snapshotBgra;
     private int _snapshotWidth;
     private int _snapshotHeight;
     private int _snapshotStride;
 
-    public FfmpegVideoSession(VideoSessionOptions options, ILogger<FfmpegVideoSession> logger)
+    public FfmpegVideoSession(VideoSessionOptions options, IHwDecoderFactory? hwFactory, ILogger<FfmpegVideoSession> logger)
     {
         _options = options;
+        _hwFactory = hwFactory;
         _logger = logger;
     }
 
@@ -122,10 +129,14 @@ internal sealed class FfmpegVideoSession : IVideoSession
         AVFormatContext* fmtCtx = null;
         AVCodecContext* codecCtx = null;
         AVFrame* frame = null;
+        AVFrame* swFrame = null;
         AVPacket* packet = null;
         SwsContext* sws = null;
         AVDictionary* opts = null;
+        AVBufferRef* hwDeviceCtx = null;
         var videoStreamIndex = -1;
+        var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
+        var hwActive = false;
 
         try
         {
@@ -159,22 +170,33 @@ internal sealed class FfmpegVideoSession : IVideoSession
             ret = ffmpeg.avcodec_parameters_to_context(codecCtx, codecpar);
             FfmpegError.ThrowIfError(ret, "avcodec_parameters_to_context");
 
+            // HW accel decision: pure policy in Resolve, native wiring inline.
+            // Any failure here logs and continues with software decode.
+            var resolved = HwAccelSelector.Resolve(_options.HwAccel, _hwFactory, _logger);
+            if (resolved != HwAccelHint.None)
+                hwActive = TryEnableHw(codecCtx, resolved, &hwDeviceCtx);
+
             ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
+            if (ret < 0 && hwActive)
+            {
+                // HW open failed: tear down HW state and retry as software.
+                _logger.LogWarning("HW-accelerated avcodec_open2 failed: {Err}; retrying software", FfmpegError.Describe(ret));
+                TearDownHw(codecCtx, &hwDeviceCtx);
+                hwActive = false;
+                ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
+            }
             FfmpegError.ThrowIfError(ret, "avcodec_open2");
 
             _width = codecCtx->width;
             _height = codecCtx->height;
-            _codecName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
-
-            sws = ffmpeg.sws_getContext(
-                _width, _height, codecCtx->pix_fmt,
-                _width, _height, AVPixelFormat.AV_PIX_FMT_BGRA,
-                ffmpeg.SWS_BILINEAR, null, null, null);
-            if (sws == null)
-                throw new InvalidOperationException("sws_getContext returned null");
+            var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
+            _codecName = hwActive ? $"{baseName} ({resolved})" : baseName;
+            if (hwActive)
+                _logger.LogInformation("HW decode active: {Codec} via {Hint}", baseName, resolved);
 
             packet = ffmpeg.av_packet_alloc();
             frame = ffmpeg.av_frame_alloc();
+            if (hwActive) swFrame = ffmpeg.av_frame_alloc();
 
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
@@ -219,8 +241,38 @@ internal sealed class FfmpegVideoSession : IVideoSession
                         break;
                     }
 
-                    EmitFrame(sws, frame);
+                    AVFrame* presentable = frame;
+                    if (hwActive && frame->hw_frames_ctx != null)
+                    {
+                        var transferRet = ffmpeg.av_hwframe_transfer_data(swFrame, frame, 0);
+                        if (transferRet < 0)
+                        {
+                            _logger.LogWarning("av_hwframe_transfer_data failed: {Err}", FfmpegError.Describe(transferRet));
+                            ffmpeg.av_frame_unref(frame);
+                            continue;
+                        }
+                        presentable = swFrame;
+                    }
+
+                    // Lazy sws init — the actual sw pixfmt is only known once
+                    // the first frame arrives (matters for HW path where the
+                    // codecCtx->pix_fmt is the HW pixfmt, not the sw one).
+                    var framePixFmt = (AVPixelFormat)presentable->format;
+                    if (sws == null || framePixFmt != swsSrcPixFmt)
+                    {
+                        if (sws != null) ffmpeg.sws_freeContext(sws);
+                        sws = ffmpeg.sws_getContext(
+                            _width, _height, framePixFmt,
+                            _width, _height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                            ffmpeg.SWS_BILINEAR, null, null, null);
+                        if (sws == null)
+                            throw new InvalidOperationException($"sws_getContext returned null for {framePixFmt}");
+                        swsSrcPixFmt = framePixFmt;
+                    }
+
+                    EmitFrame(sws, presentable);
                     ffmpeg.av_frame_unref(frame);
+                    if (presentable == swFrame) ffmpeg.av_frame_unref(swFrame);
                 }
             }
         }
@@ -234,13 +286,67 @@ internal sealed class FfmpegVideoSession : IVideoSession
         {
             if (sws != null) ffmpeg.sws_freeContext(sws);
             if (frame != null) { var p = frame; ffmpeg.av_frame_free(&p); }
+            if (swFrame != null) { var p = swFrame; ffmpeg.av_frame_free(&p); }
             if (packet != null) { var p = packet; ffmpeg.av_packet_free(&p); }
             if (codecCtx != null) { var p = codecCtx; ffmpeg.avcodec_free_context(&p); }
+            if (hwDeviceCtx != null) { var p = hwDeviceCtx; ffmpeg.av_buffer_unref(&p); }
             if (fmtCtx != null) ffmpeg.avformat_close_input(&fmtCtx);
             if (opts != null) ffmpeg.av_dict_free(&opts);
         }
 
         SetState(SessionState.Idle);
+    }
+
+    private unsafe bool TryEnableHw(AVCodecContext* ctx, HwAccelHint hint, AVBufferRef** outDeviceCtx)
+    {
+        var (deviceType, hwPixFmt) = HwAccelSelector.MapToFfmpeg(hint);
+        AVBufferRef* device = null;
+        var ret = ffmpeg.av_hwdevice_ctx_create(&device, deviceType, null, null, 0);
+        if (ret < 0)
+        {
+            _logger.LogWarning("av_hwdevice_ctx_create({Type}) failed: {Err}", deviceType, FfmpegError.Describe(ret));
+            return false;
+        }
+
+        ctx->hw_device_ctx = ffmpeg.av_buffer_ref(device);
+        *outDeviceCtx = device;
+
+        // Closure over hwPixFmt — keep the delegate rooted via instance field
+        // so the unmanaged function pointer remains valid for the codec's life.
+        _selectedHwPixFmt = hwPixFmt;
+        _getFormatDelegate = GetFormatCallback;
+        ctx->get_format = new AVCodecContext_get_format_func
+        {
+            Pointer = Marshal.GetFunctionPointerForDelegate(_getFormatDelegate),
+        };
+        return true;
+    }
+
+    private unsafe AVPixelFormat GetFormatCallback(AVCodecContext* ctx, AVPixelFormat* fmts)
+    {
+        var p = fmts;
+        while (*p != AVPixelFormat.AV_PIX_FMT_NONE)
+        {
+            if (*p == _selectedHwPixFmt) return *p;
+            p++;
+        }
+        _logger.LogWarning("get_format: HW pixfmt {Fmt} not offered by decoder; using software", _selectedHwPixFmt);
+        return AVPixelFormat.AV_PIX_FMT_NONE;
+    }
+
+    private static unsafe void TearDownHw(AVCodecContext* ctx, AVBufferRef** deviceCtx)
+    {
+        if (ctx->hw_device_ctx != null)
+        {
+            var p = ctx->hw_device_ctx;
+            ffmpeg.av_buffer_unref(&p);
+            ctx->hw_device_ctx = null;
+        }
+        ctx->get_format = default;
+        if (*deviceCtx != null)
+        {
+            ffmpeg.av_buffer_unref(deviceCtx);
+        }
     }
 
     private unsafe void EmitFrame(SwsContext* sws, AVFrame* frame)

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Recording;
+using OpenIPC.Viewer.Video.Pipeline;
 
 namespace OpenIPC.Viewer.Video.Recording;
 
@@ -38,22 +39,12 @@ public sealed class FfmpegSubprocessRecorder : IRecorder
 
     private static string ResolveDefault()
     {
-        var (rid, exe) = CurrentRid();
+        var (rid, exe) = RuntimeIds.Current();
         if (rid is not null)
         {
             var bundled = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", exe);
             if (File.Exists(bundled)) return bundled;
         }
         return "ffmpeg";
-    }
-
-    private static (string? Rid, string Exe) CurrentRid()
-    {
-        if (OperatingSystem.IsWindows()) return ("win-x64", "ffmpeg.exe");
-        if (OperatingSystem.IsLinux()) return ("linux-x64", "ffmpeg");
-        if (OperatingSystem.IsMacOS())
-            return (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64
-                ? "osx-arm64" : "osx-x64", "ffmpeg");
-        return (null, "ffmpeg");
     }
 }
