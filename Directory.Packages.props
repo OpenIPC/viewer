@@ -9,6 +9,7 @@
     <PackageVersion Include="Avalonia" Version="12.0.3" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.3" />
     <PackageVersion Include="Avalonia.Android" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.iOS" Version="12.0.3" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.3" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.3" />
     <!-- Avalonia.Diagnostics is still on 11.3.x; re-add once a 12.x build ships. -->

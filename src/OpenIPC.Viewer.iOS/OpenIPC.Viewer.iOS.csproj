@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- iOS workload manifest installed is .NET 10 (`ios 26.2.10233/10.0.100`),
+         matching Avalonia.iOS 12.0.3 which publishes for net10.0-ios.
+         min iOS 16 per Avalonia.iOS support matrix + Phase 10 spec. -->
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <SupportedOSPlatformVersion>16.0</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ApplicationId>org.openipc.viewer</ApplicationId>
+    <ApplicationTitle>OpenIPC Viewer</ApplicationTitle>
+    <ApplicationDisplayVersion>0.1.0-beta</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Configuration)' == 'Release'">ios-arm64</RuntimeIdentifier>
+    <!--
+      Same NU1903 story as the Android project: transitive
+      System.Security.Cryptography.Xml is flagged by NuGet's advisory DB
+      across every published version, doesn't affect our usage. Revisit
+      when MS ships a patched servicing release.
+    -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.iOS" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenIPC.Viewer.App\OpenIPC.Viewer.App.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Composition\OpenIPC.Viewer.Composition.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Devices\OpenIPC.Viewer.Devices.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Video\OpenIPC.Viewer.Video.csproj" />
+  </ItemGroup>
+
+</Project>

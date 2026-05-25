@@ -7,6 +7,7 @@
     <Project Path="src/OpenIPC.Viewer.Desktop/OpenIPC.Viewer.Desktop.csproj" />
     <Project Path="src/OpenIPC.Viewer.Devices/OpenIPC.Viewer.Devices.csproj" />
     <Project Path="src/OpenIPC.Viewer.Infrastructure/OpenIPC.Viewer.Infrastructure.csproj" />
+    <Project Path="src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj" />
     <Project Path="src/OpenIPC.Viewer.Video/OpenIPC.Viewer.Video.csproj" />
   </Folder>
   <Folder Name="/tests/">

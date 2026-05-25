@@ -148,8 +148,43 @@ jobs:
           path: publish/android-arm64/*-Signed.apk
           if-no-files-found: error
 
+  ios:
+    runs-on: macos-14
+    name: build (ios)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install ios workload
+        run: dotnet workload install ios
+
+      - name: Restore
+        run: dotnet restore src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj -c Release --no-restore -p:TreatWarningsAsErrors=true
+
+      # Unsigned IPA — TestFlight signing is post-MVP (Phase 11). The artifact
+      # is a Release-published app bundle suitable for ad-hoc install via Xcode
+      # or for someone with credentials to sign + upload later.
+      - name: Publish (ios-arm64, unsigned)
+        run: dotnet publish src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj -c Release -f net10.0-ios -r ios-arm64 -p:CodesignKey= -p:ArchiveOnBuild=true -o publish/ios-arm64 || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openipc-viewer-ios-arm64
+          path: |
+            publish/ios-arm64/**/*.ipa
+            publish/ios-arm64/**/*.app
+          if-no-files-found: warn
+
   release:
-    needs: [build, android]
+    needs: [build, android, ios]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
