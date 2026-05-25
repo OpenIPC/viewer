@@ -38,11 +38,11 @@
                    Foreground="{StaticResource TextPrimaryBrush}" />
 
         <CheckBox IsChecked="{Binding ShowTelemetryOverlay}"
-                  Content="Show telemetry overlay on live view"
+                  Content="{Binding [Settings.Video.TelemetryOverlay], Source={x:Static svc:Localizer.Instance}}"
                   Foreground="{StaticResource TextPrimaryBrush}" />
 
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="Max concurrent grid sessions"
+          <TextBlock Text="{Binding [Settings.Video.MaxGridSessions], Source={x:Static svc:Localizer.Instance}}"
                      VerticalAlignment="Center"
                      Foreground="{StaticResource TextSecondaryBrush}" />
           <ComboBox ItemsSource="{Binding GridSessionOptions}"
@@ -51,7 +51,7 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="Default RTSP transport"
+          <TextBlock Text="{Binding [Settings.Video.RtspTransport], Source={x:Static svc:Localizer.Instance}}"
                      VerticalAlignment="Center"
                      Foreground="{StaticResource TextSecondaryBrush}" />
           <ComboBox ItemsSource="{Binding TransportOptions}"
@@ -68,7 +68,7 @@
                    Foreground="{StaticResource TextPrimaryBrush}" />
 
         <StackPanel Spacing="4">
-          <TextBlock Text="Recordings directory"
+          <TextBlock Text="{Binding [Settings.Recording.Directory], Source={x:Static svc:Localizer.Instance}}"
                      Foreground="{StaticResource TextSecondaryBrush}" />
           <TextBox Text="{Binding EffectiveRecordingsDirectory, Mode=OneWay}"
                    IsReadOnly="True"
@@ -78,7 +78,7 @@
                    Foreground="{StaticResource TextSecondaryBrush}"
                    BorderBrush="{StaticResource BorderWeakBrush}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Pick folder…"
+            <Button Content="{Binding [Settings.Recording.PickFolder], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding PickRecordingsDirectoryCommand}"
                     Background="Transparent"
                     BorderBrush="{StaticResource BorderMediumBrush}"
@@ -86,7 +86,7 @@
                     CornerRadius="6"
                     Padding="12,6"
                     Foreground="{StaticResource TextPrimaryBrush}" />
-            <Button Content="Reset to default"
+            <Button Content="{Binding [Settings.Recording.Reset], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding ResetRecordingsDirectoryCommand}"
                     IsVisible="{Binding IsRecordingsDirOverridden}"
                     Background="Transparent"
@@ -95,7 +95,7 @@
                     CornerRadius="6"
                     Padding="12,6"
                     Foreground="{StaticResource TextSecondaryBrush}" />
-            <Button Content="Open"
+            <Button Content="{Binding [Settings.Recording.Open], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding OpenRecordingsDirectoryCommand}"
                     Background="Transparent"
                     BorderBrush="{StaticResource BorderMediumBrush}"
@@ -115,7 +115,7 @@
                    Foreground="{StaticResource TextPrimaryBrush}" />
 
         <CheckBox IsChecked="{Binding AutoScanLanOnStartup}"
-                  Content="Run WS-Discovery on launch"
+                  Content="{Binding [Settings.Discovery.AutoScan], Source={x:Static svc:Localizer.Instance}}"
                   Foreground="{StaticResource TextPrimaryBrush}" />
       </StackPanel>
 
@@ -127,10 +127,10 @@
                    Foreground="{StaticResource TextPrimaryBrush}" />
 
         <CheckBox IsChecked="{Binding VerboseLogging}"
-                  Content="Verbose logging (debug level)"
+                  Content="{Binding [Settings.Advanced.VerboseLogging], Source={x:Static svc:Localizer.Instance}}"
                   Foreground="{StaticResource TextPrimaryBrush}" />
 
-        <Button Content="Open app data folder"
+        <Button Content="{Binding [Settings.Advanced.OpenAppData], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding OpenAppDataDirectoryCommand}"
                 Background="Transparent"
                 BorderBrush="{StaticResource BorderMediumBrush}"
@@ -158,7 +158,7 @@
           <Run Text="{Binding Version}" />
         </TextBlock>
 
-        <Button Content="GitHub repository →"
+        <Button Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding OpenRepositoryCommand}"
                 Background="Transparent"
                 BorderBrush="{StaticResource BorderMediumBrush}"

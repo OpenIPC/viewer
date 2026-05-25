@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Pages.CameraLibraryPage"
              x:DataType="vm:CameraLibraryPageViewModel">
   <Grid RowDefinitions="Auto,*">
@@ -8,13 +9,13 @@
     <!-- Header -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,24">
       <TextBlock Grid.Column="0"
-                 Text="{Binding Title}"
+                 Text="{Binding [Library.Title], Source={x:Static svc:Localizer.Instance}}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
                  Foreground="{StaticResource TextPrimaryBrush}"
                  VerticalAlignment="Center" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-        <Button Content="⟲ Refresh"
+        <Button Content="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding RefreshCommand}"
                 Padding="14,8"
                 Background="Transparent"
@@ -22,7 +23,7 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="🔍 Discover"
+        <Button Content="{Binding [Common.Discover], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding DiscoverCameraCommand}"
                 Padding="14,8"
                 Background="Transparent"
@@ -30,7 +31,7 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="+ Add camera"
+        <Button Content="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding AddCameraCommand}"
                 Padding="14,8"
                 Background="{StaticResource AccentBrush}"
@@ -45,11 +46,11 @@
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 Spacing="12">
-      <TextBlock Text="No cameras yet"
+      <TextBlock Text="{Binding [Library.EmptyTitle], Source={x:Static svc:Localizer.Instance}}"
                  FontSize="{StaticResource FontSizeLg}"
                  Foreground="{StaticResource TextSecondaryBrush}"
                  HorizontalAlignment="Center" />
-      <Button Content="+ Add camera"
+      <Button Content="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding AddCameraCommand}"
               Padding="14,8"
               Background="{StaticResource AccentBrush}"
@@ -107,7 +108,7 @@
                   <Border Background="{StaticResource Bg3Brush}"
                           CornerRadius="3"
                           Padding="6,2">
-                    <TextBlock Text="OFFLINE"
+                    <TextBlock Text="{Binding [Library.Offline], Source={x:Static svc:Localizer.Instance}}"
                                FontFamily="{StaticResource FontMono}"
                                FontSize="10"
                                Foreground="{StaticResource TextTertiaryBrush}" />
@@ -119,11 +120,11 @@
                             Spacing="8"
                             VerticalAlignment="Center">
                   <CheckBox IsChecked="{Binding IsIncludedInGrid, Mode=TwoWay}"
-                            Content="Show in grid"
+                            Content="{Binding [Library.RowShowInGrid], Source={x:Static svc:Localizer.Instance}}"
                             Foreground="{StaticResource TextSecondaryBrush}"
                             FontSize="{StaticResource FontSizeSm}"
                             VerticalAlignment="Center" />
-                  <Button Content="Edit"
+                  <Button Content="{Binding [Library.RowEdit], Source={x:Static svc:Localizer.Instance}}"
                           Padding="10,6"
                           Background="Transparent"
                           BorderBrush="{StaticResource BorderMediumBrush}"
@@ -132,7 +133,7 @@
                           Foreground="{StaticResource TextPrimaryBrush}"
                           Command="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).EditCameraCommand}"
                           CommandParameter="{Binding}" />
-                  <Button Content="Delete"
+                  <Button Content="{Binding [Library.RowDelete], Source={x:Static svc:Localizer.Instance}}"
                           Padding="10,6"
                           Background="Transparent"
                           BorderBrush="{StaticResource BorderMediumBrush}"

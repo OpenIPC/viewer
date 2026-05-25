@@ -3,6 +3,7 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              xmlns:input="using:Avalonia.Input"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SingleCameraPage"
              x:DataType="vm:SingleCameraPageViewModel">
 
@@ -11,7 +12,7 @@
     <!-- Header -->
     <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
       <Button Grid.Column="0"
-              Content="← Back"
+              Content="{Binding [Common.Back], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding BackCommand}"
               Background="Transparent"
               BorderBrush="{StaticResource BorderMediumBrush}"

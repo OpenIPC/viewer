@@ -65,6 +65,10 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Library.Title"] = "Cameras",
         ["Library.EmptyTitle"] = "No cameras yet",
+        ["Library.RowEdit"] = "Edit",
+        ["Library.RowDelete"] = "Delete",
+        ["Library.RowShowInGrid"] = "Show in grid",
+        ["Library.Offline"] = "OFFLINE",
 
         ["Welcome.Title"] = "OpenIPC Viewer",
         ["Welcome.Tagline"] = "Cross-platform viewer for OpenIPC IP cameras",
@@ -82,6 +86,22 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Discovery"] = "Discovery",
         ["Settings.Advanced"] = "Advanced",
         ["Settings.About"] = "About",
+
+        ["Settings.Video.TelemetryOverlay"] = "Show telemetry overlay on live view",
+        ["Settings.Video.MaxGridSessions"] = "Max concurrent grid sessions",
+        ["Settings.Video.RtspTransport"] = "Default RTSP transport",
+
+        ["Settings.Recording.Directory"] = "Recordings directory",
+        ["Settings.Recording.PickFolder"] = "Pick folder…",
+        ["Settings.Recording.Reset"] = "Reset to default",
+        ["Settings.Recording.Open"] = "Open",
+
+        ["Settings.Discovery.AutoScan"] = "Run WS-Discovery on launch",
+
+        ["Settings.Advanced.VerboseLogging"] = "Verbose logging (debug level)",
+        ["Settings.Advanced.OpenAppData"] = "Open app data folder",
+
+        ["Settings.About.Repository"] = "GitHub repository →",
 
         ["Lang.System"] = "System",
         ["Lang.English"] = "English",
@@ -107,6 +127,10 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Library.Title"] = "Камеры",
         ["Library.EmptyTitle"] = "Камер пока нет",
+        ["Library.RowEdit"] = "Изменить",
+        ["Library.RowDelete"] = "Удалить",
+        ["Library.RowShowInGrid"] = "В гриде",
+        ["Library.Offline"] = "ОФЛАЙН",
 
         ["Welcome.Title"] = "OpenIPC Viewer",
         ["Welcome.Tagline"] = "Кросс-платформенный просмотрщик IP-камер OpenIPC",
@@ -124,6 +148,22 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Discovery"] = "Поиск",
         ["Settings.Advanced"] = "Дополнительно",
         ["Settings.About"] = "О приложении",
+
+        ["Settings.Video.TelemetryOverlay"] = "Показывать телеметрию на видео",
+        ["Settings.Video.MaxGridSessions"] = "Максимум потоков в гриде",
+        ["Settings.Video.RtspTransport"] = "RTSP-транспорт по умолчанию",
+
+        ["Settings.Recording.Directory"] = "Папка записей",
+        ["Settings.Recording.PickFolder"] = "Выбрать…",
+        ["Settings.Recording.Reset"] = "Сбросить",
+        ["Settings.Recording.Open"] = "Открыть",
+
+        ["Settings.Discovery.AutoScan"] = "Запускать WS-Discovery при старте",
+
+        ["Settings.Advanced.VerboseLogging"] = "Подробные логи (debug)",
+        ["Settings.Advanced.OpenAppData"] = "Открыть папку данных",
+
+        ["Settings.About.Repository"] = "Репозиторий на GitHub →",
 
         ["Lang.System"] = "Системный",
         ["Lang.English"] = "English",
