@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Android.Platform;
+using OpenIPC.Viewer.Android.Recording;
 using OpenIPC.Viewer.App;
 using OpenIPC.Viewer.Composition;
 using OpenIPC.Viewer.Core.Platform;
@@ -38,8 +39,10 @@ internal static class Composition
             new AndroidSecretsStore(context, sp.GetRequiredService<IFileSystem>().AppDataDir));
         services.AddSingleton<IHwDecoderFactory, MediaCodecDecoderFactory>();
 
-        // Recording stub until Phase 9c.
-        services.AddSingleton<IRecorder, NotImplementedRecorder>();
+        // Recording — in-process libavformat (no subprocess on Android) +
+        // foreground service for OS keep-alive. Phase 9c.
+        services.AddSingleton<IRecorder>(sp =>
+            new AndroidRecorder(context, sp.GetRequiredService<ILoggerFactory>()));
 
         services.AddSharedServices();
 
