@@ -20,4 +20,6 @@ public interface IOnvifClient
     Task StopPtzAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct);
     Task<IReadOnlyList<PtzPreset>> GetPresetsAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct);
     Task GotoPresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct);
+    Task<string> SetPresetAsync(OnvifEndpoint endpoint, string profileToken, string name, CancellationToken ct);
+    Task RemovePresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct);
 }

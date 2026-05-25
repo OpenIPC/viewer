@@ -47,6 +47,7 @@ public sealed class CameraDirectoryService
             ChipModel: null,
             FirmwareVersion: null,
             IncludedInGrid: true,
+            HasPtz: false,
             SortOrder: 0,
             CreatedAt: now,
             UpdatedAt: now);
@@ -85,6 +86,30 @@ public sealed class CameraDirectoryService
         var existing = await _cameras.GetAsync(id, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Camera {id} not found");
         var updated = existing with { IncludedInGrid = included, UpdatedAt = DateTime.UtcNow };
+        await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
+    }
+
+    public async Task SaveOnvifMetadataAsync(
+        CameraId id,
+        Onvif.OnvifProbeResult probe,
+        CancellationToken ct)
+    {
+        var existing = await _cameras.GetAsync(id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Camera {id} not found");
+
+        var chipModel = probe.Manufacturer is not null && probe.Model is not null
+            ? $"{probe.Manufacturer} {probe.Model}".Trim()
+            : probe.Model ?? probe.Manufacturer;
+
+        var updated = existing with
+        {
+            OnvifEnabled = true,
+            OnvifProfileToken = probe.ProfileToken,
+            HasPtz = probe.HasPtz,
+            ChipModel = chipModel ?? existing.ChipModel,
+            FirmwareVersion = probe.FirmwareVersion ?? existing.FirmwareVersion,
+            UpdatedAt = DateTime.UtcNow,
+        };
         await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
     }
 

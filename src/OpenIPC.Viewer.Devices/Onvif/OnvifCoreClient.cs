@@ -164,6 +164,35 @@ public sealed class OnvifCoreClient : IOnvifClient
         }
     }
 
+    public async Task<string> SetPresetAsync(OnvifEndpoint endpoint, string profileToken, string name, CancellationToken ct)
+    {
+        var ptz = await OpenPtzAsync(endpoint).ConfigureAwait(false);
+        try
+        {
+            // Empty token = create new preset; camera returns the assigned token.
+            var req = new SetPresetRequest(profileToken, name, "");
+            var resp = await ptz.SetPresetAsync(req).ConfigureAwait(false);
+            return resp?.PresetToken ?? string.Empty;
+        }
+        finally
+        {
+            CloseQuietly(ptz);
+        }
+    }
+
+    public async Task RemovePresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct)
+    {
+        var ptz = await OpenPtzAsync(endpoint).ConfigureAwait(false);
+        try
+        {
+            await ptz.RemovePresetAsync(profileToken, presetToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CloseQuietly(ptz);
+        }
+    }
+
     private static Task<DeviceClient> OpenDeviceAsync(OnvifEndpoint ep) =>
         ep.Credentials is null
             ? OnvifClientFactory.CreatePreAuthDeviceClientAsync(ep.DeviceServiceUri)

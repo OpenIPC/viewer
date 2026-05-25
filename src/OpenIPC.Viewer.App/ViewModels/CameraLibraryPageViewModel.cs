@@ -113,7 +113,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
 
         try
         {
-            await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            // Persist HasPtz / ProfileToken / manufacturer info from the probe so
+            // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
+            await _directory.SaveOnvifMetadataAsync(id, found.Probe, CancellationToken.None).ConfigureAwait(true);
             await LoadAsync(CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)

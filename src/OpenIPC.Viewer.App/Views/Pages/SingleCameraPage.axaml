@@ -83,6 +83,64 @@
               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
         <TextBlock Text="{Binding ErrorMessage}" Foreground="White" />
       </Border>
+
+      <!-- PTZ overlay (joystick + presets), bottom-right, only for PTZ cams -->
+      <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  Margin="0,0,12,48" Spacing="10"
+                  IsVisible="{Binding HasPtz}">
+        <controls:PtzJoystick Controller="{Binding Ptz}" HorizontalAlignment="Right" />
+
+        <Border Background="#90000000" CornerRadius="6" Padding="8" MaxWidth="280">
+          <StackPanel Spacing="6">
+            <ItemsControl ItemsSource="{Binding Presets}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="2" ColumnDefinitions="Auto,Auto">
+                    <Button Grid.Column="0"
+                            Content="{Binding Name}"
+                            Padding="8,4"
+                            Background="{StaticResource Bg2Brush}"
+                            Foreground="White"
+                            CornerRadius="4"
+                            FontSize="11"
+                            Command="{Binding $parent[ItemsControl].((vm:SingleCameraPageViewModel)DataContext).GotoPresetCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="1"
+                            Content="✕"
+                            Padding="6,4"
+                            Background="Transparent"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            FontSize="11"
+                            Command="{Binding $parent[ItemsControl].((vm:SingleCameraPageViewModel)DataContext).RemovePresetCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="*,Auto" Margin="2,4,2,2">
+              <TextBox Grid.Column="0"
+                       Text="{Binding NewPresetName, Mode=TwoWay}"
+                       PlaceholderText="preset name"
+                       FontSize="11"
+                       Padding="6,4"
+                       Margin="0,0,4,0" />
+              <Button Grid.Column="1"
+                      Content="+ Save"
+                      Command="{Binding SavePresetCommand}"
+                      Padding="8,4"
+                      Background="{StaticResource AccentBrush}"
+                      Foreground="White"
+                      CornerRadius="4"
+                      FontSize="11" />
+            </Grid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
     </Grid>
 
     <!-- Bottom bar -->

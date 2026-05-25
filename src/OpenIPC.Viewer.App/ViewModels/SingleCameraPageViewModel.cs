@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
@@ -18,6 +20,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 {
     private readonly LiveStreamCoordinator _coordinator;
     private readonly CameraDirectoryService _directory;
+    private readonly IOnvifClient _onvif;
     private readonly IFileSystem _fs;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private readonly Camera _camera;
@@ -31,6 +34,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private SessionTelemetry? _telemetry;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string? _snapshotPath;
+    [ObservableProperty] private PtzController? _ptz;
+    [ObservableProperty] private string _newPresetName = "";
+
+    public bool HasPtz => _camera.HasPtz && !string.IsNullOrEmpty(_camera.OnvifProfileToken);
+    public ObservableCollection<PtzPreset> Presets { get; } = new();
 
     public string CameraName => _camera.Name;
     public string HostLabel => _camera.Host;
@@ -39,12 +47,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         Camera camera,
         LiveStreamCoordinator coordinator,
         CameraDirectoryService directory,
+        IOnvifClient onvif,
         IFileSystem fs,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
         _coordinator = coordinator;
         _directory = directory;
+        _onvif = onvif;
         _fs = fs;
         _logger = logger;
     }
@@ -77,6 +87,80 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             _logger.LogError(ex, "Failed to start session for camera {CameraId}", _camera.Id);
             ErrorMessage = ex.Message;
             State = SessionState.Failed;
+        }
+
+        if (HasPtz)
+            await InitPtzAsync(creds, ct).ConfigureAwait(true);
+    }
+
+    private async Task InitPtzAsync(CameraCredentials? creds, CancellationToken ct)
+    {
+        var port = _camera.OnvifPort ?? 80;
+        var endpoint = OnvifEndpoint.FromHost(_camera.Host, port, creds);
+        Ptz = new PtzController(_onvif, endpoint, _camera.OnvifProfileToken!);
+        await ReloadPresetsAsync(ct).ConfigureAwait(true);
+    }
+
+    private async Task ReloadPresetsAsync(CancellationToken ct)
+    {
+        if (Ptz is null) return;
+        try
+        {
+            var list = await Ptz.GetPresetsAsync(ct).ConfigureAwait(true);
+            Presets.Clear();
+            foreach (var p in list) Presets.Add(p);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load PTZ presets for {CameraId}", _camera.Id);
+        }
+    }
+
+    [RelayCommand]
+    private async Task GotoPresetAsync(PtzPreset? preset)
+    {
+        if (preset is null || Ptz is null) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Ptz.GotoPresetAsync(preset.Token, cts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to goto preset {Preset}", preset.Token);
+        }
+    }
+
+    [RelayCommand]
+    private async Task SavePresetAsync()
+    {
+        if (Ptz is null || string.IsNullOrWhiteSpace(NewPresetName)) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Ptz.SetPresetAsync(NewPresetName.Trim(), cts.Token).ConfigureAwait(true);
+            NewPresetName = "";
+            await ReloadPresetsAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to save preset");
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemovePresetAsync(PtzPreset? preset)
+    {
+        if (preset is null || Ptz is null) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Ptz.RemovePresetAsync(preset.Token, cts.Token).ConfigureAwait(true);
+            await ReloadPresetsAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remove preset {Preset}", preset.Token);
         }
     }
 
@@ -111,6 +195,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        if (Ptz is not null)
+        {
+            await Ptz.DisposeAsync().ConfigureAwait(false);
+            Ptz = null;
+        }
         if (Session is not null)
         {
             Session = null;

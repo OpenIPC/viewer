@@ -18,6 +18,7 @@ public sealed record Camera(
     string? ChipModel,
     string? FirmwareVersion,
     bool IncludedInGrid,
+    bool HasPtz,
     int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt);
