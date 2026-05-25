@@ -67,6 +67,23 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private bool _isRecording;
     [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
 
+    // 9e — touch gestures. ZoomLevel drives the ScaleTransform on the video
+    // surface (digital zoom only, 1.0..MaxZoom). IsPtzOverlayVisible is a
+    // toggle hidden behind long-press on narrow viewports — the joystick
+    // takes a chunk of screen real estate that's fine on desktop but should
+    // stay out of the way on a phone until the user explicitly asks.
+    public const double MinZoom = 1.0;
+    public const double MaxZoom = 4.0;
+    public const double ZoomStep = 0.25;
+
+    [ObservableProperty] private double _zoomLevel = MinZoom;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPtzPanelVisible))]
+    private bool _isPtzOverlayVisible = true;
+
+    public bool IsPtzPanelVisible => HasPtz && IsPtzOverlayVisible;
+
     // Hardcoded option lists. Phase-05 risk §"Кривой conf": free-input on res/codec
     // can brick the camera, so dropdowns only.
     public System.Collections.Generic.IReadOnlyList<string> CodecOptions { get; } = new[] { "h264", "h265" };
@@ -150,6 +167,46 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             _logger.LogError(ex, "Toggle recording failed for {CameraId}", _camera.Id);
             ErrorMessage = $"Recording failed: {ex.Message}";
         }
+    }
+
+    [RelayCommand]
+    private void TogglePtzOverlay() => IsPtzOverlayVisible = !IsPtzOverlayVisible;
+
+    [RelayCommand]
+    private void ResetZoom() => ZoomLevel = MinZoom;
+
+    public void ApplyZoomDelta(double factor)
+    {
+        var next = Math.Clamp(ZoomLevel * factor, MinZoom, MaxZoom);
+        ZoomLevel = next;
+    }
+
+    public void StepZoom(int steps)
+    {
+        var next = Math.Clamp(ZoomLevel + steps * ZoomStep, MinZoom, MaxZoom);
+        ZoomLevel = next;
+    }
+
+    public async Task NavigateRelativeAsync(int offset, CancellationToken ct)
+    {
+        if (offset == 0) return;
+        var cameras = await _directory.ListAsync(ct).ConfigureAwait(true);
+        if (cameras.Count <= 1) return;
+
+        var index = -1;
+        for (var i = 0; i < cameras.Count; i++)
+        {
+            if (cameras[i].Id == _camera.Id) { index = i; break; }
+        }
+        if (index < 0) return;
+
+        // Wrap around — swiping past the last camera takes you back to the
+        // first. Matches phone-gallery muscle memory.
+        var n = cameras.Count;
+        var next = ((index + offset) % n + n) % n;
+        if (next == index) return;
+
+        WeakReferenceMessenger.Default.Send(new OpenCameraMessage(cameras[next].Id));
     }
 
     public async Task ActivateAsync(CancellationToken ct)

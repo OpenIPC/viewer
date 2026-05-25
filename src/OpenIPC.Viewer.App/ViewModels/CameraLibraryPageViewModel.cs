@@ -62,6 +62,9 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private Task RefreshAsync() => LoadAsync(CancellationToken.None);
+
+    [RelayCommand]
     private void OpenCamera(CameraRowViewModel? row)
     {
         if (row is null)

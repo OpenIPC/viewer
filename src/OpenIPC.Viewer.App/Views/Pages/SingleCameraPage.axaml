@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:input="using:Avalonia.Input"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SingleCameraPage"
              x:DataType="vm:SingleCameraPageViewModel">
 
@@ -30,9 +31,20 @@
       </StackPanel>
     </Grid>
 
-    <!-- Video + overlays -->
-    <Grid Grid.Row="1">
-      <controls:RtspVideoView Session="{Binding Session}" />
+    <!-- Video + overlays. ClipToBounds keeps zoomed frames inside this row.
+         RenderTransform binds ZoomLevel from the VM (1.0..4.0 digital zoom).
+         Code-behind attaches Holding / DoubleTapped / Pinch / swipe handlers
+         to this grid. -->
+    <Grid Grid.Row="1" Name="VideoArea" ClipToBounds="True">
+      <controls:RtspVideoView Name="VideoView" Session="{Binding Session}"
+                              RenderTransformOrigin="0.5,0.5">
+        <controls:RtspVideoView.RenderTransform>
+          <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}" />
+        </controls:RtspVideoView.RenderTransform>
+        <controls:RtspVideoView.GestureRecognizers>
+          <input:PinchGestureRecognizer />
+        </controls:RtspVideoView.GestureRecognizers>
+      </controls:RtspVideoView>
 
       <!-- Top-left LIVE badge -->
       <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12"
@@ -84,10 +96,12 @@
         <TextBlock Text="{Binding ErrorMessage}" Foreground="White" />
       </Border>
 
-      <!-- PTZ overlay (joystick + presets), bottom-right, only for PTZ cams -->
+      <!-- PTZ overlay (joystick + presets), bottom-right, only for PTZ cams.
+           Long-press on the video toggles IsPtzOverlayVisible to free up
+           screen real estate on mobile while keeping it pinned on desktop. -->
       <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"
                   Margin="0,0,12,48" Spacing="10"
-                  IsVisible="{Binding HasPtz}">
+                  IsVisible="{Binding IsPtzPanelVisible}">
         <controls:PtzJoystick Controller="{Binding Ptz}" HorizontalAlignment="Right" />
 
         <Border Background="#90000000" CornerRadius="6" Padding="8" MaxWidth="280">

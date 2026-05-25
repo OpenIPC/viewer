@@ -14,6 +14,14 @@
                  Foreground="{StaticResource TextPrimaryBrush}"
                  VerticalAlignment="Center" />
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button Content="⟲ Refresh"
+                Command="{Binding RefreshCommand}"
+                Padding="14,8"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Foreground="{StaticResource TextPrimaryBrush}" />
         <Button Content="🔍 Discover"
                 Command="{Binding DiscoverCameraCommand}"
                 Padding="14,8"
