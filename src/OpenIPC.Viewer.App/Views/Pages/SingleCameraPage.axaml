@@ -126,13 +126,13 @@
                             Command="{Binding $parent[ItemsControl].((vm:SingleCameraPageViewModel)DataContext).GotoPresetCommand}"
                             CommandParameter="{Binding}" />
                     <Button Grid.Column="1"
-                            Content="✕"
                             Padding="6,4"
                             Background="Transparent"
                             Foreground="{StaticResource TextSecondaryBrush}"
-                            FontSize="11"
                             Command="{Binding $parent[ItemsControl].((vm:SingleCameraPageViewModel)DataContext).RemovePresetCommand}"
-                            CommandParameter="{Binding}" />
+                            CommandParameter="{Binding}">
+                      <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+                    </Button>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

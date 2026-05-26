@@ -40,22 +40,32 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="{Binding [Common.Discover], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding DiscoverCameraCommand}"
-                Padding="14,8"
+        <Button Command="{Binding DiscoverCameraCommand}"
+                Padding="12,8"
                 Background="Transparent"
                 BorderBrush="{StaticResource BorderMediumBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="{Binding [Library.ScanQr], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding ScanQrCommand}"
-                Padding="14,8"
+                Foreground="{StaticResource TextPrimaryBrush}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconSearch}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding [Common.Discover], Source={x:Static svc:Localizer.Instance}}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Command="{Binding ScanQrCommand}"
+                Padding="12,8"
                 Background="Transparent"
                 BorderBrush="{StaticResource BorderMediumBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
-                Foreground="{StaticResource TextPrimaryBrush}" />
+                Foreground="{StaticResource TextPrimaryBrush}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconQr}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding [Library.ScanQr], Source={x:Static svc:Localizer.Instance}}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Content="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding AddCameraCommand}"
                 Padding="14,8"

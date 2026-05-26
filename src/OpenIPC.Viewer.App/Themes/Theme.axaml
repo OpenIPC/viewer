@@ -46,4 +46,34 @@
   <StreamGeometry x:Key="IconEvents">M5,3 H11 V5 C11,7 12,9 12,10 H4 C4,9 5,7 5,5 Z M7,11 H9 V12.5 H7 Z</StreamGeometry>
   <StreamGeometry x:Key="IconSettings">M2,4 H14 V6 H2 Z M2,7 H14 V9 H2 Z M2,10 H14 V12 H2 Z</StreamGeometry>
 
+  <!--
+    Utility icons (16x16). Same EvenOdd-fill convention as the nav icons above
+    — concentric paths punch out inner regions so PathIcon's Foreground paints
+    the visible shape only.
+  -->
+  <!-- IconSearch — magnifier: outer lens ring + diagonal handle. Doubles as the
+       section icon for Discovery. -->
+  <StreamGeometry x:Key="IconSearch">M6,3 A3,3 0 1 1 6,9 A3,3 0 1 1 6,3 Z M6,4.2 A1.8,1.8 0 1 1 6,7.8 A1.8,1.8 0 1 1 6,4.2 Z M8.6,9 L9,8.6 L13,12.6 L12.6,13 Z</StreamGeometry>
+  <!-- IconQr — three corner finder patterns + two dots. -->
+  <StreamGeometry x:Key="IconQr">M2,2 H6 V6 H2 Z M3,3 H5 V5 H3 Z M10,2 H14 V6 H10 Z M11,3 H13 V5 H11 Z M2,10 H6 V14 H2 Z M3,11 H5 V13 H3 Z M9,8 H11 V10 H9 Z M12,11 H14 V13 H12 Z</StreamGeometry>
+  <!-- IconClose — × cross as two filled diagonal bars. -->
+  <StreamGeometry x:Key="IconClose">M3.5,4.5 L4.5,3.5 L12.5,11.5 L11.5,12.5 Z M11.5,3.5 L12.5,4.5 L4.5,12.5 L3.5,11.5 Z</StreamGeometry>
+  <!-- IconEdit — pencil silhouette. -->
+  <StreamGeometry x:Key="IconEdit">M2,14 L4.5,14 L13,5.5 L10.5,3 L2,11.5 Z M10.5,3 L12,1.5 L14.5,4 L13,5.5 Z</StreamGeometry>
+  <!-- IconCheck — thick check mark. -->
+  <StreamGeometry x:Key="IconCheck">M2,8 L4,6 L7,9 L13,3 L14,5 L7,12 Z</StreamGeometry>
+
+  <!--
+    Settings section icons. Each ~16x16, monochrome, fits next to the section
+    header at 18x18 displayed size.
+  -->
+  <!-- IconAppearance — half-filled disc (left half) — theme/contrast affordance. -->
+  <StreamGeometry x:Key="IconAppearance">M8,3 A5,5 0 0 0 8,13 Z M8,3 A5,5 0 1 1 8,13 A5,5 0 1 1 8,3 Z M8,4.5 A3.5,3.5 0 1 1 8,11.5 A3.5,3.5 0 1 1 8,4.5 Z</StreamGeometry>
+  <!-- IconVideo — play silhouette: filled rect with triangle punched out. -->
+  <StreamGeometry x:Key="IconVideo">M2,4 H14 V12 H2 Z M6,6 L11,8 L6,10 Z</StreamGeometry>
+  <!-- IconAdvanced — gear: ring with four cardinal teeth. -->
+  <StreamGeometry x:Key="IconAdvanced">M8,4 A4,4 0 1 1 8,12 A4,4 0 1 1 8,4 Z M8,5.5 A2.5,2.5 0 1 1 8,10.5 A2.5,2.5 0 1 1 8,5.5 Z M7,2 H9 V4.2 H7 Z M7,11.8 H9 V14 H7 Z M2,7 H4.2 V9 H2 Z M11.8,7 H14 V9 H11.8 Z</StreamGeometry>
+  <!-- IconAbout — i in a circle. -->
+  <StreamGeometry x:Key="IconAbout">M8,3 A5,5 0 1 1 8,13 A5,5 0 1 1 8,3 Z M8,4.5 A3.5,3.5 0 1 1 8,11.5 A3.5,3.5 0 1 1 8,4.5 Z M7.2,7.5 H8.8 V11 H7.2 Z M7.2,5.5 H8.8 V6.7 H7.2 Z</StreamGeometry>
+
 </ResourceDictionary>

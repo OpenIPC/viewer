@@ -6,8 +6,50 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.SettingsPage"
              x:DataType="vm:SettingsPageViewModel">
 
+  <UserControl.Styles>
+    <!-- Section card. Bg2 + thin border + soft corners. Padding shrinks slightly
+         on narrow viewports through the Grid layout — actual card padding stays
+         constant for visual consistency desktop↔mobile. -->
+    <Style Selector="Border.section">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderWeakBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeMd}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="PathIcon.section-icon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Row: label on the left (wraps), control on the right. Stays one line
+         on desktop, on a phone narrow viewport the wrapping label keeps the
+         control visible instead of pushing it off-screen. -->
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+    <Style Selector="Button.outlined">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <ScrollViewer>
-    <StackPanel Spacing="24" Margin="0,0,8,24" VerticalAlignment="Top">
+    <StackPanel Spacing="16" Margin="0,0,8,24" VerticalAlignment="Top">
 
       <TextBlock Text="{Binding [Settings.Title], Source={x:Static svc:Localizer.Instance}}"
                  FontSize="{StaticResource FontSizeXl}"
@@ -15,170 +57,166 @@
                  Foreground="{StaticResource TextPrimaryBrush}" />
 
       <!-- Appearance -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.Appearance], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconAppearance}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Appearance], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="{Binding [Settings.Appearance.Language], Source={x:Static svc:Localizer.Instance}}"
-                     VerticalAlignment="Center"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-          <ComboBox ItemsSource="{Binding LanguageOptions}"
-                    SelectedItem="{Binding Language, Mode=TwoWay}"
-                    MinWidth="120">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="x:String">
-                <TextBlock Text="{Binding ., Converter={x:Static conv:LanguageCodeConverter.Instance}}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Appearance.Language], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding LanguageOptions}"
+                      SelectedItem="{Binding Language, Mode=TwoWay}"
+                      MinWidth="120">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Text="{Binding ., Converter={x:Static conv:LanguageCodeConverter.Instance}}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
         </StackPanel>
-      </StackPanel>
+      </Border>
 
       <!-- Video -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.Video], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconVideo}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Video], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <CheckBox IsChecked="{Binding ShowTelemetryOverlay}"
-                  Content="{Binding [Settings.Video.TelemetryOverlay], Source={x:Static svc:Localizer.Instance}}"
-                  Foreground="{StaticResource TextPrimaryBrush}" />
+          <CheckBox IsChecked="{Binding ShowTelemetryOverlay}"
+                    Content="{Binding [Settings.Video.TelemetryOverlay], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
 
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="{Binding [Settings.Video.MaxGridSessions], Source={x:Static svc:Localizer.Instance}}"
-                     VerticalAlignment="Center"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-          <ComboBox ItemsSource="{Binding GridSessionOptions}"
-                    SelectedItem="{Binding MaxConcurrentGridSessions, Mode=TwoWay}"
-                    MinWidth="80" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Video.MaxGridSessions], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding GridSessionOptions}"
+                      SelectedItem="{Binding MaxConcurrentGridSessions, Mode=TwoWay}"
+                      MinWidth="80" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Video.RtspTransport], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding TransportOptions}"
+                      SelectedItem="{Binding RtspTransport, Mode=TwoWay}"
+                      MinWidth="80" />
+          </Grid>
         </StackPanel>
-
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="{Binding [Settings.Video.RtspTransport], Source={x:Static svc:Localizer.Instance}}"
-                     VerticalAlignment="Center"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-          <ComboBox ItemsSource="{Binding TransportOptions}"
-                    SelectedItem="{Binding RtspTransport, Mode=TwoWay}"
-                    MinWidth="80" />
-        </StackPanel>
-      </StackPanel>
+      </Border>
 
       <!-- Recording -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.Recording], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconRecordings}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Recording], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <StackPanel Spacing="4">
-          <TextBlock Text="{Binding [Settings.Recording.Directory], Source={x:Static svc:Localizer.Instance}}"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
-          <TextBox Text="{Binding EffectiveRecordingsDirectory, Mode=OneWay}"
-                   IsReadOnly="True"
-                   FontFamily="{StaticResource FontMono}"
-                   FontSize="{StaticResource FontSizeSm}"
-                   Background="{StaticResource Bg2Brush}"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   BorderBrush="{StaticResource BorderWeakBrush}" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{Binding [Settings.Recording.PickFolder], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding PickRecordingsDirectoryCommand}"
-                    Background="Transparent"
-                    BorderBrush="{StaticResource BorderMediumBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,6"
-                    Foreground="{StaticResource TextPrimaryBrush}" />
-            <Button Content="{Binding [Settings.Recording.Reset], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding ResetRecordingsDirectoryCommand}"
-                    IsVisible="{Binding IsRecordingsDirOverridden}"
-                    Background="Transparent"
-                    BorderBrush="{StaticResource BorderMediumBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,6"
-                    Foreground="{StaticResource TextSecondaryBrush}" />
-            <Button Content="{Binding [Settings.Recording.Open], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding OpenRecordingsDirectoryCommand}"
-                    Background="Transparent"
-                    BorderBrush="{StaticResource BorderMediumBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,6"
-                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <StackPanel Spacing="6">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.Recording.Directory], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBox Text="{Binding EffectiveRecordingsDirectory, Mode=OneWay}"
+                     IsReadOnly="True"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     Background="{StaticResource Bg0Brush}"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     BorderBrush="{StaticResource BorderWeakBrush}" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6" Margin="0,2,0,0">
+              <Button Classes="outlined"
+                      Content="{Binding [Settings.Recording.PickFolder], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding PickRecordingsDirectoryCommand}" />
+              <Button Classes="outlined"
+                      Content="{Binding [Settings.Recording.Reset], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding ResetRecordingsDirectoryCommand}"
+                      IsVisible="{Binding IsRecordingsDirOverridden}"
+                      Foreground="{StaticResource TextSecondaryBrush}" />
+              <Button Classes="outlined"
+                      Content="{Binding [Settings.Recording.Open], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding OpenRecordingsDirectoryCommand}" />
+            </WrapPanel>
           </StackPanel>
         </StackPanel>
-      </StackPanel>
+      </Border>
 
       <!-- Discovery -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.Discovery], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconSearch}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Discovery], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <CheckBox IsChecked="{Binding AutoScanLanOnStartup}"
-                  Content="{Binding [Settings.Discovery.AutoScan], Source={x:Static svc:Localizer.Instance}}"
-                  Foreground="{StaticResource TextPrimaryBrush}" />
-      </StackPanel>
+          <CheckBox IsChecked="{Binding AutoScanLanOnStartup}"
+                    Content="{Binding [Settings.Discovery.AutoScan], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+        </StackPanel>
+      </Border>
 
       <!-- Advanced -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.Advanced], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconAdvanced}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Advanced], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <CheckBox IsChecked="{Binding VerboseLogging}"
-                  Content="{Binding [Settings.Advanced.VerboseLogging], Source={x:Static svc:Localizer.Instance}}"
-                  Foreground="{StaticResource TextPrimaryBrush}" />
+          <CheckBox IsChecked="{Binding VerboseLogging}"
+                    Content="{Binding [Settings.Advanced.VerboseLogging], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
 
-        <CheckBox IsChecked="{Binding RawConfigEditorEnabled}"
-                  Content="{Binding [Settings.Advanced.RawConfigEditor], Source={x:Static svc:Localizer.Instance}}"
-                  Foreground="{StaticResource TextPrimaryBrush}" />
+          <CheckBox IsChecked="{Binding RawConfigEditorEnabled}"
+                    Content="{Binding [Settings.Advanced.RawConfigEditor], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
 
-        <Button Content="{Binding [Settings.Advanced.OpenAppData], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding OpenAppDataDirectoryCommand}"
-                Background="Transparent"
-                BorderBrush="{StaticResource BorderMediumBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="12,6"
-                Foreground="{StaticResource TextPrimaryBrush}"
-                HorizontalAlignment="Left" />
-
-        <TextBlock Text="{Binding AppDataDirectory}"
-                   FontFamily="{StaticResource FontMono}"
-                   FontSize="{StaticResource FontSizeSm}"
-                   Foreground="{StaticResource TextTertiaryBrush}" />
-      </StackPanel>
+          <StackPanel Spacing="6">
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Advanced.OpenAppData], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding OpenAppDataDirectoryCommand}"
+                    HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding AppDataDirectory}"
+                       FontFamily="{StaticResource FontMono}"
+                       FontSize="{StaticResource FontSizeSm}"
+                       Foreground="{StaticResource TextTertiaryBrush}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
       <!-- About -->
-      <StackPanel Spacing="12">
-        <TextBlock Text="{Binding [Settings.About], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeMd}"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <Border Classes="section">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Classes="section-icon" Data="{StaticResource IconAbout}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.About], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
 
-        <TextBlock Foreground="{StaticResource TextSecondaryBrush}">
-          <Run Text="OpenIPC Viewer " />
-          <Run Text="{Binding Version}" />
-        </TextBlock>
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}">
+            <Run Text="OpenIPC Viewer " />
+            <Run Text="{Binding Version}" />
+          </TextBlock>
 
-        <Button Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding OpenRepositoryCommand}"
-                Background="Transparent"
-                BorderBrush="{StaticResource BorderMediumBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="12,6"
-                Foreground="{StaticResource TextPrimaryBrush}"
-                HorizontalAlignment="Left" />
-      </StackPanel>
+          <Button Classes="outlined"
+                  Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding OpenRepositoryCommand}"
+                  HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
 
     </StackPanel>
   </ScrollViewer>

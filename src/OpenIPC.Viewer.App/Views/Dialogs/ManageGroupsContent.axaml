@@ -45,28 +45,31 @@
                          BorderThickness="0"
                          VerticalAlignment="Center" />
                 <Button Grid.Column="1"
-                        Content="✎"
                         Command="{Binding BeginRenameCommand}"
                         IsVisible="{Binding !IsEditing}"
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource TextSecondaryBrush}"
-                        Padding="8,4" />
+                        Padding="8,4">
+                  <PathIcon Data="{StaticResource IconEdit}" Width="12" Height="12" />
+                </Button>
                 <Button Grid.Column="1"
-                        Content="✓"
                         Command="{Binding CommitRenameCommand}"
                         IsVisible="{Binding IsEditing}"
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource AccentBrush}"
-                        Padding="8,4" />
+                        Padding="8,4">
+                  <PathIcon Data="{StaticResource IconCheck}" Width="12" Height="12" />
+                </Button>
                 <Button Grid.Column="2"
-                        Content="✕"
                         Command="{Binding DeleteCommand}"
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource DangerBrush}"
-                        Padding="8,4" />
+                        Padding="8,4">
+                  <PathIcon Data="{StaticResource IconClose}" Width="11" Height="11" />
+                </Button>
               </Grid>
             </Border>
           </DataTemplate>
