@@ -324,14 +324,18 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
     private unsafe AVPixelFormat GetFormatCallback(AVCodecContext* ctx, AVPixelFormat* fmts)
     {
-        var p = fmts;
-        while (*p != AVPixelFormat.AV_PIX_FMT_NONE)
-        {
+        // First pass: pick the HW pixfmt if the decoder offers it.
+        for (var p = fmts; *p != AVPixelFormat.AV_PIX_FMT_NONE; p++)
             if (*p == _selectedHwPixFmt) return *p;
-            p++;
-        }
-        _logger.LogWarning("get_format: HW pixfmt {Fmt} not offered by decoder; using software", _selectedHwPixFmt);
-        return AVPixelFormat.AV_PIX_FMT_NONE;
+
+        // Fallback: decoder didn't offer the HW format (typical on Android
+        // emulators — no MediaCodec passthrough). Return the first offered
+        // (software) format. Returning AV_PIX_FMT_NONE makes the decoder
+        // reject every subsequent packet with AVERROR_INVALIDDATA.
+        var fallback = *fmts;
+        _logger.LogWarning("get_format: HW pixfmt {Fmt} not offered; falling back to software {Sw}",
+            _selectedHwPixFmt, fallback);
+        return fallback;
     }
 
     private static unsafe void TearDownHw(AVCodecContext* ctx, AVBufferRef** deviceCtx)
