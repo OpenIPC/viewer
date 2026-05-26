@@ -37,15 +37,18 @@ internal static class FfmpegRuntime
             throw new FfmpegNativeLibsMissingException(
                 $"FFmpeg native libraries are missing for runtime '{rid ?? "unknown"}'. " +
                 $"Probed: {probe}. " +
-                $"Build them with tools/build-ffmpeg-android.sh (Android) or install " +
-                $"ffmpeg via apt/brew/winget (Desktop). Inner: {ex.Message}", ex);
+                $"Android: run tools/build-ffmpeg-android.sh (WSL/Linux/macOS) — builds " +
+                $"arm64-v8a + x86_64 from upstream n7.1. " +
+                $"Desktop: run tools/fetch-ffmpeg.ps1 (Windows) or install ffmpeg via " +
+                $"apt/brew. Inner: {ex.Message}", ex);
         }
         catch (TypeInitializationException ex) when (ex.InnerException is DllNotFoundException dll)
         {
             var (rid, _) = RuntimeIds.Current();
             throw new FfmpegNativeLibsMissingException(
                 $"FFmpeg native libraries are missing for runtime '{rid ?? "unknown"}'. " +
-                $"Inner: {dll.Message}", ex);
+                $"Run tools/build-ffmpeg-android.sh (Android) or tools/fetch-ffmpeg.ps1 " +
+                $"(Desktop). Inner: {dll.Message}", ex);
         }
     }
 

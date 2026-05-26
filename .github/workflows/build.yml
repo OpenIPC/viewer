@@ -102,15 +102,17 @@ jobs:
       - name: Install android workload
         run: dotnet workload install android
 
-      # FFmpeg .so build is the long pole (~15 min) — cache the output dir.
-      # Key on FFmpeg version + NDK version + the build script hash so any of
-      # those changing invalidates the cache and forces a rebuild.
-      - name: Cache FFmpeg android-arm64 build
+      # FFmpeg .so build is the long pole (~15 min per ABI) — cache the output
+      # dirs for both ABIs in one entry. Key on FFmpeg version + NDK version
+      # + the build script hash so any of those changing invalidates the cache.
+      - name: Cache FFmpeg android natives (arm64 + x64)
         id: ffmpeg-cache
         uses: actions/cache@v4
         with:
-          path: runtimes/android-arm64/native
-          key: ffmpeg-android-arm64-${{ env.FFMPEG_VERSION }}-ndk${{ env.NDK_VERSION }}-${{ hashFiles('tools/build-ffmpeg-android.sh') }}
+          path: |
+            runtimes/android-arm64/native
+            runtimes/android-x64/native
+          key: ffmpeg-android-${{ env.FFMPEG_VERSION }}-ndk${{ env.NDK_VERSION }}-${{ hashFiles('tools/build-ffmpeg-android.sh') }}
 
       - name: Set up Android NDK
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
@@ -126,7 +128,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y yasm nasm pkg-config
 
-      - name: Cross-compile FFmpeg for android-arm64
+      - name: Cross-compile FFmpeg for android-arm64 + android-x64
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -141,11 +143,21 @@ jobs:
       - name: Publish APK (android-arm64)
         run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -o publish/android-arm64
 
-      - name: Upload artifact
+      - name: Publish APK (android-x64)
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64
+
+      - name: Upload artifact (arm64)
         uses: actions/upload-artifact@v4
         with:
           name: openipc-viewer-android-arm64
           path: publish/android-arm64/*-Signed.apk
+          if-no-files-found: error
+
+      - name: Upload artifact (x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openipc-viewer-android-x64
+          path: publish/android-x64/*-Signed.apk
           if-no-files-found: error
 
   ios:
