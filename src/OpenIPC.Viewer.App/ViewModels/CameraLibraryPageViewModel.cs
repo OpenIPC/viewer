@@ -23,7 +23,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     private readonly DiscoveryDialogFactory _discoveryFactory;
     private readonly ILogger<CameraLibraryPageViewModel> _logger;
 
-    public string Title => "Cameras";
+    public string Title => Localizer.Instance["Library.Title"];
     public ObservableCollection<CameraRowViewModel> Cameras { get; } = new();
 
     [ObservableProperty]

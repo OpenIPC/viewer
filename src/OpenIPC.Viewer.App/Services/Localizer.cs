@@ -104,6 +104,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Groups.Empty"] = "No groups yet",
         ["Groups.NewName"] = "New group name",
         ["Groups.Add"] = "Add",
+        ["Groups.Error.CamerasReferenced"] = "Cannot delete: cameras still reference this group.",
+        ["Groups.Tooltip.Rename"] = "Rename",
+        ["Groups.Tooltip.Confirm"] = "Confirm",
+        ["Groups.Tooltip.Delete"] = "Delete",
 
         ["Welcome.Title"] = "OpenIPC Viewer",
         ["Welcome.Tagline"] = "Cross-platform viewer for OpenIPC IP cameras",
@@ -189,6 +193,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Discovery.Status.ProbingFormat"] = "Probing {0}…",
         ["Discovery.Status.ProbeOkFormat"] = "OK — {0} {1}",
         ["Discovery.Status.ProbeFailedFormat"] = "Probe failed: {0}",
+        ["Discovery.UnknownModel"] = "(unknown model)",
 
         ["RawConfigEditor.Title"] = "Edit raw Majestic config",
         ["RawConfigEditor.InvalidJsonFormat"] = "Invalid JSON: {0}",
@@ -221,6 +226,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["CameraPage.OpenSnapshotFailedFormat"] = "Open snapshot failed: {0}",
         ["CameraPage.CopySnapshotFailedFormat"] = "Copy snapshot failed: {0}",
         ["CameraPage.SaveSnapshotFailedFormat"] = "Save snapshot failed: {0}",
+        ["CameraPage.Tooltip.RemovePreset"] = "Remove preset",
 
         ["Snapshot.SaveAsTitle"] = "Save snapshot",
 
@@ -296,6 +302,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Groups.Empty"] = "Групп пока нет",
         ["Groups.NewName"] = "Название новой группы",
         ["Groups.Add"] = "Добавить",
+        ["Groups.Error.CamerasReferenced"] = "Нельзя удалить: камеры всё ещё ссылаются на эту группу.",
+        ["Groups.Tooltip.Rename"] = "Переименовать",
+        ["Groups.Tooltip.Confirm"] = "Подтвердить",
+        ["Groups.Tooltip.Delete"] = "Удалить",
 
         ["Welcome.Title"] = "OpenIPC Viewer",
         ["Welcome.Tagline"] = "Кросс-платформенный просмотрщик IP-камер OpenIPC",
@@ -381,6 +391,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Discovery.Status.ProbingFormat"] = "Опрос {0}…",
         ["Discovery.Status.ProbeOkFormat"] = "OK — {0} {1}",
         ["Discovery.Status.ProbeFailedFormat"] = "Опрос не удался: {0}",
+        ["Discovery.UnknownModel"] = "(неизвестная модель)",
 
         ["RawConfigEditor.Title"] = "Правка raw-конфига Majestic",
         ["RawConfigEditor.InvalidJsonFormat"] = "Невалидный JSON: {0}",
@@ -413,6 +424,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["CameraPage.OpenSnapshotFailedFormat"] = "Не удалось открыть снимок: {0}",
         ["CameraPage.CopySnapshotFailedFormat"] = "Не удалось скопировать снимок: {0}",
         ["CameraPage.SaveSnapshotFailedFormat"] = "Не удалось сохранить снимок: {0}",
+        ["CameraPage.Tooltip.RemovePreset"] = "Удалить пресет",
 
         ["Snapshot.SaveAsTitle"] = "Сохранить снимок",
 

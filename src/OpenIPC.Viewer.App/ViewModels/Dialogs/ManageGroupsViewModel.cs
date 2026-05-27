@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 
@@ -85,7 +86,7 @@ public sealed partial class ManageGroupsViewModel : ViewModelBase
             // FK constraint trips when cameras still reference this group;
             // surface the message instead of swallowing.
             _logger.LogInformation(ex, "Remove group {Id} blocked", id);
-            ErrorMessage = "Cannot delete: cameras still reference this group.";
+            ErrorMessage = Localizer.Instance["Groups.Error.CamerasReferenced"];
         }
     }
 }

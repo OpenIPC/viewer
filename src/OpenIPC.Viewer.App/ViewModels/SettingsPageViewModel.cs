@@ -16,7 +16,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private bool _suppressSave;
 
-    public string Title => "Settings";
+    public string Title => Localizer.Instance["Settings.Title"];
 
     [ObservableProperty] private bool _showTelemetryOverlay;
     [ObservableProperty] private bool _verboseLogging;

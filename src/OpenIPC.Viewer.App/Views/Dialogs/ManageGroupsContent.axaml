@@ -50,7 +50,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource TextSecondaryBrush}"
-                        Padding="8,4">
+                        Padding="8,4"
+                        ToolTip.Tip="{Binding [Groups.Tooltip.Rename], Source={x:Static svc:Localizer.Instance}}">
                   <Path Classes="lucide" Data="{StaticResource IconEdit}"
                         Stroke="{StaticResource TextSecondaryBrush}"
                         Width="14" Height="14" />
@@ -61,7 +62,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource AccentBrush}"
-                        Padding="8,4">
+                        Padding="8,4"
+                        ToolTip.Tip="{Binding [Groups.Tooltip.Confirm], Source={x:Static svc:Localizer.Instance}}">
                   <Path Classes="lucide" Data="{StaticResource IconCheck}"
                         Stroke="{StaticResource AccentBrush}"
                         Width="14" Height="14" />
@@ -71,7 +73,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{StaticResource DangerBrush}"
-                        Padding="8,4">
+                        Padding="8,4"
+                        ToolTip.Tip="{Binding [Groups.Tooltip.Delete], Source={x:Static svc:Localizer.Instance}}">
                   <Path Classes="lucide" Data="{StaticResource IconClose}"
                         Stroke="{StaticResource DangerBrush}"
                         Width="13" Height="13" />

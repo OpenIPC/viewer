@@ -145,7 +145,7 @@ public sealed class DiscoveredCameraRowVm
     public DiscoveredCamera Camera { get; }
     public string HostPort => Camera.OnvifPort == 80 ? Camera.Host : $"{Camera.Host}:{Camera.OnvifPort}";
     public string DisplayName => Camera.Name ?? Camera.Model ?? Camera.Host;
-    public string Subtitle => Camera.Model ?? "(unknown model)";
+    public string Subtitle => Camera.Model ?? Localizer.Instance["Discovery.UnknownModel"];
 
     public DiscoveredCameraRowVm(DiscoveredCamera camera)
     {

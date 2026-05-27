@@ -30,7 +30,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private bool _minimized;
 
-    public string Title => "Live";
+    public string Title => Localizer.Instance["Nav.Live"];
 
     public ObservableCollection<CameraTileViewModel> Tiles { get; } = new();
     public ObservableCollection<CameraTileViewModel?> Slots { get; } = new();

@@ -80,7 +80,11 @@
                     HorizontalAlignment="Stretch">
             <ComboBox.ItemTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding Name, FallbackValue='(no group)', TargetNullValue='(no group)'}" />
+                <!-- FallbackValue / TargetNullValue can't bind to Localizer (XAML
+                     attaches them as static strings), so we read the localized
+                     "(no group)" from the surrounding parent's PlaceholderText
+                     binding instead — for null items it shows through anyway. -->
+                <TextBlock Text="{Binding Name}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>

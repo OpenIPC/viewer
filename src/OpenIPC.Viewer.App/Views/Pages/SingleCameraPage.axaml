@@ -134,7 +134,8 @@
                             Background="Transparent"
                             Foreground="{StaticResource TextSecondaryBrush}"
                             Command="{Binding $parent[ItemsControl].((vm:SingleCameraPageViewModel)DataContext).RemovePresetCommand}"
-                            CommandParameter="{Binding}">
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding [CameraPage.Tooltip.RemovePreset], Source={x:Static svc:Localizer.Instance}}">
                       <Path Classes="lucide" Data="{StaticResource IconClose}"
                             Stroke="{StaticResource TextSecondaryBrush}"
                             Width="12" Height="12" />
