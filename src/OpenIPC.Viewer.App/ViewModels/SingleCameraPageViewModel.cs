@@ -38,10 +38,24 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
 
-    [ObservableProperty] private IVideoSession? _session;
-    [ObservableProperty] private SessionState _state = SessionState.Idle;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConnecting))]
+    private IVideoSession? _session;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConnecting))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
+    private SessionState _state = SessionState.Idle;
+
     [ObservableProperty] private SessionTelemetry? _telemetry;
     [ObservableProperty] private string? _errorMessage;
+
+    // Visible while the session is mid-connect (or backing off a reconnect). Gated
+    // on Session != null so the empty pre-activate window doesn't show a spinner
+    // out of nowhere. State changes flip both flags via NotifyPropertyChangedFor.
+    public bool IsConnecting =>
+        Session is not null && State is SessionState.Connecting or SessionState.Reconnecting;
+    public bool IsFailed => State == SessionState.Failed;
     [ObservableProperty] private string? _snapshotPath;
     [ObservableProperty] private PtzController? _ptz;
     [ObservableProperty] private string _newPresetName = "";
@@ -405,6 +419,16 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     [RelayCommand]
     private void ToggleRawJson() => ShowRawJson = !ShowRawJson;
+
+    // Bound to the Retry button on the Disconnected overlay. Clears the error
+    // banner and re-runs the full Activate path (which re-acquires the session
+    // and re-subscribes to State / Telemetry).
+    [RelayCommand]
+    private async Task RetryAsync()
+    {
+        ErrorMessage = null;
+        await ReloadStreamAsync().ConfigureAwait(true);
+    }
 
     // Visible only when the user opts in via Settings → Advanced. The flag is
     // a property (not [ObservableProperty]) — re-raised from OnUserSettingsChanged

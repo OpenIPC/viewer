@@ -29,7 +29,7 @@
       <ItemsControl ItemsSource="{Binding Groups}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Spacing="6" />
+            <StackPanel Spacing="8" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
@@ -109,7 +109,7 @@
             Name="CloseButton"
             Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
             HorizontalAlignment="Right"
-            Margin="0,16,0,0"
+            Margin="0,24,0,0"
             Padding="14,6"
             Background="Transparent"
             BorderBrush="{StaticResource BorderMediumBrush}"

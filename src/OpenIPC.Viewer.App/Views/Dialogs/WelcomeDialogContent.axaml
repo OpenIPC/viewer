@@ -8,6 +8,8 @@
              FontSize="{StaticResource FontSizeBase}"
              Foreground="{StaticResource TextPrimaryBrush}">
 
+  <!-- Margin 32 (not the 24-px dialog standard) — welcome screen with four
+       full-width action buttons gets more breathing room on purpose. -->
   <StackPanel Spacing="16" Margin="32" VerticalAlignment="Center">
 
     <StackPanel Orientation="Horizontal" Spacing="12">

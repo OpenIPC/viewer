@@ -98,7 +98,9 @@
               HorizontalAlignment="Center" />
     </StackPanel>
 
-    <!-- List -->
+    <!-- List. Empty/Loading panels share row 1 and render in document order;
+         the loader sits last so it floats on top during refresh of a populated
+         list (user sees content + spinner overlay instead of a blank flash). -->
     <ScrollViewer Grid.Row="1" IsVisible="{Binding HasCameras}">
       <ItemsControl ItemsSource="{Binding Cameras}">
         <ItemsControl.ItemsPanel>
@@ -185,6 +187,18 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </ScrollViewer>
+
+    <!-- Loading overlay (rendered last → on top). -->
+    <StackPanel Grid.Row="1"
+                IsVisible="{Binding IsLoading}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Spacing="12">
+      <ProgressBar IsIndeterminate="True" Width="160" />
+      <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
 
   </Grid>
 </UserControl>

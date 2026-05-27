@@ -89,7 +89,11 @@
         </TextBlock>
       </Border>
 
-      <!-- Error overlay -->
+      <!-- Top-strip error banner. Visible only when there's an ErrorMessage AND
+           we're not showing the full-area Disconnected overlay — that covers
+           failures with a louder UI. The strip stays for non-stream errors
+           (snapshot / recording / copy / save-as) raised while the stream is
+           still alive. -->
       <Border HorizontalAlignment="Stretch" VerticalAlignment="Top"
               Background="{StaticResource DangerBrush}"
               Padding="12,8"
@@ -158,6 +162,48 @@
           </StackPanel>
         </Border>
       </StackPanel>
+
+      <!-- Connecting overlay. Full-area dim with a centered spinner. Rendered
+           late so it floats on top of LIVE / telemetry badges during connect /
+           reconnect. -->
+      <Border IsVisible="{Binding IsConnecting}"
+              Background="#A0000000">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14">
+          <ProgressBar IsIndeterminate="True" Width="180" />
+          <TextBlock Text="{Binding [Stream.Connecting], Source={x:Static svc:Localizer.Instance}}"
+                     Foreground="White"
+                     FontSize="{StaticResource FontSizeMd}"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+
+      <!-- Disconnected overlay. Failure UI — headline, server-supplied error,
+           and a Retry button that re-runs the full Activate path. -->
+      <Border IsVisible="{Binding IsFailed}"
+              Background="#A0000000">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420">
+          <TextBlock Text="{Binding [Stream.Disconnected], Source={x:Static svc:Localizer.Instance}}"
+                     Foreground="White"
+                     FontSize="{StaticResource FontSizeLg}"
+                     FontWeight="SemiBold"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding ErrorMessage}"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     FontSize="{StaticResource FontSizeBase}"
+                     TextWrapping="Wrap"
+                     HorizontalAlignment="Center"
+                     TextAlignment="Center"
+                     IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Button Content="{Binding [Common.Retry], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding RetryCommand}"
+                  Padding="18,8"
+                  Background="{StaticResource AccentBrush}"
+                  Foreground="White"
+                  CornerRadius="6"
+                  HorizontalAlignment="Center"
+                  Margin="0,4,0,0" />
+        </StackPanel>
+      </Border>
     </Grid>
 
     <!-- Majestic Config panel (Phase 5) — only for OpenIPC-Majestic cameras -->

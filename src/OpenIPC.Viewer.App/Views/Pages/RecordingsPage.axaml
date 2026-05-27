@@ -93,6 +93,39 @@
       </ItemsControl>
     </ScrollViewer>
 
+    <!-- Error overlay -->
+    <StackPanel Grid.Row="1"
+                IsVisible="{Binding HasLoadError}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Spacing="12">
+      <TextBlock Text="{Binding LoadError}"
+                 FontSize="{StaticResource FontSizeLg}"
+                 Foreground="{StaticResource DangerBrush}"
+                 HorizontalAlignment="Center" />
+      <Button Content="{Binding [Common.Retry], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding ReloadCommand}"
+              Padding="14,8"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="8"
+              Foreground="{StaticResource TextPrimaryBrush}"
+              HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <!-- Loading overlay (rendered last → on top). -->
+    <StackPanel Grid.Row="1"
+                IsVisible="{Binding IsLoading}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Spacing="12">
+      <ProgressBar IsIndeterminate="True" Width="160" />
+      <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
+
   </Grid>
 
 </UserControl>

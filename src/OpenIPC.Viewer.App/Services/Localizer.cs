@@ -70,6 +70,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Refresh"] = "⟲ Refresh",
         ["Common.Discover"] = "Discover",
         ["Common.AddCamera"] = "+ Add camera",
+        ["Common.Loading"] = "Loading…",
+        ["Common.Retry"] = "Retry",
+
+        ["Stream.Connecting"] = "Connecting…",
+        ["Stream.Disconnected"] = "Disconnected",
 
         ["Library.Title"] = "Cameras",
         ["Library.EmptyTitle"] = "No cameras yet",
@@ -195,6 +200,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Recordings.Dialog.DeleteMessageFormat"] = "Delete {0}? The MP4 file will be removed.",
         ["Recordings.Empty"] = "No recordings yet. Hit ● REC on a camera page to start.",
         ["Recordings.Live"] = "live",
+        ["Recordings.LoadError"] = "Could not load recordings",
 
         ["Events.Button.SimulateMotion"] = "Simulate motion",
         ["Events.Empty"] = "No events yet. Hit Simulate motion to push one through the pipeline.",
@@ -224,6 +230,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Refresh"] = "⟲ Обновить",
         ["Common.Discover"] = "Поиск",
         ["Common.AddCamera"] = "+ Добавить камеру",
+        ["Common.Loading"] = "Загрузка…",
+        ["Common.Retry"] = "Повторить",
+
+        ["Stream.Connecting"] = "Подключение…",
+        ["Stream.Disconnected"] = "Нет соединения",
 
         ["Library.Title"] = "Камеры",
         ["Library.EmptyTitle"] = "Камер пока нет",
@@ -349,6 +360,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Recordings.Dialog.DeleteMessageFormat"] = "Удалить {0}? MP4-файл будет удалён.",
         ["Recordings.Empty"] = "Записей пока нет. Нажмите ● REC на странице камеры, чтобы начать.",
         ["Recordings.Live"] = "идёт",
+        ["Recordings.LoadError"] = "Не удалось загрузить записи",
 
         ["Events.Button.SimulateMotion"] = "Симулировать движение",
         ["Events.Empty"] = "Событий пока нет. Нажмите «Симулировать движение», чтобы прогнать одно через конвейер.",

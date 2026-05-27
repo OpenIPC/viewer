@@ -31,8 +31,14 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private bool _isLoaded;
 
+    // Gates the centered loader. Empty-state is also suppressed while loading so
+    // refresh doesn't flash "No cameras yet" between Clear() and Add().
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    private bool _isLoading;
+
     public bool HasCameras => IsLoaded && Cameras.Count > 0;
-    public bool IsEmpty => IsLoaded && Cameras.Count == 0;
+    public bool IsEmpty => IsLoaded && !IsLoading && Cameras.Count == 0;
 
     private readonly UserSettingsService _userSettings;
     private readonly IDiscoveryService _discovery;
@@ -73,10 +79,18 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
 
     public async Task LoadAsync(CancellationToken ct)
     {
-        _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
-        await ReloadGroupsAsync(ct).ConfigureAwait(true);
-        RefilterCameras();
-        IsLoaded = true;
+        IsLoading = true;
+        try
+        {
+            _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
+            await ReloadGroupsAsync(ct).ConfigureAwait(true);
+            RefilterCameras();
+            IsLoaded = true;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
 
         // First-run welcome — only the very first time the library opens
         // empty. WelcomeShown persists across launches; the user can't be

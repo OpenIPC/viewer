@@ -37,7 +37,11 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private bool _isLoaded;
 
-    public bool IsEmpty => IsLoaded && Items.Count == 0;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    private bool _isLoading;
+
+    public bool IsEmpty => IsLoaded && !IsLoading && Items.Count == 0;
 
     [ObservableProperty] private CameraOption? _selectedCamera;
 
@@ -81,17 +85,25 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
 
     private async Task ReloadAsync(CancellationToken ct)
     {
-        var events = await _repo.ListAsync(
-            cameraId: SelectedCamera?.Id,
-            kind: null,
-            since: null,
-            limit: PageLimit,
-            ct).ConfigureAwait(true);
+        IsLoading = true;
+        try
+        {
+            var events = await _repo.ListAsync(
+                cameraId: SelectedCamera?.Id,
+                kind: null,
+                since: null,
+                limit: PageLimit,
+                ct).ConfigureAwait(true);
 
-        Items.Clear();
-        foreach (var e in events) Items.Add(BuildRow(e));
-        IsLoaded = true;
-        OnPropertyChanged(nameof(IsEmpty));
+            Items.Clear();
+            foreach (var e in events) Items.Add(BuildRow(e));
+            IsLoaded = true;
+            OnPropertyChanged(nameof(IsEmpty));
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     [RelayCommand]

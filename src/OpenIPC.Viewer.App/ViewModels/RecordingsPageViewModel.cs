@@ -29,7 +29,19 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private bool _isLoaded;
 
-    public bool IsEmpty => IsLoaded && Items.Count == 0;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    private bool _isLoading;
+
+    // Set when ListAsync throws — the page shows a localized error overlay
+    // instead of the empty/loaded states. Cleared on the next successful load.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoadError))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    private string? _loadError;
+
+    public bool IsEmpty => IsLoaded && !IsLoading && LoadError is null && Items.Count == 0;
+    public bool HasLoadError => LoadError is not null;
 
     public RecordingsPageViewModel(
         IRecordingRepository repo,
@@ -45,20 +57,37 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
 
     public async Task LoadAsync(CancellationToken ct)
     {
-        var recordings = await _repo.ListAsync(cameraId: null, ct).ConfigureAwait(true);
-        var cams = await _cameras.ListAsync(ct).ConfigureAwait(true);
-        var nameById = new Dictionary<CameraId, string>();
-        foreach (var c in cams) nameById[c.Id] = c.Name;
-
-        Items.Clear();
-        foreach (var r in recordings)
+        IsLoading = true;
+        LoadError = null;
+        try
         {
-            var name = nameById.TryGetValue(r.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
-            Items.Add(new RecordingRowViewModel(r, name));
+            var recordings = await _repo.ListAsync(cameraId: null, ct).ConfigureAwait(true);
+            var cams = await _cameras.ListAsync(ct).ConfigureAwait(true);
+            var nameById = new Dictionary<CameraId, string>();
+            foreach (var c in cams) nameById[c.Id] = c.Name;
+
+            Items.Clear();
+            foreach (var r in recordings)
+            {
+                var name = nameById.TryGetValue(r.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
+                Items.Add(new RecordingRowViewModel(r, name));
+            }
+            IsLoaded = true;
+            OnPropertyChanged(nameof(IsEmpty));
         }
-        IsLoaded = true;
-        OnPropertyChanged(nameof(IsEmpty));
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load recordings");
+            LoadError = Localizer.Instance["Recordings.LoadError"];
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
+
+    [RelayCommand]
+    private Task ReloadAsync() => LoadAsync(CancellationToken.None);
 
     [RelayCommand]
     private async Task DeleteAsync(RecordingRowViewModel? row)

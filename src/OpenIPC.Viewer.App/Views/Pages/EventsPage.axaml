@@ -102,6 +102,18 @@
       </ItemsControl>
     </ScrollViewer>
 
+    <!-- Loading overlay (rendered last → on top). -->
+    <StackPanel Grid.Row="1"
+                IsVisible="{Binding IsLoading}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Spacing="12">
+      <ProgressBar IsIndeterminate="True" Width="160" />
+      <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
+
   </Grid>
 
 </UserControl>

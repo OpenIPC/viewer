@@ -16,10 +16,10 @@
                Text="{Binding Title}"
                FontSize="{StaticResource FontSizeLg}"
                FontWeight="SemiBold"
-               Margin="0,0,0,20" />
+               Margin="0,0,0,16" />
 
     <ScrollViewer Grid.Row="1">
-      <StackPanel Spacing="14">
+      <StackPanel Spacing="12">
 
         <StackPanel Spacing="6">
           <TextBlock Text="{Binding [CameraEditor.Label.Name], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
@@ -95,7 +95,7 @@
       </StackPanel>
     </ScrollViewer>
 
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,20,0,0">
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,24,0,0">
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Button Content="{Binding [CameraEditor.Button.TestConnection], Source={x:Static svc:Localizer.Instance}}"
                 Command="{Binding TestConnectionCommand}"
