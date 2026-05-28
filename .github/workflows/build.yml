@@ -50,18 +50,20 @@ jobs:
 
       # Mobile heads (Android/iOS) need workloads not installed on these
       # runners and build in their own jobs — so the desktop matrix uses a
-      # solution that excludes them.
+      # solution that excludes them. The shared App project still multi-targets
+      # the mobile TFMs, so IncludeMobileTargets=false strips them to net9.0 for
+      # these builds (a solution build / restore evaluates every TFM otherwise).
       - name: Restore
-        run: dotnet restore OpenIPC.Viewer.Desktop.slnx
+        run: dotnet restore OpenIPC.Viewer.Desktop.slnx -p:IncludeMobileTargets=false
 
       - name: Build
-        run: dotnet build OpenIPC.Viewer.Desktop.slnx --configuration Release --no-restore /warnaserror
+        run: dotnet build OpenIPC.Viewer.Desktop.slnx --configuration Release --no-restore /warnaserror -p:IncludeMobileTargets=false
 
       - name: Test
-        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build --verbosity normal -p:IncludeMobileTargets=false
 
       - name: Publish
-        run: dotnet publish src/OpenIPC.Viewer.Desktop/OpenIPC.Viewer.Desktop.csproj -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o publish/${{ matrix.rid }}
+        run: dotnet publish src/OpenIPC.Viewer.Desktop/OpenIPC.Viewer.Desktop.csproj -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeMobileTargets=false -o publish/${{ matrix.rid }}
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
@@ -177,11 +179,14 @@ jobs:
       - name: Install ios workload
         run: dotnet workload install ios
 
+      # iOS Release builds for the device RID (ios-arm64), so restore must be
+      # RID-specific or the assets file won't have a net10.0-ios/ios-arm64
+      # target and the --no-restore build fails with NETSDK1047.
       - name: Restore
-        run: dotnet restore src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj
+        run: dotnet restore src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj -r ios-arm64
 
       - name: Build (Release, warnings as errors)
-        run: dotnet build src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj -c Release --no-restore -p:TreatWarningsAsErrors=true
+        run: dotnet build src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj -c Release -r ios-arm64 --no-restore -p:TreatWarningsAsErrors=true
 
       # Unsigned IPA — TestFlight signing is post-MVP (Phase 11). The artifact
       # is a Release-published app bundle suitable for ad-hoc install via Xcode
