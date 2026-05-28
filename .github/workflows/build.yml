@@ -168,10 +168,13 @@ jobs:
   ios:
     runs-on: macos-14
     name: build (ios)
-    # Non-blocking: the .NET 10 iOS workload pins to an Xcode version the
-    # GitHub macOS runners don't ship yet (workload 26.5 needs Xcode 26.5).
-    # Keep iOS best-effort until a matching runner image is available, rather
-    # than failing the whole workflow. See aka.ms/xcode-requirement.
+    # Temporarily disabled: the .NET 10 iOS workload pins to an Xcode version
+    # the GitHub macOS runners don't ship yet (workload 26.5 needs Xcode 26.5),
+    # so iOS can't build at all right now. Skip the job entirely and drop it
+    # from the release gate so tagged releases still go out. Re-enable (set
+    # `if:` back to a real condition) once a matching runner image is available.
+    # See aka.ms/xcode-requirement.
+    if: false
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -209,10 +212,10 @@ jobs:
           if-no-files-found: warn
 
   release:
-    needs: [build, android, ios]
-    # iOS is best-effort (see continue-on-error above), so don't gate releases
-    # on it — require only the desktop matrix + android to succeed. Any iOS
-    # artifact that did build still gets merged in via download-artifact.
+    needs: [build, android]
+    # iOS is disabled for now (see the ios job above), so the release only
+    # depends on the desktop matrix + android. Re-add `ios` here once that job
+    # is re-enabled.
     if: always() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && needs.android.result == 'success'
     runs-on: ubuntu-latest
     permissions:
