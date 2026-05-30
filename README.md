@@ -29,6 +29,8 @@ Built with .NET 9 / 10 and Avalonia 12.
 
 ### Desktop (Windows / Linux / macOS)
 
+[![Live multi-camera grid](docs/screenshots/desktop-live-grid.jpg)](docs/screenshots/desktop-live-grid.jpg)
+
 | Library + ONVIF discovery | Add camera |
 |---|---|
 | [![Library and ONVIF discovery](docs/screenshots/desktop-library-discover.png)](docs/screenshots/desktop-library-discover.png) | [![Add camera dialog](docs/screenshots/desktop-add-camera.png)](docs/screenshots/desktop-add-camera.png) |
