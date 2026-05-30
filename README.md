@@ -25,6 +25,24 @@ Built with .NET 9 / 10 and Avalonia 12.
 - **Camera groups**, English / Russian UI (runtime switch), responsive layout
   (sidebar ↔ bottom tab strip).
 
+## Screenshots
+
+### Desktop (Windows / Linux / macOS)
+
+| Library + ONVIF discovery | Add camera |
+|---|---|
+| [![Library and ONVIF discovery](docs/screenshots/desktop-library-discover.png)](docs/screenshots/desktop-library-discover.png) | [![Add camera dialog](docs/screenshots/desktop-add-camera.png)](docs/screenshots/desktop-add-camera.png) |
+
+| Events | Settings |
+|---|---|
+| [![Events log](docs/screenshots/desktop-events.png)](docs/screenshots/desktop-events.png) | [![Settings](docs/screenshots/desktop-settings.png)](docs/screenshots/desktop-settings.png) |
+
+### Mobile (Android)
+
+| Live grid 2×2 | Live grid 3×3 |
+|---|---|
+| <img src="docs/screenshots/mobile-live-2x2.png" width="280" alt="Live grid 2x2"> | <img src="docs/screenshots/mobile-live-3x3.png" width="280" alt="Live grid 3x3"> |
+
 ## Download
 
 Pre-built **standalone** binaries are attached to each
