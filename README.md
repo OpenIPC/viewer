@@ -8,6 +8,9 @@ Built with .NET 9 / 10 and Avalonia 12.
 > Status: **release polish** — feature-complete for the first beta. Pending
 > packaging (installers / in-app auto-update), code signing, and the
 > `v0.1.0-beta` tag. Targets: Windows / Linux / macOS desktops + Android + iOS.
+>
+> See the [Roadmap](docs/ROADMAP.md) for phase status and what's left before
+> the betas.
 
 ## Features
 
