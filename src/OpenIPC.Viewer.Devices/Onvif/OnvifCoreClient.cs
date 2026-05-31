@@ -194,21 +194,13 @@ public sealed class OnvifCoreClient : IOnvifClient
     }
 
     private static Task<DeviceClient> OpenDeviceAsync(OnvifEndpoint ep) =>
-        ep.Credentials is null
-            ? OnvifClientFactory.CreatePreAuthDeviceClientAsync(ep.DeviceServiceUri)
-            : OnvifClientFactory.CreateDeviceClientAsync(ep.DeviceServiceUri, ep.Credentials.Username, ep.Credentials.Password);
+        OnvifClientBuilder.CreateDeviceClientAsync(ep);
 
     private static Task<MediaClient> OpenMediaAsync(OnvifEndpoint ep) =>
-        OnvifClientFactory.CreateMediaClientAsync(HostString(ep), ep.Credentials?.Username ?? "", ep.Credentials?.Password ?? "");
+        OnvifClientBuilder.CreateMediaClientAsync(ep);
 
     private static Task<PTZClient> OpenPtzAsync(OnvifEndpoint ep) =>
-        OnvifClientFactory.CreatePTZClientAsync(HostString(ep), ep.Credentials?.Username ?? "", ep.Credentials?.Password ?? "");
-
-    private static string HostString(OnvifEndpoint ep)
-    {
-        var uri = ep.DeviceServiceUri;
-        return uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
-    }
+        OnvifClientBuilder.CreatePtzClientAsync(ep);
 
     private static Uri? TryUri(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : new Uri(value, UriKind.Absolute);
