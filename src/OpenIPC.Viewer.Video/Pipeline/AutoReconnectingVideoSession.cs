@@ -93,6 +93,12 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
             using var telemetrySub = inner.Telemetry.Subscribe(_telemetry.OnNext);
 
             var failed = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // failed.Task only completes when the inner session reports Failed/Idle.
+            // On Dispose the token is cancelled while the inner is still Playing, so
+            // without this the await below would hang forever and Dispose would never
+            // return (freezing the layout-switch command). Cancelling the TCS lets the
+            // OperationCanceledException catch unwind the loop promptly.
+            using var ctReg = ct.Register(() => failed.TrySetCanceled());
             using var stateSub = inner.StateChanged.Subscribe(s =>
             {
                 SetState(s);
