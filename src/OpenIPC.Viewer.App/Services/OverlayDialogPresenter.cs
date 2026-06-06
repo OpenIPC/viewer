@@ -29,6 +29,18 @@ public static class OverlayDialogPresenter
 {
     private static readonly TimeSpan FadeIn = TimeSpan.FromMilliseconds(160);
 
+    // Number of overlay dialogs currently on screen. Mobile dialogs live in the
+    // TopLevel.OverlayLayer; the dim Border does not reliably intercept taps on
+    // the bottom nav, so the shell gates navigation on this instead. Desktop
+    // uses real modal Windows (ShowDialog) and never goes through here.
+    private static int _activeCount;
+
+    /// <summary>True while at least one overlay (mobile modal) dialog is open.</summary>
+    public static bool IsAnyOpen => _activeCount > 0;
+
+    /// <summary>Raised on the UI thread whenever <see cref="IsAnyOpen"/> may have changed.</summary>
+    public static event Action? ActiveChanged;
+
     public static async Task<TResult> ShowAsync<TResult>(Control content, Task<TResult> completion)
     {
         var overlay = GetOverlayLayer();
@@ -82,6 +94,8 @@ public static class OverlayDialogPresenter
         };
 
         overlay.Children.Add(dim);
+        _activeCount++;
+        ActiveChanged?.Invoke();
         // Kick the opacity transition after the first layout pass — set
         // synchronously the Avalonia renderer treats it as initial state
         // and skips the animation.
@@ -94,6 +108,8 @@ public static class OverlayDialogPresenter
         finally
         {
             overlay.Children.Remove(dim);
+            _activeCount--;
+            ActiveChanged?.Invoke();
         }
     }
 
