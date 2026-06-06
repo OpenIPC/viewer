@@ -42,6 +42,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
 
     private readonly UserSettingsService _userSettings;
     private readonly IDiscoveryService _discovery;
+    private readonly IReachabilityProbe _reachability;
     private readonly ManageGroupsDialogFactory _manageGroupsFactory;
     private bool _autoScanRanThisSession;
     private System.Collections.Generic.IReadOnlyList<Camera> _allCameras = System.Array.Empty<Camera>();
@@ -60,6 +61,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         ManageGroupsDialogFactory manageGroupsFactory,
         UserSettingsService userSettings,
         IDiscoveryService discovery,
+        IReachabilityProbe reachability,
         ILogger<CameraLibraryPageViewModel> logger)
     {
         _directory = directory;
@@ -69,6 +71,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _manageGroupsFactory = manageGroupsFactory;
         _userSettings = userSettings;
         _discovery = discovery;
+        _reachability = reachability;
         _logger = logger;
         Cameras.CollectionChanged += (_, _) =>
         {
@@ -199,7 +202,20 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
 
         Cameras.Clear();
         foreach (var camera in filtered)
-            Cameras.Add(new CameraRowViewModel(camera, _directory, _logger));
+            Cameras.Add(new CameraRowViewModel(camera, _directory, _reachability, _logger));
+
+        // Kick off reachability probes for the freshly-built rows. Fire-and-forget:
+        // each row updates its own Status independently, in parallel.
+        _ = ProbeReachabilityAsync();
+    }
+
+    private async Task ProbeReachabilityAsync()
+    {
+        var rows = new System.Collections.Generic.List<CameraRowViewModel>(Cameras);
+        var tasks = new System.Collections.Generic.List<Task>(rows.Count);
+        foreach (var row in rows)
+            tasks.Add(row.RefreshReachabilityAsync(CancellationToken.None));
+        await Task.WhenAll(tasks).ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -397,9 +413,17 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     }
 }
 
+public enum CameraReachability { Checking, Online, Offline }
+
 public sealed partial class CameraRowViewModel : ViewModelBase
 {
+    // Probe timeout per camera. Kept short so a screen of offline cameras
+    // settles quickly — probes run in parallel, so this is the worst-case
+    // wait for the whole list, not a per-camera sum.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(2);
+
     private readonly CameraDirectoryService? _directory;
+    private readonly IReachabilityProbe? _reachability;
     private readonly ILogger? _logger;
 
     public Camera Camera { get; }
@@ -410,14 +434,60 @@ public sealed partial class CameraRowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isIncludedInGrid;
 
-    public CameraRowViewModel(Camera camera) : this(camera, null, null) { }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private CameraReachability _status = CameraReachability.Checking;
+
+    public string StatusText => Localizer.Instance[Status switch
+    {
+        CameraReachability.Online => "Library.Online",
+        CameraReachability.Checking => "Library.Checking",
+        _ => "Library.Offline",
+    }];
+
+    public CameraRowViewModel(Camera camera) : this(camera, null, null, null) { }
 
     public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, ILogger? logger)
+        : this(camera, directory, null, logger) { }
+
+    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, ILogger? logger)
     {
         Camera = camera;
         _directory = directory;
+        _reachability = reachability;
         _logger = logger;
         _isIncludedInGrid = camera.IncludedInGrid;
+    }
+
+    /// <summary>
+    /// TCP-probes the camera's RTSP port and updates <see cref="Status"/>.
+    /// Started from the UI thread; the connect runs off-thread and the status
+    /// write resumes on the UI thread (ConfigureAwait(true)).
+    /// </summary>
+    public async Task RefreshReachabilityAsync(CancellationToken ct)
+    {
+        if (_reachability is null)
+            return;
+
+        Status = CameraReachability.Checking;
+
+        // RTSP default port is 554; Uri.Port yields -1 when the scheme has no
+        // registered default and the URI omits an explicit port.
+        var port = Camera.RtspMainUri.Port;
+        if (port <= 0) port = 554;
+
+        try
+        {
+            var reachable = await _reachability
+                .IsReachableAsync(Camera.Host, port, ProbeTimeout, ct)
+                .ConfigureAwait(true);
+            Status = reachable ? CameraReachability.Online : CameraReachability.Offline;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Reachability probe failed for {CameraId}", Camera.Id);
+            Status = CameraReachability.Offline;
+        }
     }
 
     partial void OnIsIncludedInGridChanged(bool value)

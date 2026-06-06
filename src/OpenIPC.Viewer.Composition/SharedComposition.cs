@@ -14,6 +14,7 @@ using OpenIPC.Viewer.Core.Video;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
 using OpenIPC.Viewer.Devices.Onvif.Discovery;
+using OpenIPC.Viewer.Infrastructure.Net;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 
 namespace OpenIPC.Viewer.Composition;
@@ -40,6 +41,7 @@ public static class SharedComposition
 
         // Domain services
         services.AddSingleton<CameraDirectoryService>();
+        services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();
