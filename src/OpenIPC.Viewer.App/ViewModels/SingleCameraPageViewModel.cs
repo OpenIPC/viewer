@@ -39,6 +39,17 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
 
+    // Re-entrancy/lifecycle gates. MainView hosts CurrentPage in BOTH the wide
+    // and narrow layouts, so two views bind this single VM and each fires
+    // Loaded -> ActivateAsync / Unloaded -> DisposeAsync. Without these gates
+    // the two Activate calls both pass the `Session is null` check before the
+    // first await assigns it, double-Acquire (leaking a coordinator ref so the
+    // session is never released) and double-Start (the 2nd throws "Already
+    // started"). The leaked, stale session is then reused on the next open —
+    // which is why an edited RTSP URL didn't take effect until an app restart.
+    private bool _activating;
+    private bool _disposed;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConnecting))]
     private IVideoSession? _session;
@@ -272,39 +283,51 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     public async Task ActivateAsync(CancellationToken ct)
     {
-        if (Session is not null)
+        // Synchronous gate (no await between check and set) so a second caller
+        // can't slip past while the first is mid-activation. Cleared in finally
+        // so legitimate re-activation (ReloadStreamAsync nulls Session first)
+        // still works.
+        if (Session is not null || _activating || _disposed)
             return;
-
-        var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(true);
-        var options = VideoSessionOptions.Default(_camera.RtspMainUri, creds)
-            with { Transport = ParseTransport(_userSettings.Current.RtspTransport) };
+        _activating = true;
 
         try
         {
-            var session = _coordinator.Acquire(_camera.Id, _quality, options);
-            _stateSub = session.StateChanged.Subscribe(s =>
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(true);
+            var options = VideoSessionOptions.Default(_camera.RtspMainUri, creds)
+                with { Transport = ParseTransport(_userSettings.Current.RtspTransport) };
+
+            try
             {
-                State = s;
-                if (s == SessionState.Failed)
-                    ErrorMessage = session.LastError;
-            });
-            _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
-            Session = session;
+                var session = _coordinator.Acquire(_camera.Id, _quality, options);
+                _stateSub = session.StateChanged.Subscribe(s =>
+                {
+                    State = s;
+                    if (s == SessionState.Failed)
+                        ErrorMessage = session.LastError;
+                });
+                _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
+                Session = session;
 
-            if (session.State == SessionState.Idle)
-                await session.StartAsync(ct).ConfigureAwait(true);
+                if (session.State == SessionState.Idle)
+                    await session.StartAsync(ct).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to start session for camera {CameraId}", _camera.Id);
+                ErrorMessage = ex.Message;
+                State = SessionState.Failed;
+            }
+
+            if (HasPtz)
+                await InitPtzAsync(creds, ct).ConfigureAwait(true);
+
+            await InitMajesticAsync(creds, ct).ConfigureAwait(true);
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "Failed to start session for camera {CameraId}", _camera.Id);
-            ErrorMessage = ex.Message;
-            State = SessionState.Failed;
+            _activating = false;
         }
-
-        if (HasPtz)
-            await InitPtzAsync(creds, ct).ConfigureAwait(true);
-
-        await InitMajesticAsync(creds, ct).ConfigureAwait(true);
     }
 
     private async Task InitMajesticAsync(CameraCredentials? creds, CancellationToken ct)
@@ -680,6 +703,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     public async ValueTask DisposeAsync()
     {
+        // Idempotent: the two hosting views (wide + narrow layout) each fire
+        // Unloaded -> DisposeAsync, and MainWindowViewModel disposes us on
+        // navigation too. Only the first call releases the session, so the
+        // coordinator ref-count lands back at zero instead of leaking.
+        if (_disposed)
+            return;
+        _disposed = true;
+
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
         _recordings.StateChanged -= OnRecordingsStateChanged;

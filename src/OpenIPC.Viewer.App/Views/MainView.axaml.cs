@@ -18,7 +18,18 @@ public partial class MainView : UserControl
         AvaloniaProperty.RegisterDirect<MainView, bool>(
             nameof(IsNarrowLayout), o => o.IsNarrowLayout);
 
+    // Content inset differs by layout (desktop has more breathing room). Exposed
+    // as a property because the single shared ContentControl can no longer pick
+    // its Padding from two separate layout literals.
+    public static readonly DirectProperty<MainView, Thickness> ContentPaddingProperty =
+        AvaloniaProperty.RegisterDirect<MainView, Thickness>(
+            nameof(ContentPadding), o => o.ContentPadding);
+
+    private static readonly Thickness WidePadding = new(24);
+    private static readonly Thickness NarrowPadding = new(12);
+
     private bool _isWideLayout = true;
+    private Thickness _contentPadding = WidePadding;
 
     public bool IsWideLayout
     {
@@ -26,11 +37,20 @@ public partial class MainView : UserControl
         private set
         {
             if (SetAndRaise(IsWideLayoutProperty, ref _isWideLayout, value))
+            {
                 RaisePropertyChanged(IsNarrowLayoutProperty, !value, value == false);
+                ContentPadding = value ? WidePadding : NarrowPadding;
+            }
         }
     }
 
     public bool IsNarrowLayout => !_isWideLayout;
+
+    public Thickness ContentPadding
+    {
+        get => _contentPadding;
+        private set => SetAndRaise(ContentPaddingProperty, ref _contentPadding, value);
+    }
 
     public MainView()
     {
