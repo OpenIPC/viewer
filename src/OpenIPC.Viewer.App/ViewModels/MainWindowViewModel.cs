@@ -61,9 +61,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
 
         WeakReferenceMessenger.Default.Register<OpenCameraMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);
+
+        // While a mobile overlay dialog is open the bottom nav must not switch
+        // pages under it — the dim layer doesn't reliably swallow those taps.
+        // Re-evaluate CanNavigate whenever an overlay opens/closes; this greys
+        // out the nav buttons (Avalonia disables a control whose command can't
+        // execute). This VM is an app-lifetime singleton, so the static
+        // subscription lives as long as the process — no unsubscribe needed.
+        OverlayDialogPresenter.ActiveChanged += () => NavigateCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
+    private static bool CanNavigate() => !OverlayDialogPresenter.IsAnyOpen;
+
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void Navigate(string target)
     {
         if (_activeSingleCamera is not null && target != "library")
