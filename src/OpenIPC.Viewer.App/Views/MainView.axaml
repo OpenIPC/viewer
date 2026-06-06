@@ -16,90 +16,89 @@
       wide  → desktop sidebar on the left, content fills the rest
       narrow → bottom-nav under the content (mobile / pinned-narrow window)
     IsWideLayout is updated by code-behind on every SizeChanged.
+
+    CurrentPage is hosted in a SINGLE ContentControl shared by both layouts.
+    Hosting it twice (one ContentControl per layout) made the same page VM bind
+    to two views at once — both fired Loaded and double-activated the live
+    session (double Acquire + "Already started"). Only the chrome toggles on the
+    breakpoint now: the sidebar collapses to zero width and the bottom nav hides.
   -->
 
-  <Grid>
+  <Grid ColumnDefinitions="Auto,*">
 
-    <!-- Wide / desktop layout -->
-    <Grid ColumnDefinitions="200,*"
-          IsVisible="{Binding #Root.IsWideLayout}">
+    <!-- Desktop sidebar — fixed 200px wide; collapses to nothing when narrow. -->
+    <Border Grid.Column="0"
+            Width="200"
+            IsVisible="{Binding #Root.IsWideLayout}"
+            Background="{StaticResource Bg2Brush}"
+            BorderBrush="{StaticResource BorderWeakBrush}"
+            BorderThickness="0,0,1,0">
+      <DockPanel LastChildFill="True" Margin="12">
 
-      <Border Grid.Column="0"
-              Background="{StaticResource Bg2Brush}"
-              BorderBrush="{StaticResource BorderWeakBrush}"
-              BorderThickness="0,0,1,0">
-        <DockPanel LastChildFill="True" Margin="12">
+        <TextBlock DockPanel.Dock="Top"
+                   Text="OpenIPC Viewer"
+                   FontSize="{StaticResource FontSizeMd}"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}"
+                   Margin="8,8,8,20" />
 
-          <TextBlock DockPanel.Dock="Top"
-                     Text="OpenIPC Viewer"
-                     FontSize="{StaticResource FontSizeMd}"
-                     FontWeight="SemiBold"
-                     Foreground="{StaticResource TextPrimaryBrush}"
-                     Margin="8,8,8,20" />
+        <StackPanel Spacing="2" VerticalAlignment="Top">
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsLiveSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="live">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource IconLive}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Live], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsLibrarySelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="library">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource IconLibrary}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Library], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsRecordingsSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="recordings">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource IconRecordings}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Recordings], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsEventsSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="events">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource IconEvents}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Events], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="settings">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Settings], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
 
-          <StackPanel Spacing="2" VerticalAlignment="Top">
-            <RadioButton Classes="sidebar" GroupName="DesktopNav"
-                         IsChecked="{Binding IsLiveSelected, Mode=OneWay}"
-                         Command="{Binding NavigateCommand}"
-                         CommandParameter="live">
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <PathIcon Data="{StaticResource IconLive}" Width="16" Height="16" />
-                <TextBlock Text="{Binding [Nav.Live], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-            <RadioButton Classes="sidebar" GroupName="DesktopNav"
-                         IsChecked="{Binding IsLibrarySelected, Mode=OneWay}"
-                         Command="{Binding NavigateCommand}"
-                         CommandParameter="library">
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <PathIcon Data="{StaticResource IconLibrary}" Width="16" Height="16" />
-                <TextBlock Text="{Binding [Nav.Library], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-            <RadioButton Classes="sidebar" GroupName="DesktopNav"
-                         IsChecked="{Binding IsRecordingsSelected, Mode=OneWay}"
-                         Command="{Binding NavigateCommand}"
-                         CommandParameter="recordings">
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <PathIcon Data="{StaticResource IconRecordings}" Width="16" Height="16" />
-                <TextBlock Text="{Binding [Nav.Recordings], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-            <RadioButton Classes="sidebar" GroupName="DesktopNav"
-                         IsChecked="{Binding IsEventsSelected, Mode=OneWay}"
-                         Command="{Binding NavigateCommand}"
-                         CommandParameter="events">
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <PathIcon Data="{StaticResource IconEvents}" Width="16" Height="16" />
-                <TextBlock Text="{Binding [Nav.Events], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-            <RadioButton Classes="sidebar" GroupName="DesktopNav"
-                         IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                         Command="{Binding NavigateCommand}"
-                         CommandParameter="settings">
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16" />
-                <TextBlock Text="{Binding [Nav.Settings], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-          </StackPanel>
+      </DockPanel>
+    </Border>
 
-        </DockPanel>
-      </Border>
-
-      <ContentControl Grid.Column="1"
-                      Content="{Binding CurrentPage}"
-                      Padding="24" />
-
-    </Grid>
-
-    <!-- Narrow / mobile layout -->
-    <DockPanel IsVisible="{Binding #Root.IsNarrowLayout}"
-               LastChildFill="True">
-      <views:BottomNavBar DockPanel.Dock="Bottom" />
+    <!-- Content host + bottom nav (narrow only). One ContentControl, period. -->
+    <DockPanel Grid.Column="1" LastChildFill="True">
+      <views:BottomNavBar DockPanel.Dock="Bottom"
+                          IsVisible="{Binding #Root.IsNarrowLayout}" />
       <ContentControl Content="{Binding CurrentPage}"
-                      Padding="12" />
+                      Padding="{Binding #Root.ContentPadding}" />
     </DockPanel>
 
   </Grid>

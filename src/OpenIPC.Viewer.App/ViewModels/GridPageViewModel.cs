@@ -107,11 +107,32 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             }
         }
 
-        // Add new ones.
+        // Reconcile against the freshly-loaded records: keep unchanged tiles,
+        // rebuild ones whose stream URL was edited, add new ones. Without the
+        // rebuild branch an edited RTSP URL never reached the grid — the tile
+        // was matched by Id and kept, so it kept streaming the old URL until an
+        // app restart. RefreshTilesAsync re-runs on every Live-tab entry (the
+        // only time an edit can have landed), so the swap happens on next view.
         foreach (var camera in visible)
         {
-            if (Tiles.Any(t => t.Camera.Id == camera.Id))
+            var existing = Tiles.FirstOrDefault(t => t.Camera.Id == camera.Id);
+            if (existing is not null)
+            {
+                if (!StreamUriChanged(existing.Camera, camera))
+                    continue;
+
+                var idx = Tiles.IndexOf(existing);
+                Tiles.RemoveAt(idx);
+                try { await existing.DisposeAsync().ConfigureAwait(true); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
+
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                Tiles.Insert(idx, rebuilt);
+                try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate rebuilt tile for {Camera}", camera.Name); }
                 continue;
+            }
+
             var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }
@@ -125,6 +146,13 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         for (var i = 0; i < visualCapacity; i++)
             Slots.Add(i < Tiles.Count ? Tiles[i] : null);
     }
+
+    // A tile is rebuilt only when the URL it actually streams changes — the
+    // grid uses the substream, falling back to main (mirrors
+    // CameraTileViewModel.ActivateAsync). Comparing this (rather than the whole
+    // record) avoids churning sessions on cosmetic edits like a rename.
+    private static bool StreamUriChanged(Camera a, Camera b) =>
+        (a.RtspSubUri ?? a.RtspMainUri) != (b.RtspSubUri ?? b.RtspMainUri);
 
     // Drag-reorder hook called from GridPage code-behind. Both indices are in
     // the *Tiles* collection (live cameras only — empty Slots placeholders are
