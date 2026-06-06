@@ -6,8 +6,12 @@ namespace OpenIPC.Viewer.App.Services;
 
 // Tiny ICU-free localizer. Static singleton because XAML's {Binding [Key],
 // Source={x:Static svc:Localizer.Instance}} pattern needs a static reference.
-// PropertyChanged on "Item[]" tells all indexed bindings to re-evaluate when
-// SetLanguage flips the active dict — no relaunch needed.
+// SetLanguage raises PropertyChanged with an empty name ("everything changed")
+// so every binding on Localizer.Instance re-reads when the active dict flips —
+// no relaunch needed. Note: the WPF "Item[]" indexer convention does NOT work
+// here — Avalonia's accessor only re-reads when PropertyName equals the CLR
+// indexer name ("Item") or is null/empty, so persistent controls like the
+// bottom nav stayed stale on "Item[]". Empty name is the reliable signal.
 //
 // EN/RU only for now; adding a third language = one more dict + one more
 // LangCode value. Missing keys fall back to the key itself, so adding a new
@@ -41,7 +45,9 @@ public sealed class Localizer : INotifyPropertyChanged
             _ => English,
         };
         _active = resolved;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+        // Empty/null name = "all properties changed"; Avalonia's INPC accessor
+        // re-reads on string.IsNullOrEmpty(PropertyName). "Item[]" would not match.
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
     }
 
     private static LangCode DetectSystem()
