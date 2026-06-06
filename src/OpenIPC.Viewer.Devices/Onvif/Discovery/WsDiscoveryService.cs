@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Onvif.Core.Discovery;
-using Onvif.Core.Discovery.Common;
 using Onvif.Core.Discovery.Models;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 
@@ -32,7 +31,9 @@ public sealed class WsDiscoveryService : IDiscoveryService
     {
         var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
         var ws = new WSDiscovery();
-        var client = new UdpClientWrapper();
+        // Our own IUdpClient — the stock UdpClientWrapper crashes on Android/iOS
+        // (GetActiveTcpListeners is PlatformNotSupported). See PlatformSafeUdpClient.
+        var client = new PlatformSafeUdpClient();
 
         _logger.LogDebug("WS-Discovery scan starting (timeout={Seconds}s)", seconds);
         IEnumerable<DiscoveryDevice> devices;
