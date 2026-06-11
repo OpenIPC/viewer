@@ -33,6 +33,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     [NotifyPropertyChangedFor(nameof(IsSettingsSelected))]
     private ViewModelBase _currentPage;
 
+    // Orientation-driven fullscreen (mobile only). MainView reports whether
+    // the viewport is in mobile landscape; fullscreen engages only while the
+    // single-camera page is open, so list/settings pages keep their chrome.
+    private bool _isMobileLandscape;
+
+    [ObservableProperty]
+    private bool _isFullscreen;
+
     public bool IsLiveSelected => CurrentPage is GridPageViewModel;
     public bool IsLibrarySelected => CurrentPage is CameraLibraryPageViewModel or SingleCameraPageViewModel;
     public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel;
@@ -69,6 +77,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         // execute). This VM is an app-lifetime singleton, so the static
         // subscription lives as long as the process — no unsubscribe needed.
         OverlayDialogPresenter.ActiveChanged += () => NavigateCommand.NotifyCanExecuteChanged();
+    }
+
+    public void SetViewportOrientation(bool isMobileLandscape)
+    {
+        if (_isMobileLandscape == isMobileLandscape)
+            return;
+        _isMobileLandscape = isMobileLandscape;
+        UpdateFullscreen();
+    }
+
+    partial void OnCurrentPageChanged(ViewModelBase value) => UpdateFullscreen();
+
+    private void UpdateFullscreen()
+    {
+        IsFullscreen = _isMobileLandscape && CurrentPage is SingleCameraPageViewModel;
+        // Camera-to-camera swipe replaces the page VM while IsFullscreen stays
+        // true, so the flag is pushed to the current page explicitly instead
+        // of relying on the property-changed callback.
+        if (CurrentPage is SingleCameraPageViewModel camera)
+            camera.IsFullscreen = IsFullscreen;
     }
 
     private static bool CanNavigate() => !OverlayDialogPresenter.IsAnyOpen;

@@ -9,8 +9,9 @@
 
   <Grid RowDefinitions="Auto,*,Auto,Auto">
 
-    <!-- Header -->
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+    <!-- Header. Hidden in landscape fullscreen — only the video row stays. -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12"
+          IsVisible="{Binding !IsFullscreen}">
       <Button Grid.Column="0"
               Content="{Binding [Common.Back], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding BackCommand}"
@@ -214,8 +215,13 @@
             Background="{StaticResource Bg2Brush}"
             BorderBrush="{StaticResource BorderWeakBrush}"
             BorderThickness="1"
-            CornerRadius="8"
-            IsVisible="{Binding IsMajestic}">
+            CornerRadius="8">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="IsMajestic" />
+          <Binding Path="!IsFullscreen" />
+        </MultiBinding>
+      </Border.IsVisible>
       <StackPanel Spacing="8">
 
         <!-- Title row -->
@@ -330,8 +336,9 @@
       </StackPanel>
     </Border>
 
-    <!-- Bottom bar -->
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,0">
+    <!-- Bottom bar. Hidden in landscape fullscreen. -->
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,0"
+          IsVisible="{Binding !IsFullscreen}">
 
       <!-- REC indicator (visible while recording) -->
       <Border Grid.Column="0"

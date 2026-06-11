@@ -15,7 +15,9 @@
     Responsive layout. The split happens at 700px:
       wide  → desktop sidebar on the left, content fills the rest
       narrow → bottom-nav under the content (mobile / pinned-narrow window)
-    IsWideLayout is updated by code-behind on every SizeChanged.
+    ShowSidebar / ShowBottomNav are updated by code-behind on every SizeChanged
+    and both collapse while the mobile landscape-fullscreen camera view is
+    active (MainWindowViewModel.IsFullscreen).
 
     CurrentPage is hosted in a SINGLE ContentControl shared by both layouts.
     Hosting it twice (one ContentControl per layout) made the same page VM bind
@@ -29,7 +31,7 @@
     <!-- Desktop sidebar — fixed 200px wide; collapses to nothing when narrow. -->
     <Border Grid.Column="0"
             Width="200"
-            IsVisible="{Binding #Root.IsWideLayout}"
+            IsVisible="{Binding #Root.ShowSidebar}"
             Background="{StaticResource Bg2Brush}"
             BorderBrush="{StaticResource BorderWeakBrush}"
             BorderThickness="0,0,1,0">
@@ -96,7 +98,7 @@
     <!-- Content host + bottom nav (narrow only). One ContentControl, period. -->
     <DockPanel Grid.Column="1" LastChildFill="True">
       <views:BottomNavBar DockPanel.Dock="Bottom"
-                          IsVisible="{Binding #Root.IsNarrowLayout}" />
+                          IsVisible="{Binding #Root.ShowBottomNav}" />
       <ContentControl Content="{Binding CurrentPage}"
                       Padding="{Binding #Root.ContentPadding}" />
     </DockPanel>
