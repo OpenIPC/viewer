@@ -18,6 +18,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 {
     private readonly IVideoEngine? _engine;
     private readonly CameraDirectoryService? _directory;
+    private readonly UserSettingsService? _userSettings;
     private readonly ILogger<CameraEditorViewModel>? _logger;
     private GroupId? _pendingGroupId;
 
@@ -48,15 +49,16 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 
     public CameraEditorViewModel() { }
 
-    public CameraEditorViewModel(IVideoEngine engine, CameraDirectoryService directory, ILogger<CameraEditorViewModel> logger)
+    public CameraEditorViewModel(IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
     {
         _engine = engine;
         _directory = directory;
+        _userSettings = userSettings;
         _logger = logger;
     }
 
-    public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, IVideoEngine engine, CameraDirectoryService directory, ILogger<CameraEditorViewModel> logger)
-        : this(engine, directory, logger)
+    public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
+        : this(engine, directory, userSettings, logger)
     {
         EditingId = existing.Id;
         Name = existing.Name;
@@ -112,7 +114,10 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         var creds = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
             ? null
             : new CameraCredentials(Username, Password);
-        var options = VideoSessionOptions.Default(rtspMain, creds);
+        // Same transport the live view will use — a UDP-only setup used to pass
+        // playback but fail the test (which was hardwired to the default TCP).
+        var options = VideoSessionOptions.Default(rtspMain, creds)
+            with { Transport = ParseTransport(_userSettings?.Current.RtspTransport) };
         var session = _engine.CreateSession(options);
 
         try
@@ -236,6 +241,12 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         ok = true;
         return true;
     }
+
+    private static RtspTransport ParseTransport(string? s) => s?.ToLowerInvariant() switch
+    {
+        "udp" => RtspTransport.Udp,
+        _ => RtspTransport.Tcp,
+    };
 }
 
 public sealed record CameraEditorResult(NewCameraRequest? NewRequest, UpdateCameraRequest? UpdateRequest);

@@ -209,6 +209,14 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _ = ProbeReachabilityAsync();
     }
 
+    /// <summary>
+    /// Re-runs reachability probes for the rows already on screen. Called by
+    /// the view on every Loaded — the full LoadAsync only runs once (IsLoaded
+    /// gate), so without this a status probed before e.g. a Wi-Fi hiccup
+    /// stayed OFFLINE forever while the stream itself played fine.
+    /// </summary>
+    public Task ReprobeReachabilityAsync() => ProbeReachabilityAsync();
+
     private async Task ProbeReachabilityAsync()
     {
         var rows = new System.Collections.Generic.List<CameraRowViewModel>(Cameras);
@@ -476,10 +484,16 @@ public sealed partial class CameraRowViewModel : ViewModelBase
         var port = Camera.RtspMainUri.Port;
         if (port <= 0) port = 554;
 
+        // Probe the endpoint the player actually dials. The RTSP URI host can
+        // differ from the Host field (ONVIF behind NAT, mDNS name vs IP) — a
+        // probe against the wrong one showed OFFLINE while the stream played.
+        var host = Camera.RtspMainUri.Host;
+        if (string.IsNullOrEmpty(host)) host = Camera.Host;
+
         try
         {
             var reachable = await _reachability
-                .IsReachableAsync(Camera.Host, port, ProbeTimeout, ct)
+                .IsReachableAsync(host, port, ProbeTimeout, ct)
                 .ConfigureAwait(true);
             Status = reachable ? CameraReachability.Online : CameraReachability.Offline;
         }
