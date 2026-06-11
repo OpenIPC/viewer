@@ -68,6 +68,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     public bool IsConnecting =>
         Session is not null && State is SessionState.Connecting or SessionState.Reconnecting;
     public bool IsFailed => State == SessionState.Failed;
+    // Set by MainWindowViewModel while the device is in mobile landscape —
+    // hides the header / Majestic panel / bottom bar so the video gets the
+    // whole screen. Overlays (LIVE badge, telemetry, PTZ) stay on the video.
+    [ObservableProperty] private bool _isFullscreen;
+
     [ObservableProperty] private string? _snapshotPath;
     [ObservableProperty] private PtzController? _ptz;
     [ObservableProperty] private string _newPresetName = "";

@@ -1,5 +1,8 @@
+using System;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using OpenIPC.Viewer.App.ViewModels;
 
 namespace OpenIPC.Viewer.App.Views;
 
@@ -10,13 +13,18 @@ public partial class MainView : UserControl
     // windows) gets the bottom strip.
     private const double WideBreakpoint = 700;
 
-    public static readonly DirectProperty<MainView, bool> IsWideLayoutProperty =
-        AvaloniaProperty.RegisterDirect<MainView, bool>(
-            nameof(IsWideLayout), o => o.IsWideLayout);
+    // Orientation-driven fullscreen is mobile-only: on desktop a window that
+    // is wider than tall is just a window, not a rotated device.
+    private static readonly bool IsMobilePlatform =
+        OperatingSystem.IsAndroid() || OperatingSystem.IsIOS();
 
-    public static readonly DirectProperty<MainView, bool> IsNarrowLayoutProperty =
+    public static readonly DirectProperty<MainView, bool> ShowSidebarProperty =
         AvaloniaProperty.RegisterDirect<MainView, bool>(
-            nameof(IsNarrowLayout), o => o.IsNarrowLayout);
+            nameof(ShowSidebar), o => o.ShowSidebar);
+
+    public static readonly DirectProperty<MainView, bool> ShowBottomNavProperty =
+        AvaloniaProperty.RegisterDirect<MainView, bool>(
+            nameof(ShowBottomNav), o => o.ShowBottomNav);
 
     // Content inset differs by layout (desktop has more breathing room). Exposed
     // as a property because the single shared ContentControl can no longer pick
@@ -29,41 +37,83 @@ public partial class MainView : UserControl
     private static readonly Thickness NarrowPadding = new(12);
 
     private bool _isWideLayout = true;
+    private bool _isFullscreen;
+    private bool _showSidebar = true;
+    private bool _showBottomNav;
     private Thickness _contentPadding = WidePadding;
+    private MainWindowViewModel? _vm;
 
-    public bool IsWideLayout
-    {
-        get => _isWideLayout;
-        private set
-        {
-            if (SetAndRaise(IsWideLayoutProperty, ref _isWideLayout, value))
-            {
-                RaisePropertyChanged(IsNarrowLayoutProperty, !value, value == false);
-                ContentPadding = value ? WidePadding : NarrowPadding;
-            }
-        }
-    }
-
-    public bool IsNarrowLayout => !_isWideLayout;
-
-    public Thickness ContentPadding
-    {
-        get => _contentPadding;
-        private set => SetAndRaise(ContentPaddingProperty, ref _contentPadding, value);
-    }
+    public bool ShowSidebar => _showSidebar;
+    public bool ShowBottomNav => _showBottomNav;
+    public Thickness ContentPadding => _contentPadding;
 
     public MainView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
         // Seed off the initial bounds — XAML evaluates IsVisible before
         // the first SizeChanged fires, so without this both layouts could
         // flash for a frame on narrow viewports.
-        IsWideLayout = Bounds.Width >= WideBreakpoint;
+        _isWideLayout = Bounds.Width >= WideBreakpoint;
+        UpdateChrome();
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
-        IsWideLayout = e.NewSize.Width >= WideBreakpoint;
+        _isWideLayout = e.NewSize.Width >= WideBreakpoint;
+        // Landscape on a phone = the user rotated the device. The VM decides
+        // whether that means fullscreen (only while a camera page is open).
+        if (IsMobilePlatform)
+            _vm?.SetViewportOrientation(e.NewSize.Width > e.NewSize.Height);
+        UpdateChrome();
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_vm is not null)
+            _vm.PropertyChanged -= OnVmPropertyChanged;
+        _vm = DataContext as MainWindowViewModel;
+        if (_vm is not null)
+        {
+            _vm.PropertyChanged += OnVmPropertyChanged;
+            // Push current orientation in case the device started in landscape
+            // and SizeChanged fired before the DataContext was assigned.
+            if (IsMobilePlatform && Bounds.Width > 0)
+                _vm.SetViewportOrientation(Bounds.Width > Bounds.Height);
+        }
+        SetFullscreen(_vm?.IsFullscreen ?? false);
+    }
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsFullscreen) && _vm is not null)
+            SetFullscreen(_vm.IsFullscreen);
+    }
+
+    private void SetFullscreen(bool on)
+    {
+        if (_isFullscreen == on)
+            return;
+        _isFullscreen = on;
+        UpdateChrome();
+
+        // System status/navigation bars follow the app chrome on mobile;
+        // InsetsManager is null on desktop so this is a no-op there.
+        var insets = TopLevel.GetTopLevel(this)?.InsetsManager;
+        if (insets is not null)
+            insets.IsSystemBarVisible = !on;
+    }
+
+    private void UpdateChrome()
+    {
+        var showSidebar = _isWideLayout && !_isFullscreen;
+        var showBottomNav = !_isWideLayout && !_isFullscreen;
+        var padding = _isFullscreen ? new Thickness(0)
+            : _isWideLayout ? WidePadding : NarrowPadding;
+
+        SetAndRaise(ShowSidebarProperty, ref _showSidebar, showSidebar);
+        SetAndRaise(ShowBottomNavProperty, ref _showBottomNav, showBottomNav);
+        SetAndRaise(ContentPaddingProperty, ref _contentPadding, padding);
     }
 }
