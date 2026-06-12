@@ -19,8 +19,15 @@ public sealed partial class CameraLibraryPage : UserControl
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is CameraLibraryPageViewModel vm && !vm.IsLoaded)
+        if (DataContext is not CameraLibraryPageViewModel vm)
+            return;
+
+        if (!vm.IsLoaded)
             await vm.LoadAsync(CancellationToken.None);
+        else
+            // Coming back to the page (e.g. from a camera view) — the list is
+            // already loaded, but the online/offline badges may be stale.
+            await vm.ReprobeReachabilityAsync();
     }
 
     private void OnCameraCardTapped(object? sender, TappedEventArgs e)

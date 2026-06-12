@@ -99,45 +99,47 @@
       </StackPanel>
     </ScrollViewer>
 
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,24,0,0">
-      <Button Grid.Column="0"
-              Content="{Binding [CameraEditor.Button.TestConnection], Source={x:Static svc:Localizer.Instance}}"
-              Command="{Binding TestConnectionCommand}"
-              Padding="12,8"
-              VerticalAlignment="Center"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Foreground="{StaticResource TextPrimaryBrush}" />
-      <TextBlock Grid.Column="1"
-                 Text="{Binding TestStatus}"
+    <StackPanel Grid.Row="2" Margin="0,24,0,0" Spacing="10">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <Button Grid.Column="0"
+                Content="{Binding [CameraEditor.Button.TestConnection], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding TestConnectionCommand}"
+                Padding="12,8"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="2"
+                Name="CancelButton"
+                Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
+                Padding="14,8"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                Margin="0,0,8,0" />
+        <Button Grid.Column="3"
+                Name="SaveButton"
+                Content="{Binding [Common.Save], Source={x:Static svc:Localizer.Instance}}"
+                Padding="14,8"
+                Background="{StaticResource AccentBrush}"
+                Foreground="White"
+                CornerRadius="6"
+                IsDefault="True" />
+      </Grid>
+      <!-- Test result gets its own full-width row. It used to live in the
+           star column between the buttons, which collapses to ~0px on phone
+           widths and ellipsizes the whole message away — making "Test" look
+           like a silent no-op on mobile. -->
+      <TextBlock Text="{Binding TestStatus}"
                  FontSize="{StaticResource FontSizeSm}"
                  Foreground="{StaticResource TextSecondaryBrush}"
-                 VerticalAlignment="Center"
-                 Margin="10,0"
-                 TextTrimming="CharacterEllipsis"
-                 ToolTip.Tip="{Binding TestStatus}"
+                 TextWrapping="Wrap"
                  IsVisible="{Binding TestStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      <Button Grid.Column="2"
-              Name="CancelButton"
-              Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
-              Padding="14,8"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Foreground="{StaticResource TextPrimaryBrush}"
-              Margin="0,0,8,0" />
-      <Button Grid.Column="3"
-              Name="SaveButton"
-              Content="{Binding [Common.Save], Source={x:Static svc:Localizer.Instance}}"
-              Padding="14,8"
-              Background="{StaticResource AccentBrush}"
-              Foreground="White"
-              CornerRadius="6"
-              IsDefault="True" />
-    </Grid>
+    </StackPanel>
 
   </Grid>
 
