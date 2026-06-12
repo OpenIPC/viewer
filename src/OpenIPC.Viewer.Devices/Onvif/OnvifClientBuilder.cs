@@ -97,6 +97,15 @@ internal static class OnvifClientBuilder
         {
             shift = await probe.GetDeviceTimeShift().ConfigureAwait(false);
         }
+        catch (CommunicationException)
+        {
+            // Some firmwares answer GetSystemDateAndTime with an empty/truncated
+            // body ("Unexpected end of file"), which used to abort the whole add
+            // flow. The shift only compensates camera clock skew for the
+            // WS-UsernameToken digest — assume zero and proceed; if the camera
+            // truly rejects the digest, the next call surfaces the real error.
+            shift = TimeSpan.Zero;
+        }
         finally
         {
             CloseQuietly(probe);
