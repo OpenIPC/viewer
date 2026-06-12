@@ -64,11 +64,28 @@
         <Grid ColumnDefinitions="*,12,*">
           <StackPanel Grid.Column="0" Spacing="6">
             <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-            <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
+            <!-- Inline paste buttons (mobile-only, toggled in code-behind):
+                 Avalonia's long-press → context-flyout path on Android is
+                 unreliable (flyout hidden behind the soft keyboard, flaky
+                 Holding gesture on empty fields), so credentials copied from
+                 a password manager had no way into these fields. -->
+            <TextBox Name="UsernameBox" Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}">
+              <TextBox.InnerRightContent>
+                <Button Name="PasteUsernameButton" Classes="paste-inline" Click="OnPasteUsername">
+                  <Path Classes="lucide" Data="{StaticResource IconPaste}" Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16" />
+                </Button>
+              </TextBox.InnerRightContent>
+            </TextBox>
           </StackPanel>
           <StackPanel Grid.Column="2" Spacing="6">
             <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-            <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
+            <TextBox Name="PasswordBox" Text="{Binding Password, Mode=TwoWay}" PasswordChar="•">
+              <TextBox.InnerRightContent>
+                <Button Name="PastePasswordButton" Classes="paste-inline" Click="OnPastePassword">
+                  <Path Classes="lucide" Data="{StaticResource IconPaste}" Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16" />
+                </Button>
+              </TextBox.InnerRightContent>
+            </TextBox>
           </StackPanel>
         </Grid>
 

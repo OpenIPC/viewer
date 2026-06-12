@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
@@ -22,6 +23,12 @@ public sealed partial class CameraEditorContent : UserControl
 
         this.FindControl<Button>("CancelButton")!.Click += (_, _) => _tcs.TrySetResult(null);
         this.FindControl<Button>("SaveButton")!.Click += OnSave;
+
+        // Desktop has Ctrl+V and a right-click menu; the inline paste buttons
+        // exist for mobile, where the long-press flyout is unreliable.
+        var isMobile = OverlayDialogPresenter.IsMobile;
+        this.FindControl<Button>("PasteUsernameButton")!.IsVisible = isMobile;
+        this.FindControl<Button>("PastePasswordButton")!.IsVisible = isMobile;
         AttachedToVisualTree += async (_, _) =>
         {
             if (DataContext is CameraEditorViewModel vm)
@@ -34,5 +41,17 @@ public sealed partial class CameraEditorContent : UserControl
         if (DataContext is not CameraEditorViewModel vm) return;
         if (!vm.TryBuildRequest(out var newRequest, out var updateRequest)) return;
         _tcs.TrySetResult(new CameraEditorResult(newRequest, updateRequest));
+    }
+
+    private void OnPasteUsername(object? sender, RoutedEventArgs e) =>
+        PasteInto(this.FindControl<TextBox>("UsernameBox")!);
+
+    private void OnPastePassword(object? sender, RoutedEventArgs e) =>
+        PasteInto(this.FindControl<TextBox>("PasswordBox")!);
+
+    private static void PasteInto(TextBox box)
+    {
+        box.Focus();
+        box.Paste();
     }
 }
