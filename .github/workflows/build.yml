@@ -102,6 +102,13 @@ jobs:
     env:
       FFMPEG_VERSION: n7.1
       NDK_VERSION: r27c
+      # Secrets are mapped to env so steps can gate on them (`if:` can't read
+      # secrets directly). Empty when the repo has no release keystore yet —
+      # the APK then falls back to per-runner debug signing, exactly as before.
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_STORE_PASS: ${{ secrets.ANDROID_STORE_PASS }}
+      ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
     steps:
       - uses: actions/checkout@v4
 
@@ -157,11 +164,48 @@ jobs:
       - name: Build (Release, warnings as errors)
         run: dotnet build src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release --no-restore -p:TreatWarningsAsErrors=true
 
+      # versionCode must grow monotonically or Android refuses to install the
+      # new APK over the old one ("app already installed"). Derived from the
+      # tag: major*1000000 + minor*10000 + patch*100 + rev, where rev is the
+      # rc/beta number (no number → 1) and 99 for a final release — so a final
+      # always outranks its own rcs and the next patch's rc01 outranks the
+      # final. Non-tag builds keep the csproj defaults (versionCode 1).
+      - name: Compute APK version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VER="${GITHUB_REF_NAME#v}"            # v0.1.7-rc2 -> 0.1.7-rc2
+          BASE="${VER%%-*}"                     # 0.1.7
+          IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
+          case "$VER" in
+            *-*) REV=$(echo "${VER#*-}" | grep -o '[0-9]*$'); REV=${REV:-1} ;;
+            *)   REV=99 ;;
+          esac
+          CODE=$((MAJOR*1000000 + MINOR*10000 + PATCH*100 + REV))
+          echo "Tag $GITHUB_REF_NAME -> versionName=$VER versionCode=$CODE"
+          echo "APP_DISPLAY_VERSION=$VER" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$CODE" >> "$GITHUB_ENV"
+
+      # Stable release signing (when the keystore secrets are set). Without a
+      # constant key every CI run signs with a freshly generated debug key, so
+      # Android rejects each new release as a signature mismatch until the app
+      # is uninstalled. Passwords go via env: indirection, not argv.
+      - name: Set up release signing
+        if: env.ANDROID_KEYSTORE_B64 != ''
+        run: |
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          {
+            echo "SIGN_ARGS=-p:AndroidKeyStore=true \
+              -p:AndroidSigningKeyStore=$RUNNER_TEMP/release.keystore \
+              -p:AndroidSigningKeyAlias=$ANDROID_KEY_ALIAS \
+              -p:AndroidSigningStorePass=env:ANDROID_STORE_PASS \
+              -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS"
+          } >> "$GITHUB_ENV"
+
       - name: Publish APK (android-arm64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -o publish/android-arm64
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       - name: Publish APK (android-x64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       - name: Upload artifact (arm64)
         uses: actions/upload-artifact@v4
