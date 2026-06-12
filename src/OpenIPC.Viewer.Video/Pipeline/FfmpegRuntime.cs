@@ -9,11 +9,21 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 internal static class FfmpegRuntime
 {
     private static int _initialized;
+    private static Exception? _initFailure;
 
     public static void EnsureInitialized()
     {
         if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+        {
+            // Replay a failed first init instead of returning success — otherwise
+            // every later session walks straight into uninitialized bindings and
+            // dies mid-stream with a bare "Specified method is not supported"
+            // (what the field logs showed: one descriptive crash, then an endless
+            // reconnect loop of cryptic av_dict_set failures).
+            if (_initFailure is not null)
+                throw _initFailure;
             return;
+        }
 
         if (OperatingSystem.IsAndroid())
         {
@@ -54,13 +64,15 @@ internal static class FfmpegRuntime
             // message is preserved.
             var (rid, _) = RuntimeIds.Current();
             var probe = string.IsNullOrEmpty(nativeDir) ? "(loader path)" : nativeDir;
-            throw new FfmpegNativeLibsMissingException(
+            _initFailure = new FfmpegNativeLibsMissingException(
                 $"FFmpeg native libraries failed to load for runtime '{rid ?? "unknown"}'. " +
                 $"Probed: {probe}. " +
                 $"Android: ensure runtimes/android-{{arm64,x64}}/native/*.so are populated " +
                 $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
-                $"Desktop: tools/fetch-ffmpeg.ps1 (Windows) or apt/brew. " +
+                $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
+                $"or tools/fetch-ffmpeg.ps1 (Windows) / apt/brew. " +
                 $"Underlying: {DescribeChain(ex)}", ex);
+            throw _initFailure;
         }
     }
 
@@ -70,6 +82,11 @@ internal static class FfmpegRuntime
         {
             if (cur is DllNotFoundException) return true;
             if (cur is BadImageFormatException) return true;
+            // FFmpeg.AutoGen's DynamicallyLoadedBindings doesn't throw on a
+            // failed library load — it leaves the function vector pointing at a
+            // stub that throws NotSupportedException on first call. Within this
+            // init scope that's always a load failure, not a real capability gap.
+            if (cur is NotSupportedException) return true;
         }
         return ex is TypeInitializationException;
     }
