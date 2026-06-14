@@ -159,6 +159,12 @@ internal static class OnvifClientBuilder
             AllowCookies = true,
             MaxBufferSize = int.MaxValue,
             MaxReceivedMessageSize = int.MaxValue,
+            // onvif_simple_server is CGI-style: one request per TCP connection,
+            // then it closes the socket. WCF/.NET pool and reuse connections by
+            // default, so the next ONVIF call grabs the already-closed socket and
+            // reads EOF -> XmlException "Unexpected end of file". Force Connection:
+            // close so every request gets a fresh socket, matching the server.
+            KeepAliveEnabled = false,
         });
         return binding;
     }
