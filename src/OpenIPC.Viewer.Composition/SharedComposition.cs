@@ -51,6 +51,8 @@ public static class SharedComposition
         services.AddSingleton<IOnvifClient, OnvifCoreClient>();
         services.AddSingleton<OnvifProbeService>();
         services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Onvif.Discovery.INetworkInterfaceProvider,
+            OpenIPC.Viewer.Devices.Onvif.Discovery.SystemNetworkInterfaceProvider>();
 
         // Majestic HTTP
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();

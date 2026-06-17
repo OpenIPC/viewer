@@ -78,9 +78,12 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.AddCamera"] = "+ Add camera",
         ["Common.Loading"] = "Loading…",
         ["Common.Retry"] = "Retry",
+        ["Common.Close"] = "Close",
 
         ["Stream.Connecting"] = "Connecting…",
+        ["Stream.Reconnecting"] = "Reconnecting…",
         ["Stream.Disconnected"] = "Disconnected",
+        ["Stream.Unavailable"] = "Stream unavailable",
 
         ["Library.Title"] = "Cameras",
         ["Library.EmptyTitle"] = "No cameras yet",
@@ -136,8 +139,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.About"] = "About",
 
         ["Settings.Video.TelemetryOverlay"] = "Show telemetry overlay on live view",
+        ["Settings.Video.AutoSdHd"] = "Auto SD/HD (sub in grid, main when full-screen)",
         ["Settings.Video.MaxGridSessions"] = "Max concurrent grid sessions",
         ["Settings.Video.RtspTransport"] = "Default RTSP transport",
+        ["Settings.Video.NetworkInterface"] = "Network interface (discovery)",
+        ["Settings.Video.NetworkInterface.Auto"] = "Auto",
 
         ["Settings.Recording.Directory"] = "Recordings directory",
         ["Settings.Recording.PickFolder"] = "Pick folder…",
@@ -168,6 +174,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["CameraEditor.Label.Username"] = "Username",
         ["CameraEditor.Label.Password"] = "Password",
         ["CameraEditor.Label.Group"] = "Group",
+        ["CameraEditor.Label.StreamQuality"] = "Grid stream quality",
+        ["CameraEditor.Quality.Auto"] = "Auto (SD/HD)",
+        ["CameraEditor.Quality.AlwaysHd"] = "Always HD (main)",
+        ["CameraEditor.Quality.AlwaysSd"] = "Always SD (sub)",
         ["CameraEditor.Placeholder.Name"] = "Front door",
         ["CameraEditor.Placeholder.Host"] = "192.168.1.10",
         ["CameraEditor.Placeholder.OnvifPort"] = "8899",
@@ -278,9 +288,12 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.AddCamera"] = "+ Добавить камеру",
         ["Common.Loading"] = "Загрузка…",
         ["Common.Retry"] = "Повторить",
+        ["Common.Close"] = "Закрыть",
 
         ["Stream.Connecting"] = "Подключение…",
+        ["Stream.Reconnecting"] = "Переподключение…",
         ["Stream.Disconnected"] = "Нет соединения",
+        ["Stream.Unavailable"] = "Поток недоступен",
 
         ["Library.Title"] = "Камеры",
         ["Library.EmptyTitle"] = "Камер пока нет",
@@ -336,8 +349,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.About"] = "О приложении",
 
         ["Settings.Video.TelemetryOverlay"] = "Показывать телеметрию на видео",
+        ["Settings.Video.AutoSdHd"] = "Авто SD/HD (sub в гриде, main на весь экран)",
         ["Settings.Video.MaxGridSessions"] = "Максимум потоков в гриде",
         ["Settings.Video.RtspTransport"] = "RTSP-транспорт по умолчанию",
+        ["Settings.Video.NetworkInterface"] = "Сетевой интерфейс (поиск)",
+        ["Settings.Video.NetworkInterface.Auto"] = "Авто",
 
         ["Settings.Recording.Directory"] = "Папка записей",
         ["Settings.Recording.PickFolder"] = "Выбрать…",
@@ -368,6 +384,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["CameraEditor.Label.Username"] = "Логин",
         ["CameraEditor.Label.Password"] = "Пароль",
         ["CameraEditor.Label.Group"] = "Группа",
+        ["CameraEditor.Label.StreamQuality"] = "Качество в гриде",
+        ["CameraEditor.Quality.Auto"] = "Авто (SD/HD)",
+        ["CameraEditor.Quality.AlwaysHd"] = "Всегда HD (main)",
+        ["CameraEditor.Quality.AlwaysSd"] = "Всегда SD (sub)",
         ["CameraEditor.Placeholder.Name"] = "Входная",
         ["CameraEditor.Placeholder.Host"] = "192.168.1.10",
         ["CameraEditor.Placeholder.OnvifPort"] = "8899",

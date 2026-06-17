@@ -22,6 +22,8 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     public string? RecordingsDirectoryOverride =>
         string.IsNullOrWhiteSpace(Current.RecordingsDirOverride) ? null : Current.RecordingsDirOverride;
     public int MaxConcurrentGridSessions => Current.MaxConcurrentGridSessions;
+    public string? PreferredNetworkInterface =>
+        string.IsNullOrWhiteSpace(Current.PreferredNetworkInterface) ? null : Current.PreferredNetworkInterface;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {

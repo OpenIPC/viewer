@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Threading;
@@ -35,6 +37,16 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private CameraGroup? _selectedGroup;
 
+    // Per-camera SD/HD override (Phase 12.2).
+    public IReadOnlyList<StreamQualityOption> StreamQualityOptions { get; } = new[]
+    {
+        new StreamQualityOption(Localizer.Instance["CameraEditor.Quality.Auto"], StreamQualityOverride.Auto),
+        new StreamQualityOption(Localizer.Instance["CameraEditor.Quality.AlwaysHd"], StreamQualityOverride.AlwaysHd),
+        new StreamQualityOption(Localizer.Instance["CameraEditor.Quality.AlwaysSd"], StreamQualityOverride.AlwaysSd),
+    };
+
+    [ObservableProperty] private StreamQualityOption? _selectedStreamQuality;
+
     // Includes a leading null entry so the user can pick "no group".
     public ObservableCollection<CameraGroup?> AvailableGroups { get; } = new();
 
@@ -55,6 +67,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         _directory = directory;
         _userSettings = userSettings;
         _logger = logger;
+        SelectedStreamQuality = StreamQualityOptions[0]; // Auto
     }
 
     public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
@@ -70,6 +83,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         Username = credentials?.Username ?? "";
         Password = credentials?.Password ?? "";
         _pendingGroupId = existing.GroupId;
+        SelectedStreamQuality = StreamQualityOptions.FirstOrDefault(o => o.Value == existing.StreamQualityOverride)
+            ?? StreamQualityOptions[0];
     }
 
     public async Task LoadGroupsAsync(CancellationToken ct)
@@ -156,6 +171,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             ? null
             : new CameraCredentials(Username, Password);
 
+        var quality = SelectedStreamQuality?.Value ?? StreamQualityOverride.Auto;
+
         if (EditingId is null)
         {
             newRequest = new NewCameraRequest(
@@ -166,7 +183,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 RtspMainUri: rtspMain,
                 RtspSubUri: rtspSub,
                 Credentials: credentials,
-                GroupId: SelectedGroup?.Id);
+                GroupId: SelectedGroup?.Id,
+                StreamQualityOverride: quality);
         }
         else
         {
@@ -178,7 +196,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 RtspMainUri: rtspMain,
                 RtspSubUri: rtspSub,
                 Credentials: credentials,
-                GroupId: SelectedGroup?.Id);
+                GroupId: SelectedGroup?.Id,
+                StreamQualityOverride: quality);
         }
 
         return ok;
@@ -250,3 +269,6 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 }
 
 public sealed record CameraEditorResult(NewCameraRequest? NewRequest, UpdateCameraRequest? UpdateRequest);
+
+// Combo item for the per-camera SD/HD override picker (Phase 12.2).
+public sealed record StreamQualityOption(string Display, StreamQualityOverride Value);

@@ -10,4 +10,5 @@ public sealed record SessionTelemetry(
     string? Codec,
     int Width,
     int Height,
-    DateTime CapturedAt);
+    DateTime CapturedAt,
+    double BitrateKbps = 0);

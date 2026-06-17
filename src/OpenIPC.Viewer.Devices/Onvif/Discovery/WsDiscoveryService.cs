@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Onvif.Core.Discovery;
 using Onvif.Core.Discovery.Models;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
+using OpenIPC.Viewer.Core.Settings;
 
 namespace OpenIPC.Viewer.Devices.Onvif.Discovery;
 
@@ -19,10 +20,17 @@ namespace OpenIPC.Viewer.Devices.Onvif.Discovery;
 public sealed class WsDiscoveryService : IDiscoveryService
 {
     private readonly ILogger<WsDiscoveryService> _logger;
+    private readonly INetworkInterfaceProvider _nics;
+    private readonly IUserSettingsAccessor _settings;
 
-    public WsDiscoveryService(ILogger<WsDiscoveryService> logger)
+    public WsDiscoveryService(
+        ILogger<WsDiscoveryService> logger,
+        INetworkInterfaceProvider nics,
+        IUserSettingsAccessor settings)
     {
         _logger = logger;
+        _nics = nics;
+        _settings = settings;
     }
 
     public async IAsyncEnumerable<DiscoveredCamera> ScanAsync(
@@ -31,11 +39,15 @@ public sealed class WsDiscoveryService : IDiscoveryService
     {
         var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
         var ws = new WSDiscovery();
+        // Bind to the chosen LAN interface so the probe doesn't leave via a VPN
+        // on multi-adapter machines (Phase 12.6). Auto/stale → best candidate.
+        var bind = NetworkInterfaceSelector.ResolveBindAddress(
+            _nics.GetCandidates(), _settings.PreferredNetworkInterface);
         // Our own IUdpClient — the stock UdpClientWrapper crashes on Android/iOS
         // (GetActiveTcpListeners is PlatformNotSupported). See PlatformSafeUdpClient.
-        var client = new PlatformSafeUdpClient();
+        var client = new PlatformSafeUdpClient(bind);
 
-        _logger.LogDebug("WS-Discovery scan starting (timeout={Seconds}s)", seconds);
+        _logger.LogDebug("WS-Discovery scan starting (timeout={Seconds}s, bind={Bind})", seconds, bind ?? "any");
         IEnumerable<DiscoveryDevice> devices;
         try
         {

@@ -1,4 +1,5 @@
 using System;
+using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Core.Entities;
 
@@ -22,4 +23,7 @@ public sealed record Camera(
     bool IsMajestic,
     int SortOrder,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    // Per-camera SD/HD override (Phase 12.2). Trailing param with a default so
+    // existing constructor calls stay valid.
+    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto);

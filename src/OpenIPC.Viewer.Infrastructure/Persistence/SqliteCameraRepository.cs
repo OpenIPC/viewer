@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Dapper;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Infrastructure.Persistence;
 
@@ -45,12 +46,14 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 Id, GroupId, Name, Host, OnvifPort, HttpPort,
                 RtspMainUri, RtspSubUri, UsernameRef, PasswordRef,
                 OnvifEnabled, OnvifProfileToken, ChipModel, FirmwareVersion,
-                IncludedInGrid, HasPtz, IsMajestic, SortOrder, CreatedAt, UpdatedAt)
+                IncludedInGrid, HasPtz, IsMajestic, SortOrder, CreatedAt, UpdatedAt,
+                StreamQualityOverride)
             VALUES (
                 @Id, @GroupId, @Name, @Host, @OnvifPort, @HttpPort,
                 @RtspMainUri, @RtspSubUri, @UsernameRef, @PasswordRef,
                 @OnvifEnabled, @OnvifProfileToken, @ChipModel, @FirmwareVersion,
-                @IncludedInGrid, @HasPtz, @IsMajestic, @SortOrder, @CreatedAt, @UpdatedAt);
+                @IncludedInGrid, @HasPtz, @IsMajestic, @SortOrder, @CreatedAt, @UpdatedAt,
+                @StreamQualityOverride);
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -81,7 +84,8 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 HasPtz             = @HasPtz,
                 IsMajestic         = @IsMajestic,
                 SortOrder          = @SortOrder,
-                UpdatedAt          = @UpdatedAt
+                UpdatedAt          = @UpdatedAt,
+                StreamQualityOverride = @StreamQualityOverride
             WHERE Id = @Id;
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
@@ -137,7 +141,8 @@ public sealed class SqliteCameraRepository : ICameraRepository
         IsMajestic: row.IsMajestic != 0,
         SortOrder: row.SortOrder,
         CreatedAt: DateTime.Parse(row.CreatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-        UpdatedAt: DateTime.Parse(row.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+        UpdatedAt: DateTime.Parse(row.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+        StreamQualityOverride: (StreamQualityOverride)row.StreamQualityOverride);
 
     private static object ToRow(Camera c) => new
     {
@@ -161,6 +166,7 @@ public sealed class SqliteCameraRepository : ICameraRepository
         c.SortOrder,
         CreatedAt = c.CreatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
         UpdatedAt = c.UpdatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
+        StreamQualityOverride = (int)c.StreamQualityOverride,
     };
 
     private sealed class CameraRow
@@ -185,5 +191,6 @@ public sealed class SqliteCameraRepository : ICameraRepository
         public int SortOrder { get; init; }
         public string CreatedAt { get; init; } = default!;
         public string UpdatedAt { get; init; } = default!;
+        public int StreamQualityOverride { get; init; }
     }
 }

@@ -30,9 +30,16 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private SessionState _state = SessionState.Idle;
     private string? _lastError;
 
+    // Smart Pause gate (Phase 12.1). Signaled = decoding; reset = the Run loop
+    // parks before av_read_frame so a hidden tile burns no CPU. The native
+    // context stays alive for an instant resume.
+    private readonly ManualResetEventSlim _decodeGate = new(true);
+    private volatile bool _paused;
+
     private int _framesDecoded;
     private DateTime _lastFpsTick;
     private int _framesSinceFpsTick;
+    private long _bytesSinceFpsTick;
     private string? _codecName;
     private int _width;
     private int _height;
@@ -111,9 +118,28 @@ internal sealed class FfmpegVideoSession : IVideoSession
         return Task.FromResult(data.ToArray());
     }
 
+    public void PauseDecode()
+    {
+        if (_thread is null || _paused) return;
+        _paused = true;
+        _decodeGate.Reset();
+        SetState(SessionState.Paused);
+    }
+
+    public void Resume()
+    {
+        if (_thread is null || !_paused) return;
+        _paused = false;
+        _decodeGate.Set();
+        SetState(SessionState.Playing);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _cts?.Cancel();
+        // Unblock the decode gate so a paused thread observes cancellation and
+        // exits instead of parking forever.
+        _decodeGate.Set();
         if (_thread is { IsAlive: true })
         {
             await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
@@ -122,6 +148,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         _stateChanged.OnCompleted();
         _telemetry.OnCompleted();
         _cts?.Dispose();
+        _decodeGate.Dispose();
     }
 
     private unsafe void Run()
@@ -204,6 +231,15 @@ internal sealed class FfmpegVideoSession : IVideoSession
             var ct = _cts!.Token;
             while (!ct.IsCancellationRequested)
             {
+                // Smart Pause: park here (no av_read_frame, no decode) while the
+                // tile is hidden. Cancellation during pause throws and unwinds to
+                // the clean Idle exit below.
+                if (_paused)
+                {
+                    try { _decodeGate.Wait(ct); }
+                    catch (OperationCanceledException) { break; }
+                }
+
                 ret = ffmpeg.av_read_frame(fmtCtx, packet);
                 if (ret < 0)
                 {
@@ -221,6 +257,9 @@ internal sealed class FfmpegVideoSession : IVideoSession
                     ffmpeg.av_packet_unref(packet);
                     continue;
                 }
+
+                // Demux-level byte count → video bitrate in MaybePublishTelemetry.
+                Interlocked.Add(ref _bytesSinceFpsTick, packet->size);
 
                 ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
                 ffmpeg.av_packet_unref(packet);
@@ -417,6 +456,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
         var sinceLast = Interlocked.Exchange(ref _framesSinceFpsTick, 0);
         var fps = sinceLast / elapsed.TotalSeconds;
+        var bytes = Interlocked.Exchange(ref _bytesSinceFpsTick, 0);
+        var bitrateKbps = bytes * 8.0 / 1000.0 / elapsed.TotalSeconds;
         _lastFpsTick = now;
 
         _telemetry.OnNext(new SessionTelemetry(
@@ -427,7 +468,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
             Codec: _codecName,
             Width: _width,
             Height: _height,
-            CapturedAt: now));
+            CapturedAt: now,
+            BitrateKbps: bitrateKbps));
     }
 
     private void SetState(SessionState newState, string? error = null)

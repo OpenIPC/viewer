@@ -8,71 +8,86 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 
 internal static class FfmpegRuntime
 {
-    private static int _initialized;
+    // Serializes the one-time native init. The old design used an Interlocked
+    // CompareExchange flag, but that let the *second* caller return "ready"
+    // the instant the first caller flipped the flag — before its (slow)
+    // DynamicallyLoadedBindings.Initialize() had populated the function
+    // vectors. On a multi-camera grid every tile's reconnect loop calls in
+    // concurrently, so the racers spawned decode threads that hit a still-null
+    // delegate and died with a bare NullReferenceException inside av_dict_set.
+    // A lock makes concurrent callers block until init genuinely completes.
+    private static readonly object _gate = new();
+    private static volatile bool _ready;
     private static Exception? _initFailure;
 
     public static void EnsureInitialized()
     {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+        if (_ready)
         {
-            // Replay a failed first init instead of returning success — otherwise
-            // every later session walks straight into uninitialized bindings and
-            // dies mid-stream with a bare "Specified method is not supported"
-            // (what the field logs showed: one descriptive crash, then an endless
-            // reconnect loop of cryptic av_dict_set failures).
-            if (_initFailure is not null)
-                throw _initFailure;
+            if (_initFailure is not null) throw _initFailure;
             return;
         }
 
-        if (OperatingSystem.IsAndroid())
+        lock (_gate)
         {
-            // FFmpeg.AutoGen 7.1.1's FunctionResolverFactory.Create() throws
-            // PlatformNotSupportedException on Android — RuntimeInformation
-            // .IsOSPlatform(Linux) returns false (Android is its own platform
-            // in .NET 6+). Initialize() uses FunctionResolver if set, otherwise
-            // calls the broken factory. Setting it here bypasses the throw.
-            DynamicallyLoadedBindings.FunctionResolver = new AndroidFunctionResolver();
-        }
+            if (_ready)
+            {
+                if (_initFailure is not null) throw _initFailure;
+                return;
+            }
 
-        var nativeDir = ResolveNativeDir();
+            if (OperatingSystem.IsAndroid())
+            {
+                // FFmpeg.AutoGen 7.1.1's FunctionResolverFactory.Create() throws
+                // PlatformNotSupportedException on Android — RuntimeInformation
+                // .IsOSPlatform(Linux) returns false (Android is its own platform
+                // in .NET 6+). Initialize() uses FunctionResolver if set, otherwise
+                // calls the broken factory. Setting it here bypasses the throw.
+                DynamicallyLoadedBindings.FunctionResolver = new AndroidFunctionResolver();
+            }
 
-        try
-        {
-            // Replaces the old ffmpeg.RootPath setter. The Abstractions.ffmpeg
-            // facade no longer owns the loader path; LibrariesPath on
-            // DynamicallyLoadedBindings is the single source of truth.
-            DynamicallyLoadedBindings.LibrariesPath = nativeDir;
+            var nativeDir = ResolveNativeDir();
 
-            // Abstractions.ffmpeg cctor doesn't auto-invoke Initialize the way
-            // the old monolithic FFmpeg.AutoGen package did — we have to call
-            // it explicitly to populate the vectors before touching av_*.
-            DynamicallyLoadedBindings.Initialize();
+            try
+            {
+                // Replaces the old ffmpeg.RootPath setter. The Abstractions.ffmpeg
+                // facade no longer owns the loader path; LibrariesPath on
+                // DynamicallyLoadedBindings is the single source of truth.
+                DynamicallyLoadedBindings.LibrariesPath = nativeDir;
 
-            // Touch one function so the P/Invoke loader resolves the native
-            // libs early — anything missing surfaces here instead of mid-stream.
-            _ = ffmpeg.av_version_info();
-            ffmpeg.avformat_network_init();
-        }
-        catch (Exception ex) when (IsNativeLoadFailure(ex))
-        {
-            // Most-likely cause on Android: the APK shipped without FFmpeg
-            // shared libs because tools/build-ffmpeg-android.sh wasn't run for
-            // the device's ABI (arm64-v8a / x86_64), or the .so are present but
-            // depend on something missing (libc++_shared, libmediandk, etc.).
-            // Re-throw with the full inner chain so the underlying loader
-            // message is preserved.
-            var (rid, _) = RuntimeIds.Current();
-            var probe = string.IsNullOrEmpty(nativeDir) ? "(loader path)" : nativeDir;
-            _initFailure = new FfmpegNativeLibsMissingException(
-                $"FFmpeg native libraries failed to load for runtime '{rid ?? "unknown"}'. " +
-                $"Probed: {probe}. " +
-                $"Android: ensure runtimes/android-{{arm64,x64}}/native/*.so are populated " +
-                $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
-                $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
-                $"or tools/fetch-ffmpeg.ps1 (Windows) / apt/brew. " +
-                $"Underlying: {DescribeChain(ex)}", ex);
-            throw _initFailure;
+                // Abstractions.ffmpeg cctor doesn't auto-invoke Initialize the way
+                // the old monolithic FFmpeg.AutoGen package did — we have to call
+                // it explicitly to populate the vectors before touching av_*.
+                DynamicallyLoadedBindings.Initialize();
+
+                // Touch one function so the P/Invoke loader resolves the native
+                // libs early — anything missing surfaces here instead of mid-stream.
+                _ = ffmpeg.av_version_info();
+                ffmpeg.avformat_network_init();
+            }
+            catch (Exception ex) when (IsNativeLoadFailure(ex))
+            {
+                // Most-likely cause on Android: the APK shipped without FFmpeg
+                // shared libs because tools/build-ffmpeg-android.sh wasn't run for
+                // the device's ABI (arm64-v8a / x86_64), or the .so are present but
+                // depend on something missing (libc++_shared, libmediandk, etc.).
+                // Cache the failure and mark ready so later callers replay it
+                // instead of walking into uninitialized bindings.
+                var (rid, _) = RuntimeIds.Current();
+                var probe = string.IsNullOrEmpty(nativeDir) ? "(loader path)" : nativeDir;
+                _initFailure = new FfmpegNativeLibsMissingException(
+                    $"FFmpeg native libraries failed to load for runtime '{rid ?? "unknown"}'. " +
+                    $"Probed: {probe}. " +
+                    $"Android: ensure runtimes/android-{{arm64,x64}}/native/*.so are populated " +
+                    $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
+                    $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
+                    $"or tools/fetch-ffmpeg.ps1 (Windows) / apt/brew. " +
+                    $"Underlying: {DescribeChain(ex)}", ex);
+                _ready = true;
+                throw _initFailure;
+            }
+
+            _ready = true;
         }
     }
 

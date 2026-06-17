@@ -2,9 +2,12 @@ using System;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -24,6 +27,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private bool _autoScanLanOnStartup;
     [ObservableProperty] private int _maxConcurrentGridSessions;
     [ObservableProperty] private string _rtspTransport = "tcp";
+    [ObservableProperty] private bool _autoSdHd = true;
+
+    [ObservableProperty] private NetworkInterfaceOption? _selectedNetworkInterface;
     [ObservableProperty] private string _language = "system";
 
     [ObservableProperty]
@@ -87,15 +93,31 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     public string[] TransportOptions { get; } = new[] { "tcp", "udp" };
     public string[] LanguageOptions { get; } = new[] { "system", "en", "ru" };
 
+    // Auto + each usable LAN adapter (Phase 12.6). Display shown in the combo,
+    // Value persisted ("" = auto).
+    public IReadOnlyList<NetworkInterfaceOption> NetworkInterfaceOptions { get; }
+
     public string AppDataDirectory => _fs.AppDataDir.FullName;
     public string Version => Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.1.0";
     public string RepositoryUrl => "https://github.com/keyldev/openipc-viewer";
 
-    public SettingsPageViewModel(UserSettingsService settings, IFileSystem fs, IDialogService dialogs)
+    public SettingsPageViewModel(
+        UserSettingsService settings,
+        IFileSystem fs,
+        IDialogService dialogs,
+        INetworkInterfaceProvider nics)
     {
         _settings = settings;
         _fs = fs;
         _dialogs = dialogs;
+
+        var options = new List<NetworkInterfaceOption>
+        {
+            new(Localizer.Instance["Settings.Video.NetworkInterface.Auto"], ""),
+        };
+        options.AddRange(nics.GetCandidates().Select(c => new NetworkInterfaceOption(c.DisplayName, c.Address)));
+        NetworkInterfaceOptions = options;
+
         Load();
     }
 
@@ -114,6 +136,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             AutoScanLanOnStartup = s.AutoScanLanOnStartup;
             MaxConcurrentGridSessions = s.MaxConcurrentGridSessions;
             RtspTransport = s.RtspTransport;
+            AutoSdHd = s.AutoSdHd;
+            SelectedNetworkInterface =
+                NetworkInterfaceOptions.FirstOrDefault(o => o.Value == s.PreferredNetworkInterface)
+                ?? NetworkInterfaceOptions[0];
             RecordingsDirOverride = s.RecordingsDirOverride;
             Language = s.Language;
         }
@@ -126,6 +152,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnAutoScanLanOnStartupChanged(bool value) => Persist();
     partial void OnMaxConcurrentGridSessionsChanged(int value) => Persist();
     partial void OnRtspTransportChanged(string value) => Persist();
+    partial void OnAutoSdHdChanged(bool value) => Persist();
+    partial void OnSelectedNetworkInterfaceChanged(NetworkInterfaceOption? value) => Persist();
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
     partial void OnLanguageChanged(string value) => Persist();
 
@@ -140,6 +168,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             AutoScanLanOnStartup = AutoScanLanOnStartup,
             MaxConcurrentGridSessions = MaxConcurrentGridSessions,
             RtspTransport = RtspTransport,
+            AutoSdHd = AutoSdHd,
+            PreferredNetworkInterface = SelectedNetworkInterface?.Value ?? "",
             RecordingsDirOverride = RecordingsDirOverride,
             Language = Language,
         };
@@ -181,3 +211,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         catch (Exception) { /* best effort — Android sandbox blocks shell-open, desktop works */ }
     }
 }
+
+// Combo item for the Settings → Video network-interface picker (Phase 12.6).
+// Display is the human label ("Auto" / "Ethernet (192.168.1.5)"); Value is the
+// persisted IPv4 ("" = auto).
+public sealed record NetworkInterfaceOption(string Display, string Value);

@@ -70,7 +70,8 @@ public sealed class CameraDirectoryService
             IsMajestic: false,
             SortOrder: 0,
             CreatedAt: now,
-            UpdatedAt: now);
+            UpdatedAt: now,
+            StreamQualityOverride: req.StreamQualityOverride);
 
         return await _cameras.AddAsync(camera, ct).ConfigureAwait(false);
     }
@@ -95,6 +96,7 @@ public sealed class CameraDirectoryService
             UsernameRef = usernameRef,
             PasswordRef = passwordRef,
             GroupId = req.GroupId,
+            StreamQualityOverride = req.StreamQualityOverride,
             UpdatedAt = DateTime.UtcNow,
         };
 
