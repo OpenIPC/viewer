@@ -83,6 +83,9 @@ public static class SharedComposition
             OpenIPC.Viewer.Analytics.OnnxObjectDetector>();
         services.AddSingleton<OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine,
             OpenIPC.Viewer.Analytics.ObjectDetectionEngine>();
+        // Auto-record on detection (Phase 15.6). Started by the App analytics
+        // bootstrap once the engine is initialized.
+        services.AddSingleton<OpenIPC.Viewer.Core.Analytics.AutoRecordCoordinator>();
 
         // Recording lifecycle (IRecorder itself is registered by the platform
         // host — FFmpeg subprocess on desktop, FFmpegKit on Android, etc).
