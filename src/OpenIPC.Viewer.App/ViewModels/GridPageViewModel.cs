@@ -132,7 +132,10 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             var existing = Tiles.FirstOrDefault(t => t.Camera.Id == camera.Id);
             if (existing is not null)
             {
-                if (!StreamUriChanged(existing.Camera, camera))
+                // Rebuild on a stream-URL change OR an analytics-settings change:
+                // the tile holds an immutable Camera snapshot, so toggling
+                // analytics in the editor only takes effect by rebuilding it.
+                if (!StreamUriChanged(existing.Camera, camera) && !AnalyticsChanged(existing.Camera, camera))
                 {
                     // Kept tile — re-evaluate SD/HD against the (possibly new)
                     // layout. No-op when quality is unchanged.
@@ -175,6 +178,23 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     // record) avoids churning sessions on cosmetic edits like a rename.
     private static bool StreamUriChanged(Camera a, Camera b) =>
         (a.RtspSubUri ?? a.RtspMainUri) != (b.RtspSubUri ?? b.RtspMainUri);
+
+    // True when a camera's analytics config changed (Phase 15) — the tile's
+    // frame tap reads its immutable Camera snapshot, so any change needs a
+    // rebuild. Compared field-by-field because AnalyticsSettings.ClassIds is a
+    // collection (record equality would compare it by reference).
+    private static bool AnalyticsChanged(Camera a, Camera b)
+    {
+        var x = a.AnalyticsOrDefault;
+        var y = b.AnalyticsOrDefault;
+        if (x.Enabled != y.Enabled || x.AutoRecord != y.AutoRecord || x.AnalyticsFps != y.AnalyticsFps
+            || x.PostEventSeconds != y.PostEventSeconds
+            || Math.Abs(x.ConfidenceThreshold - y.ConfidenceThreshold) > 0.001f)
+            return true;
+        var xc = (x.ClassIds ?? Array.Empty<int>()).OrderBy(i => i);
+        var yc = (y.ClassIds ?? Array.Empty<int>()).OrderBy(i => i);
+        return !xc.SequenceEqual(yc);
+    }
 
     // Auto SD/HD policy (Phase 12.2): mainstream only when a single tile fills
     // the view (1×1 layout) and the user hasn't disabled the feature; otherwise
