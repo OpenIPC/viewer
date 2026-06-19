@@ -64,6 +64,13 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4-preview.1.1" />
     <PackageVersion Include="System.Reactive" Version="6.0.1" />
 
+    <!-- Phase 15: local AI analytics. ONNX Runtime in-process (no Python
+         sidecar). Base package ships the CPU EP on every RID — the mandatory
+         fallback. GPU/NPU EPs (DirectML/CUDA/CoreML/NNAPI) are added per-head
+         via conditional PackageReference; the detector degrades to CPU when an
+         EP is unavailable, so the app never crashes because of acceleration. -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="9.0.0" />
     <PackageVersion Include="Serilog.Settings.Configuration" Version="9.0.0" />
