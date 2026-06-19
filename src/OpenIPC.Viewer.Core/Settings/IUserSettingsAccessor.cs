@@ -11,4 +11,8 @@ public interface IUserSettingsAccessor
     string? RecordingsDirectoryOverride { get; }
 
     int MaxConcurrentGridSessions { get; }
+
+    // Local IPv4 to bind discovery/listeners to (Phase 12.6). Empty / null =
+    // auto-pick the best LAN interface (ignore VPN/virtual adapters).
+    string? PreferredNetworkInterface { get; }
 }

@@ -1,4 +1,5 @@
 using System;
+using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Core.Entities;
 
@@ -10,4 +11,5 @@ public sealed record UpdateCameraRequest(
     Uri RtspMainUri,
     Uri? RtspSubUri,
     CameraCredentials? Credentials,
-    GroupId? GroupId = null);
+    GroupId? GroupId = null,
+    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto);

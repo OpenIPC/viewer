@@ -11,6 +11,13 @@ public sealed record UserSettings(
     bool AutoScanLanOnStartup = false,
     int MaxConcurrentGridSessions = 9,
     string RtspTransport = "tcp",
+    // Auto SD/HD (Phase 12.2): substream in the multi-camera grid, mainstream
+    // when a single tile fills the view (1×1 layout / single-camera page).
+    // Off → always substream in the grid.
+    bool AutoSdHd = true,
+    // Local IPv4 to bind WS-Discovery to (Phase 12.6). "" = auto-pick the best
+    // LAN interface (ignore VPN/virtual adapters).
+    string PreferredNetworkInterface = "",
     string RecordingsDirOverride = "",
     // "system" follows CurrentUICulture; "en"/"ru" force a specific locale.
     string Language = "system",

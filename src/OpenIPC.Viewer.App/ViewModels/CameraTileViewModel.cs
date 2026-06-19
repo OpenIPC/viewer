@@ -22,7 +22,11 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly UserSettingsService _userSettings;
     private readonly ILogger<CameraTileViewModel> _logger;
 
-    private readonly StreamQuality _quality = StreamQuality.Sub;
+    // Auto SD/HD (Phase 12.2): substream in the grid, mainstream when a single
+    // tile fills the view. Mutated by SetQualityAsync (a session swap), set
+    // pre-activation by SetInitialQuality so a tile opening straight into 1×1
+    // doesn't briefly start on the substream.
+    private StreamQuality _quality = StreamQuality.Sub;
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
     private bool _started;
@@ -30,11 +34,23 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
 
     public Camera Camera { get; }
 
-    [ObservableProperty] private IVideoSession? _session;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConnecting))]
+    private IVideoSession? _session;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateLabel))]
+    [NotifyPropertyChangedFor(nameof(IsConnecting))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(ErrorDetail))]
+    [NotifyPropertyChangedFor(nameof(ConnectingLabel))]
     private SessionState _state = SessionState.Idle;
-    [ObservableProperty] private SessionTelemetry? _telemetry;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatsLabel))]
+    [NotifyPropertyChangedFor(nameof(HasStats))]
+    private SessionTelemetry? _telemetry;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ErrorDetail))]
+    private string? _errorMessage;
 
     public string Name => Camera.Name;
     public string StateLabel => State switch
@@ -46,6 +62,51 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         SessionState.Failed => "OFFLINE",
         _ => "IDLE",
     };
+
+    // Mid-connect dim overlay (spinner). Gated on Session so the pre-activate
+    // window doesn't flash a spinner out of nowhere.
+    public bool IsConnecting =>
+        Session is not null && State is SessionState.Connecting or SessionState.Reconnecting;
+
+    // Drives the interactive error cell (icon + reason + Retry/Close).
+    public bool IsFailed => State == SessionState.Failed;
+
+    // Text under the connecting spinner — distinguishes a fresh connect from a
+    // reconnect attempt.
+    public string ConnectingLabel => State == SessionState.Reconnecting
+        ? Localizer.Instance["Stream.Reconnecting"]
+        : Localizer.Instance["Stream.Connecting"];
+
+    // Reason line for the error cell: server-supplied error (or a generic
+    // fallback) followed by the camera host, e.g. "Stream timeout · 10.0.0.42".
+    public string ErrorDetail
+    {
+        get
+        {
+            var reason = string.IsNullOrWhiteSpace(ErrorMessage)
+                ? Localizer.Instance["Stream.Unavailable"]
+                : ErrorMessage;
+            return $"{reason} · {Camera.Host}";
+        }
+    }
+
+    public bool HasStats => Telemetry is not null;
+
+    // Bottom-right stats badge: codec • resolution • fps • bitrate.
+    public string? StatsLabel
+    {
+        get
+        {
+            var t = Telemetry;
+            if (t is null) return null;
+            var codec = string.IsNullOrEmpty(t.Codec) ? "—" : t.Codec;
+            return $"{codec} • {t.Width}×{t.Height} • {t.Fps:F0} fps • {FormatBitrate(t.BitrateKbps)}";
+        }
+    }
+
+    private static string FormatBitrate(double kbps) => kbps >= 1000
+        ? $"{kbps / 1000:F1} Mb/s"
+        : $"{kbps:F0} kb/s";
 
     public CameraTileViewModel(
         Camera camera,
@@ -63,13 +124,43 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _coordinator.Invalidated += OnCoordinatorInvalidated;
     }
 
+    // Set the stream quality before the first ActivateAsync. No-op once started
+    // — use SetQualityAsync to switch a live tile.
+    public void SetInitialQuality(StreamQuality quality)
+    {
+        if (_started) return;
+        _quality = quality;
+    }
+
+    // Auto SD/HD swap on a live tile: tear the current-quality session down and
+    // re-acquire on the other stream. Mirrors RetryAsync. The coordinator keys
+    // sessions by (camera, quality), so we must release with the OLD quality
+    // before flipping the field.
+    public async Task SetQualityAsync(StreamQuality quality, CancellationToken ct)
+    {
+        if (_disposed || quality == _quality) return;
+        _stateSub?.Dispose();
+        _telemetrySub?.Dispose();
+        if (Session is not null)
+        {
+            Session = null;
+            await _coordinator.ReleaseAsync(Camera.Id, _quality).ConfigureAwait(true);
+        }
+        _quality = quality;
+        State = SessionState.Idle;
+        _started = false;
+        await ActivateAsync(ct).ConfigureAwait(true);
+    }
+
     public async Task ActivateAsync(CancellationToken ct)
     {
         if (_started) return;
         _started = true;
 
-        var streamUri = Camera.RtspSubUri ?? Camera.RtspMainUri;
-        if (Camera.RtspSubUri is null)
+        var streamUri = _quality == StreamQuality.Main
+            ? Camera.RtspMainUri
+            : (Camera.RtspSubUri ?? Camera.RtspMainUri);
+        if (_quality == StreamQuality.Sub && Camera.RtspSubUri is null)
             _logger.LogWarning("Camera {Name} has no substream URL, using mainstream in grid", Camera.Name);
 
         var creds = await _directory.GetCredentialsAsync(Camera.Id, ct).ConfigureAwait(true);
@@ -82,7 +173,12 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         try
         {
             var session = _coordinator.Acquire(Camera.Id, _quality, options);
-            _stateSub = session.StateChanged.Subscribe(s => State = s);
+            _stateSub = session.StateChanged.Subscribe(s =>
+            {
+                State = s;
+                if (s == SessionState.Failed)
+                    ErrorMessage = session.LastError;
+            });
             _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
             Session = session;
 
@@ -130,6 +226,36 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     [RelayCommand]
     private void OpenSingle() =>
         WeakReferenceMessenger.Default.Send(new OpenCameraMessage(Camera.Id));
+
+    // Retry button on the error cell. Mirrors OnCoordinatorInvalidated: drop the
+    // dead session, reset state, and re-run the full Activate path.
+    [RelayCommand]
+    private async Task RetryAsync()
+    {
+        if (_disposed) return;
+        ErrorMessage = null;
+        _stateSub?.Dispose();
+        _telemetrySub?.Dispose();
+        if (Session is not null)
+        {
+            Session = null;
+            await _coordinator.ReleaseAsync(Camera.Id, _quality).ConfigureAwait(true);
+        }
+        State = SessionState.Idle;
+        _started = false;
+        await ActivateAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    // Close button on the error cell — drops this tile from the grid for the
+    // session (GridPageViewModel handles the message).
+    [RelayCommand]
+    private void Close() =>
+        WeakReferenceMessenger.Default.Send(new CloseTileMessage(Camera.Id));
+
+    // Smart Pause (Phase 12.1): suspend/resume decode without dropping the
+    // session, so the last frame stays frozen for an instant resume.
+    public void Pause() => Session?.PauseDecode();
+    public void Resume() => Session?.Resume();
 
     public async ValueTask DisposeAsync()
     {

@@ -15,4 +15,10 @@ public interface IVideoSession : IAsyncDisposable
 
     Task StartAsync(CancellationToken ct);
     Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct);
+
+    // Smart Pause (Phase 12.1): stop decoding without tearing the session down,
+    // so a hidden/minimized tile stops burning CPU while keeping its last frame
+    // for an instant resume. Both are idempotent no-ops if not started.
+    void PauseDecode();
+    void Resume();
 }

@@ -20,11 +20,17 @@ internal sealed class PlatformSafeUdpClient : IUdpClient
 {
     private readonly UdpClient _client;
 
-    public PlatformSafeUdpClient()
+    // bindAddress pins the probe to a specific local IPv4 (Phase 12.6) so the
+    // multicast doesn't leave via a VPN/virtual adapter on multi-NIC machines.
+    // Null / unparseable → IPAddress.Any (let the OS route, prior behavior).
+    public PlatformSafeUdpClient(string? bindAddress = null)
     {
+        var local = !string.IsNullOrWhiteSpace(bindAddress) && IPAddress.TryParse(bindAddress, out var parsed)
+            ? parsed
+            : IPAddress.Any;
         // Port 0 = let the OS pick a free ephemeral port. The stock wrapper
         // hard-bound port 80, which is both privileged and collision-prone.
-        _client = new UdpClient(new IPEndPoint(IPAddress.Any, 0)) { EnableBroadcast = true };
+        _client = new UdpClient(new IPEndPoint(local, 0)) { EnableBroadcast = true };
     }
 
     public short Ttl

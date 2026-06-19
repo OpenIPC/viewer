@@ -19,6 +19,7 @@ namespace OpenIPC.Viewer.App.ViewModels;
 public sealed partial class GridPageViewModel : ViewModelBase,
     IRecipient<WindowMinimizedMessage>,
     IRecipient<WindowRestoredMessage>,
+    IRecipient<CloseTileMessage>,
     IAsyncDisposable
 {
     private readonly CameraDirectoryService _directory;
@@ -29,6 +30,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private bool _minimized;
+    private CancellationTokenSource? _graceCts;
 
     public string Title => Localizer.Instance["Nav.Live"];
 
@@ -57,6 +59,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
         WeakReferenceMessenger.Default.Register<WindowMinimizedMessage>(this);
         WeakReferenceMessenger.Default.Register<WindowRestoredMessage>(this);
+        WeakReferenceMessenger.Default.Register<CloseTileMessage>(this);
 
         // Re-render when the user changes the max-sessions cap so currently-
         // dropped cameras come back (or excess ones go away) without a relaunch.
@@ -115,11 +118,18 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         // only time an edit can have landed), so the swap happens on next view.
         foreach (var camera in visible)
         {
+            var quality = DesiredQuality(camera);
             var existing = Tiles.FirstOrDefault(t => t.Camera.Id == camera.Id);
             if (existing is not null)
             {
                 if (!StreamUriChanged(existing.Camera, camera))
+                {
+                    // Kept tile — re-evaluate SD/HD against the (possibly new)
+                    // layout. No-op when quality is unchanged.
+                    try { await existing.SetQualityAsync(quality, ct).ConfigureAwait(true); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Failed to switch quality for {Camera}", camera.Name); }
                     continue;
+                }
 
                 var idx = Tiles.IndexOf(existing);
                 Tiles.RemoveAt(idx);
@@ -127,6 +137,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
                 var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate rebuilt tile for {Camera}", camera.Name); }
@@ -134,6 +145,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             }
 
             var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate tile for {Camera}", camera.Name); }
@@ -153,6 +165,12 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     // record) avoids churning sessions on cosmetic edits like a rename.
     private static bool StreamUriChanged(Camera a, Camera b) =>
         (a.RtspSubUri ?? a.RtspMainUri) != (b.RtspSubUri ?? b.RtspMainUri);
+
+    // Auto SD/HD policy (Phase 12.2): mainstream only when a single tile fills
+    // the view (1×1 layout) and the user hasn't disabled the feature; otherwise
+    // the substream keeps the multi-camera grid light.
+    private StreamQuality DesiredQuality(Camera camera) =>
+        StreamQualityPolicy.Resolve(camera.StreamQualityOverride, _userSettings.Current.AutoSdHd, LayoutSize);
 
     // Drag-reorder hook called from GridPage code-behind. Both indices are in
     // the *Tiles* collection (live cameras only — empty Slots placeholders are
@@ -196,16 +214,70 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         }
     }
 
-    public async void Receive(WindowMinimizedMessage message)
+    // Close button on a tile's error cell — drop it from the grid for this
+    // session and leave an empty slot in its place. The camera stays
+    // IncludedInGrid, so re-entering Live re-adds it via RefreshTilesAsync.
+    public async void Receive(CloseTileMessage message)
+    {
+        var tile = Tiles.FirstOrDefault(t => t.Camera.Id == message.CameraId);
+        if (tile is null) return;
+        Tiles.Remove(tile);
+        RebuildSlots();
+        try { await tile.DisposeAsync().ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Error releasing closed tile"); }
+    }
+
+    // Re-pad Slots to the visual grid size (LayoutSize²), filling trailing
+    // gaps with null placeholders.
+    private void RebuildSlots()
+    {
+        var visualCapacity = LayoutSize * LayoutSize;
+        Slots.Clear();
+        for (var i = 0; i < visualCapacity; i++)
+            Slots.Add(i < Tiles.Count ? Tiles[i] : null);
+    }
+
+    // Smart Pause (Phase 12.1): on minimize, pause decode immediately (CPU
+    // drops, last frame stays frozen for an instant resume) and start a grace
+    // timer. Only if the window is still hidden after the grace period do we
+    // fully release the sessions to free RTSP connections.
+    private static readonly TimeSpan PauseGrace = TimeSpan.FromSeconds(10);
+
+    public void Receive(WindowMinimizedMessage message)
     {
         _minimized = true;
-        await ReleaseAllAsync().ConfigureAwait(true);
+        foreach (var tile in Tiles)
+            tile.Pause();
+
+        _graceCts?.Cancel();
+        _graceCts = new CancellationTokenSource();
+        var token = _graceCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(PauseGrace, token).ConfigureAwait(true); }
+            catch (OperationCanceledException) { return; }
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                if (_minimized) await ReleaseAllAsync().ConfigureAwait(true);
+            });
+        });
     }
 
     public async void Receive(WindowRestoredMessage message)
     {
         _minimized = false;
-        await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        _graceCts?.Cancel();
+        if (Tiles.Count > 0)
+        {
+            // Still paused (within grace) — resume in place, frozen frame intact.
+            foreach (var tile in Tiles)
+                tile.Resume();
+        }
+        else
+        {
+            // Grace elapsed and sessions were released — rebuild the grid.
+            await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        }
     }
 
     private async Task ReleaseAllAsync()
@@ -223,6 +295,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     public async ValueTask DisposeAsync()
     {
         WeakReferenceMessenger.Default.UnregisterAll(this);
+        _graceCts?.Cancel();
         await ReleaseAllAsync().ConfigureAwait(false);
     }
 }

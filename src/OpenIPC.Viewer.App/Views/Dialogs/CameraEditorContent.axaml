@@ -107,6 +107,14 @@
           </ComboBox>
         </StackPanel>
 
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.StreamQuality], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <ComboBox ItemsSource="{Binding StreamQualityOptions}"
+                    SelectedItem="{Binding SelectedStreamQuality, Mode=TwoWay}"
+                    DisplayMemberBinding="{Binding Display}"
+                    HorizontalAlignment="Stretch" />
+        </StackPanel>
+
         <TextBlock Text="{Binding ErrorMessage}"
                    Foreground="{StaticResource DangerBrush}"
                    FontSize="{StaticResource FontSizeSm}"

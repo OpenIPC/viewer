@@ -232,6 +232,10 @@
                     Content="{Binding [Settings.Video.TelemetryOverlay], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
 
+          <CheckBox IsChecked="{Binding AutoSdHd}"
+                    Content="{Binding [Settings.Video.AutoSdHd], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Grid.Column="0" Classes="field-label"
                        Text="{Binding [Settings.Video.MaxGridSessions], Source={x:Static svc:Localizer.Instance}}" />
@@ -248,6 +252,16 @@
                       ItemsSource="{Binding TransportOptions}"
                       SelectedItem="{Binding RtspTransport, Mode=TwoWay}"
                       MinWidth="80" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Video.NetworkInterface], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding NetworkInterfaceOptions}"
+                      SelectedItem="{Binding SelectedNetworkInterface, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}"
+                      MinWidth="160" />
           </Grid>
         </StackPanel>
 
