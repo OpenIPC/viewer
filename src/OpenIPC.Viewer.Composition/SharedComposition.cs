@@ -10,6 +10,7 @@ using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Ssh;
 using OpenIPC.Viewer.Core.Video;
 using OpenIPC.Viewer.Devices.Majestic;
@@ -39,6 +40,7 @@ public static class SharedComposition
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
         services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
         services.AddSingleton<IEventRepository, SqliteEventRepository>();
+        services.AddSingleton<ISnapshotRepository, SqliteSnapshotRepository>();
 
         // Domain services
         services.AddSingleton<CameraDirectoryService>();
