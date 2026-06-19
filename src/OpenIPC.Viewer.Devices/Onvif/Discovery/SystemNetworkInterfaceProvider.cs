@@ -32,8 +32,18 @@ public sealed class SystemNetworkInterfaceProvider : INetworkInterfaceProvider
                 .ToList();
             if (ipv4.Count == 0) continue;
 
-            var hasGateway = props.GatewayAddresses
-                .Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
+            // GatewayAddresses is lazily evaluated and throws
+            // PlatformNotSupportedException on Android's BCL — guard it
+            // separately (GetIPProperties itself succeeds there). When the
+            // gateway is unknowable we just treat the NIC as gateway-less.
+            var hasGateway = false;
+            try
+            {
+                hasGateway = props.GatewayAddresses
+                    .Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
+            }
+            catch (PlatformNotSupportedException) { }
+            catch (NotImplementedException) { }
 
             adapters.Add(new NicDescriptor(
                 Name: nic.Name,
