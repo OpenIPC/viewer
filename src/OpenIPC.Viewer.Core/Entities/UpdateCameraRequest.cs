@@ -12,4 +12,8 @@ public sealed record UpdateCameraRequest(
     Uri? RtspSubUri,
     CameraCredentials? Credentials,
     GroupId? GroupId = null,
-    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto);
+    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto,
+    // SSH device suite (Phase 13). Null SshCredentials keeps the stored SSH
+    // login untouched (mirrors how null Credentials keeps the main login).
+    CameraCredentials? SshCredentials = null,
+    int? SshPort = null);

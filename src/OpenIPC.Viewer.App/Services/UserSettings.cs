@@ -24,7 +24,15 @@ public sealed record UserSettings(
     bool WelcomeShown = false,
     // Unlocks the "Edit raw" button in the Phase 5 Majestic panel. Off by
     // default — a typo here can leave the camera in a non-bootable state.
-    bool RawConfigEditorEnabled = false)
+    bool RawConfigEditorEnabled = false,
+    // SSH device suite (Phase 13). StrictHostKey on → a changed host key is
+    // refused (TOFU); off → the new key is accepted and re-pinned (e.g. after
+    // a camera reflash). DefaultPort is used when a camera has no per-camera
+    // SSH port. TerminalFontSize is the monospace size in the SSH terminal.
+    bool SshStrictHostKey = true,
+    int SshDefaultPort = 22,
+    int SshTerminalFontSize = 14,
+    string MajesticConfigPath = "/etc/majestic.yaml")
 {
     public static UserSettings Default => new();
 }

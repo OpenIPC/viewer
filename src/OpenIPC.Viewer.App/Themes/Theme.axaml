@@ -78,6 +78,8 @@
   <StreamGeometry x:Key="IconAdvanced">M10,5 H3 M12,19 H3 M14,3 V7 M16,17 V21 M21,12 H12 M21,19 H16 M21,5 H14 M8,10 V14 M8,12 H3</StreamGeometry>
   <!-- IconAbout — info (i in circle). -->
   <StreamGeometry x:Key="IconAbout">M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z M12,16 v-4 M12,8 h0.01</StreamGeometry>
+  <!-- IconTerminal — Lucide "terminal", SSH section (Phase 13). -->
+  <StreamGeometry x:Key="IconTerminal">M4,17 L10,11 L4,5 M12,19 H20</StreamGeometry>
   <!-- IconPlugOff — Lucide "unplug", for the grid error/Offline cell. -->
   <StreamGeometry x:Key="IconPlugOff">M19,5 L22,2 M2,22 L5,19 M6.3,20.3 a2.4,2.4 0 0 0 3.4,0 L12,18 L6,12 L3.7,14.3 a2.4,2.4 0 0 0 0,3.4 Z M7.5,13.5 L10,11 M10.5,16.5 L13,14 M12,6 L18,12 L20.3,9.7 a2.4,2.4 0 0 0 0,-3.4 L17.7,3.7 a2.4,2.4 0 0 0 -3.4,0 Z</StreamGeometry>
 

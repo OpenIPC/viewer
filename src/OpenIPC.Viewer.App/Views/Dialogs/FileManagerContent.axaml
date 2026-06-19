@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.FileManagerContent"
+             x:DataType="vm:FileManagerViewModel"
+             MinWidth="300" MinHeight="360"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="16">
+
+    <!-- Title -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="{StaticResource FontSizeLg}" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Name="CloseButton" Content="✕" Padding="8,2" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextSecondaryBrush}" />
+    </Grid>
+
+    <!-- Toolbar -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,8">
+      <Button Grid.Column="0" Content="↑"
+              Command="{Binding NavigateUpCommand}"
+              Padding="10,6" Margin="0,0,8,0"
+              Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="6"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+      <TextBox Grid.Column="1" Text="{Binding RemotePath}" IsReadOnly="True"
+               FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+               VerticalContentAlignment="Center" Margin="0,0,8,0" />
+      <Button Grid.Column="2" Content="{Binding [FileManager.Refresh], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding RefreshCommand}"
+              Padding="10,6" Margin="0,0,8,0"
+              Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="6"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+      <Button Grid.Column="3" Content="{Binding [FileManager.NewFolder], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding NewFolderCommand}"
+              Padding="10,6" Margin="0,0,8,0"
+              Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="6"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+      <Button Grid.Column="4" Content="{Binding [FileManager.Upload], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding UploadCommand}"
+              Padding="10,6"
+              Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="6" />
+    </Grid>
+
+    <!-- Transfer progress / status -->
+    <StackPanel Grid.Row="2" Spacing="4" Margin="0,0,0,8">
+      <ProgressBar Minimum="0" Maximum="1" Value="{Binding TransferPercent}" IsVisible="{Binding IsTransferring}" Height="4" />
+      <TextBlock Text="{Binding StatusText}"
+                 Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+
+    <!-- Remote listing -->
+    <Border Grid.Row="3" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="6">
+      <ListBox ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:RemoteEntryViewModel">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <Button Grid.Column="0"
+                      Content="{Binding Display}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                      Background="Transparent" BorderThickness="0" Padding="4,2"
+                      FontFamily="{StaticResource FontMono}"
+                      Foreground="{StaticResource TextPrimaryBrush}"
+                      Command="{Binding $parent[ListBox].((vm:FileManagerViewModel)DataContext).OpenEntryCommand}"
+                      CommandParameter="{Binding}" />
+              <TextBlock Grid.Column="1" Text="{Binding SizeText}" VerticalAlignment="Center" Margin="8,0"
+                         Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+              <Button Grid.Column="2" Content="{Binding [FileManager.Download], Source={x:Static svc:Localizer.Instance}}"
+                      IsVisible="{Binding !IsDirectory}"
+                      Padding="8,2" Margin="0,0,6,0" FontSize="{StaticResource FontSizeSm}"
+                      Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="4"
+                      Foreground="{StaticResource TextPrimaryBrush}"
+                      Command="{Binding $parent[ListBox].((vm:FileManagerViewModel)DataContext).DownloadCommand}"
+                      CommandParameter="{Binding}" />
+              <Button Grid.Column="3" Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
+                      Padding="8,2" FontSize="{StaticResource FontSizeSm}"
+                      Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1" CornerRadius="4"
+                      Foreground="{StaticResource DangerBrush}"
+                      Command="{Binding $parent[ListBox].((vm:FileManagerViewModel)DataContext).DeleteCommand}"
+                      CommandParameter="{Binding}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <TextBlock Grid.Row="4" Margin="0,8,0,0"
+               Text="{Binding [FileManager.Hint], Source={x:Static svc:Localizer.Instance}}"
+               Foreground="{StaticResource TextTertiaryBrush}" FontSize="11" />
+  </Grid>
+
+</UserControl>

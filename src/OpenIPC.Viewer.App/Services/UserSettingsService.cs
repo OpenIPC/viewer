@@ -24,6 +24,10 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     public int MaxConcurrentGridSessions => Current.MaxConcurrentGridSessions;
     public string? PreferredNetworkInterface =>
         string.IsNullOrWhiteSpace(Current.PreferredNetworkInterface) ? null : Current.PreferredNetworkInterface;
+    public bool SshStrictHostKey => Current.SshStrictHostKey;
+    public int SshDefaultPort => Current.SshDefaultPort < 1 ? 22 : Current.SshDefaultPort;
+    public string MajesticConfigPath =>
+        string.IsNullOrWhiteSpace(Current.MajesticConfigPath) ? "/etc/majestic.yaml" : Current.MajesticConfigPath;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {

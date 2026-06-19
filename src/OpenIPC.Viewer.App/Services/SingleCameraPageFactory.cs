@@ -16,6 +16,7 @@ public sealed class SingleCameraPageFactory
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly IMajesticSshConfigClient _majesticSsh;
     private readonly RecordingService _recordings;
     private readonly IFileSystem _fs;
     private readonly UserSettingsService _userSettings;
@@ -27,6 +28,7 @@ public sealed class SingleCameraPageFactory
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        IMajesticSshConfigClient majesticSsh,
         RecordingService recordings,
         IFileSystem fs,
         UserSettingsService userSettings,
@@ -37,6 +39,7 @@ public sealed class SingleCameraPageFactory
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _majesticSsh = majesticSsh;
         _recordings = recordings;
         _fs = fs;
         _userSettings = userSettings;
@@ -45,5 +48,5 @@ public sealed class SingleCameraPageFactory
     }
 
     public SingleCameraPageViewModel Create(Camera camera) =>
-        new(camera, _coordinator, _directory, _onvif, _majestic, _recordings, _fs, _userSettings, _dialogs, _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
+        new(camera, _coordinator, _directory, _onvif, _majestic, _majesticSsh, _recordings, _fs, _userSettings, _dialogs, _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
 }

@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+        xmlns:dialogs="using:OpenIPC.Viewer.App.Views.Dialogs"
+        x:Class="OpenIPC.Viewer.App.Views.Dialogs.SshTerminalWindow"
+        x:DataType="vm:SshTerminalViewModel"
+        Title="{Binding Title}"
+        Width="760" Height="480"
+        WindowStartupLocation="CenterOwner"
+        Background="#0c0f14">
+
+  <dialogs:SshTerminalContent Name="InnerContent" />
+
+</Window>

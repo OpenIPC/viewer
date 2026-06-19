@@ -24,6 +24,6 @@ public sealed class CameraEditorFactory
     public CameraEditorViewModel CreateForNew() =>
         new(_engine, _directory, _userSettings, _loggerFactory.CreateLogger<CameraEditorViewModel>());
 
-    public CameraEditorViewModel CreateForEdit(Camera existing, CameraCredentials? credentials) =>
-        new(existing, credentials, _engine, _directory, _userSettings, _loggerFactory.CreateLogger<CameraEditorViewModel>());
+    public CameraEditorViewModel CreateForEdit(Camera existing, CameraCredentials? credentials, CameraCredentials? sshCredentials) =>
+        new(existing, credentials, sshCredentials, _engine, _directory, _userSettings, _loggerFactory.CreateLogger<CameraEditorViewModel>());
 }

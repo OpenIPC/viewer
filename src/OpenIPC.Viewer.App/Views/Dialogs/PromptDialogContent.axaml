@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.PromptDialogContent"
+             MaxWidth="420" MinWidth="300"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,Auto" Margin="24">
+
+    <TextBlock Grid.Row="0"
+               Name="TitleBlock"
+               FontSize="{StaticResource FontSizeLg}"
+               FontWeight="SemiBold"
+               Margin="0,0,0,12" />
+
+    <TextBox Grid.Row="1" Name="InputBox" />
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,20,0,0">
+      <Button Grid.Column="1"
+              Name="CancelButton"
+              Padding="14,8"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="6"
+              Foreground="{StaticResource TextPrimaryBrush}"
+              Margin="0,0,8,0" />
+      <Button Grid.Column="2"
+              Name="OkButton"
+              Padding="14,8"
+              Background="{StaticResource AccentBrush}"
+              Foreground="White"
+              CornerRadius="6"
+              IsDefault="True" />
+    </Grid>
+
+  </Grid>
+
+</UserControl>

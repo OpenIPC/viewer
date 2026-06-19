@@ -27,6 +27,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly IMajesticSshConfigClient _majesticSsh;
     private readonly RecordingService _recordings;
     private readonly IFileSystem _fs;
     private readonly UserSettingsService _userSettings;
@@ -141,6 +142,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        IMajesticSshConfigClient majesticSsh,
         RecordingService recordings,
         IFileSystem fs,
         UserSettingsService userSettings,
@@ -152,6 +154,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _majesticSsh = majesticSsh;
         _recordings = recordings;
         _fs = fs;
         _userSettings = userSettings;
@@ -491,6 +494,59 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Apply raw Majestic config failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+        }
+        finally
+        {
+            ApplyInProgress = false;
+        }
+    }
+
+    // SSH fallback transport for majestic.yaml (Phase 13.5) — used when the
+    // HTTP API is disabled/unreachable. Edits the raw YAML through the same
+    // raw-config editor dialog, then reloads the stream like Apply does.
+    [RelayCommand]
+    private async Task EditMajesticOverSshAsync()
+    {
+        var endpoint = await _directory.GetSshEndpointAsync(_camera, CancellationToken.None).ConfigureAwait(true);
+        if (endpoint is null)
+        {
+            ApplyStatus = Localizer.Instance["CameraPage.SshNoCreds"];
+            return;
+        }
+
+        string initial;
+        try
+        {
+            using var readCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            initial = await _majesticSsh.ReadRawAsync(endpoint, readCts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Read majestic.yaml over SSH failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+            return;
+        }
+
+        var edited = await _dialogs.ShowRawConfigEditorAsync(initial).ConfigureAwait(true);
+        if (edited is null || edited == initial) return;
+
+        ApplyInProgress = true;
+        ApplyStatus = Localizer.Instance["CameraPage.ApplyingRawStatus"];
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await _majesticSsh.WriteRawAsync(endpoint, edited, restart: true, cts.Token).ConfigureAwait(true);
+
+            ApplyStatus = Localizer.Instance["CameraPage.AppliedRestarting"];
+            await ReloadStreamAsync().ConfigureAwait(true);
+            ApplyStatus = Localizer.Instance["CameraPage.ApplyDone"];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Write majestic.yaml over SSH failed");
             ApplyStatus = string.Format(CultureInfo.CurrentCulture,
                 Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
         }

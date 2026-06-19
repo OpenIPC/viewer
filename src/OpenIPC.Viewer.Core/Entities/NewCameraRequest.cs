@@ -12,4 +12,9 @@ public sealed record NewCameraRequest(
     Uri? RtspSubUri,
     CameraCredentials? Credentials,
     GroupId? GroupId = null,
-    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto);
+    StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto,
+    // SSH device suite (Phase 13). Separate from the RTSP/ONVIF credentials —
+    // the SSH login may differ. Null SshCredentials means "no SSH-specific
+    // login" (the resolver falls back to the main credentials).
+    CameraCredentials? SshCredentials = null,
+    int? SshPort = null);

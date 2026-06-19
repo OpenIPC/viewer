@@ -305,6 +305,15 @@
                   IsEnabled="{Binding !ApplyInProgress}"
                   Padding="14,4" FontSize="11"
                   Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="4" />
+          <!-- SSH fallback for majestic.yaml (Phase 13.5) — advanced opt-in,
+               works when the HTTP API is disabled. -->
+          <Button Grid.Column="7" Content="{Binding [CameraPage.Majestic.EditRawSsh], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding EditMajesticOverSshCommand}"
+                  IsVisible="{Binding IsRawConfigEditorEnabled}"
+                  IsEnabled="{Binding !ApplyInProgress}"
+                  Padding="10,4" FontSize="11" Margin="8,0,0,0"
+                  Background="Transparent" BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource WarningBrush}" />
         </Grid>
 
         <!-- Errors -->

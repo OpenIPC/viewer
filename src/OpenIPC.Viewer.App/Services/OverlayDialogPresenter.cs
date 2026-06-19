@@ -54,7 +54,10 @@ public static class OverlayDialogPresenter
     /// <summary>Raised on the UI thread whenever <see cref="IsAnyOpen"/> may have changed.</summary>
     public static event Action? ActiveChanged;
 
-    public static async Task<TResult> ShowAsync<TResult>(Control content, Task<TResult> completion)
+    // fullScreen → fill the whole TopLevel (no bottom-sheet card / scroll wrapper).
+    // Used for the SSH terminal and file manager, which are full-screen pages on
+    // mobile, not sheets (phase-13 §13.3).
+    public static async Task<TResult> ShowAsync<TResult>(Control content, Task<TResult> completion, bool fullScreen = false)
     {
         var overlay = GetOverlayLayer();
         if (overlay is null) return default!;
@@ -69,30 +72,31 @@ public static class OverlayDialogPresenter
 
         var card = new Border
         {
-            // Full-width sheet pinned to the bottom edge. Content controls cap
-            // with MaxWidth so on wide (tablet/landscape) viewports the form
-            // stays a readable column centered inside the stretched sheet.
+            // Full-width sheet pinned to the bottom edge (sheet mode) or a
+            // full-bleed page (fullScreen). Content controls cap with MaxWidth so
+            // on wide (tablet/landscape) viewports the form stays a readable
+            // column centered inside the stretched sheet.
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            // Rounded only at the top — the bottom sits flush with the screen.
-            CornerRadius = new CornerRadius(18, 18, 0, 0),
-            // Solid sheet background so it stays opaque edge-to-edge even when
-            // the inner content caps its width (tablet / landscape); content
-            // controls also paint Bg1, this just covers the side gutters.
+            VerticalAlignment = fullScreen ? VerticalAlignment.Stretch : VerticalAlignment.Bottom,
+            // Rounded only at the top for a sheet; square for a full-screen page.
+            CornerRadius = fullScreen ? new CornerRadius(0) : new CornerRadius(18, 18, 0, 0),
+            // Solid background so it stays opaque edge-to-edge even when the
+            // inner content caps its width; content controls also paint Bg1.
             Background = ResolveBrush("Bg1Brush"),
             ClipToBounds = true,
-            BoxShadow = new BoxShadows(new BoxShadow
-            {
-                OffsetX = 0,
-                OffsetY = -6,
-                Blur = 40,
-                Spread = 0,
-                Color = Color.FromArgb(0xA0, 0, 0, 0),
-            }),
-            // Start nudged down; slid to 0 after first layout for a subtle
-            // rise-from-the-bottom feel alongside the dim fade.
-            RenderTransform = TransformOperations.Parse("translateY(24px)"),
-            Transitions = new Transitions
+            BoxShadow = fullScreen
+                ? default
+                : new BoxShadows(new BoxShadow
+                {
+                    OffsetX = 0,
+                    OffsetY = -6,
+                    Blur = 40,
+                    Spread = 0,
+                    Color = Color.FromArgb(0xA0, 0, 0, 0),
+                }),
+            // Sheet rises from the bottom; full-screen just fades with the dim.
+            RenderTransform = fullScreen ? null : TransformOperations.Parse("translateY(24px)"),
+            Transitions = fullScreen ? null : new Transitions
             {
                 new TransformOperationsTransition
                 {
@@ -101,17 +105,27 @@ public static class OverlayDialogPresenter
                     Easing = new CubicEaseOut(),
                 },
             },
-            // ScrollViewer wraps content so tall dialogs (raw-config editor,
-            // long camera-editor) stay reachable instead of overflowing past
-            // the top of the viewport — the card's MaxHeight (set below) bounds
-            // the sheet and the ScrollViewer takes over from there.
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = content,
-            },
+            // Sheet wraps content in a ScrollViewer so tall forms scroll inside
+            // the capped card. Full-screen pages (terminal/file manager) manage
+            // their own layout and must fill the viewport, so no wrapper.
+            Child = fullScreen
+                ? content
+                : new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = content,
+                },
         };
+
+        // Full-screen pages cover the whole TopLevel, including under the status
+        // bar — inset the top so the title clears the clock/notch. Use the real
+        // safe-area when the platform exposes it, else a sensible default.
+        if (fullScreen)
+        {
+            var safeTop = top?.InsetsManager?.SafeAreaPadding.Top ?? 0;
+            card.Padding = new Thickness(0, safeTop > 0 ? safeTop : 28, 0, 0);
+        }
 
         var dim = new Border
         {
@@ -137,7 +151,9 @@ public static class OverlayDialogPresenter
             if (s.Width <= 0 || s.Height <= 0) return;
             dim.Width = s.Width;
             dim.Height = s.Height;
-            card.MaxHeight = Math.Max(0, s.Height - TopPeek);
+            // Sheet leaves a top peek of the page; a full-screen page fills all.
+            if (!fullScreen)
+                card.MaxHeight = Math.Max(0, s.Height - TopPeek);
         }
 
         IDisposable? sizeSub = null;
@@ -156,7 +172,8 @@ public static class OverlayDialogPresenter
         Dispatcher.UIThread.Post(() =>
         {
             dim.Opacity = 1;
-            card.RenderTransform = TransformOperations.Parse("translateY(0)");
+            if (!fullScreen)
+                card.RenderTransform = TransformOperations.Parse("translateY(0)");
         }, DispatcherPriority.Background);
 
         try

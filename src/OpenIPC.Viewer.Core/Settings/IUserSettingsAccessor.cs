@@ -15,4 +15,11 @@ public interface IUserSettingsAccessor
     // Local IPv4 to bind discovery/listeners to (Phase 12.6). Empty / null =
     // auto-pick the best LAN interface (ignore VPN/virtual adapters).
     string? PreferredNetworkInterface { get; }
+
+    // SSH device suite (Phase 13). Strict host-key checking (TOFU reject on
+    // change) when true; default SSH port for cameras without an explicit one;
+    // remote path of the Majestic config for the SSH transport.
+    bool SshStrictHostKey { get; }
+    int SshDefaultPort { get; }
+    string MajesticConfigPath { get; }
 }

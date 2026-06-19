@@ -14,6 +14,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OpenIPC.Viewer.Core.Tests/OpenIPC.Viewer.Core.Tests.csproj" />
+    <Project Path="tests/OpenIPC.Viewer.Infrastructure.Tests/OpenIPC.Viewer.Infrastructure.Tests.csproj" />
     <Project Path="tests/OpenIPC.Viewer.Video.Tests/OpenIPC.Viewer.Video.Tests.csproj" />
   </Folder>
 </Solution>

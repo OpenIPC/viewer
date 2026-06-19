@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.SshTerminalContent"
+             x:DataType="vm:SshTerminalViewModel"
+             MinWidth="280" MinHeight="320"
+             Background="#0c0f14">
+
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="12,8">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding Title}"
+                 FontFamily="{StaticResource FontMono}"
+                 FontSize="{StaticResource FontSizeSm}"
+                 Foreground="#cccccc"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1" Name="CloseButton"
+              Content="✕"
+              Padding="8,2"
+              Background="Transparent"
+              Foreground="#cccccc"
+              BorderThickness="0" />
+    </Grid>
+
+    <Border Grid.Row="1"
+            Background="#231a1a"
+            Padding="12,6"
+            IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Text="{Binding StatusText}"
+                 Foreground="#f5a623"
+                 FontSize="{StaticResource FontSizeSm}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <controls:TerminalView Grid.Row="2" Name="Term" />
+  </Grid>
+
+</UserControl>

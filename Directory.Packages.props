@@ -52,6 +52,10 @@
     <!-- Phase 4: ONVIF. Onvif.Core wraps the generated WSDL service clients
          (Device, Media, PTZ) with WS-UsernameToken Digest auth. -->
     <PackageVersion Include="Onvif.Core" Version="3.0.0" />
+
+    <!-- Phase 13: SSH device suite. Pure-managed SSH/SCP (no native bins) so it
+         links on every .NET target including Android/iOS. -->
+    <PackageVersion Include="SSH.NET" Version="2025.1.0" />
     <!-- Avalonia.Skia 12.0.3 pulls SkiaSharp 3.119.4-preview.1.1 transitively; match it explicitly. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4-preview.1.1" />
     <PackageVersion Include="System.Reactive" Version="6.0.1" />
