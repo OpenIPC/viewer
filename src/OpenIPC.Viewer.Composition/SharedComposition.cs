@@ -58,8 +58,10 @@ public static class SharedComposition
         // Majestic HTTP
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
 
-        // SSH device suite (Phase 13): factory creates per-use sessions.
+        // SSH device suite (Phase 13): factory creates per-use sessions; the
+        // SSH transport for majestic.yaml is the fallback when HTTP is off.
         services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
+        services.AddSingleton<IMajesticSshConfigClient, MajesticSshConfigClient>();
 
         // Recording lifecycle (IRecorder itself is registered by the platform
         // host — FFmpeg subprocess on desktop, FFmpegKit on Android, etc).
