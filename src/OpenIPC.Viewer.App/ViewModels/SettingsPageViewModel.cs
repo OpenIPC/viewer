@@ -31,6 +31,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private string _rtspTransport = "tcp";
     [ObservableProperty] private bool _autoSdHd = true;
 
+    // AI analytics (Phase 15.2). On → pin the CPU execution provider.
+    [ObservableProperty] private bool _aiForceCpu;
+
     [ObservableProperty] private NetworkInterfaceOption? _selectedNetworkInterface;
     [ObservableProperty] private string _language = "system";
 
@@ -150,6 +153,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             MaxConcurrentGridSessions = s.MaxConcurrentGridSessions;
             RtspTransport = s.RtspTransport;
             AutoSdHd = s.AutoSdHd;
+            AiForceCpu = string.Equals(s.AiAcceleration, "force-cpu", StringComparison.OrdinalIgnoreCase);
             SelectedNetworkInterface =
                 NetworkInterfaceOptions.FirstOrDefault(o => o.Value == s.PreferredNetworkInterface)
                 ?? NetworkInterfaceOptions[0];
@@ -170,6 +174,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnMaxConcurrentGridSessionsChanged(int value) => Persist();
     partial void OnRtspTransportChanged(string value) => Persist();
     partial void OnAutoSdHdChanged(bool value) => Persist();
+    partial void OnAiForceCpuChanged(bool value) => Persist();
     partial void OnSelectedNetworkInterfaceChanged(NetworkInterfaceOption? value) => Persist();
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
     partial void OnLanguageChanged(string value) => Persist();
@@ -190,6 +195,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             MaxConcurrentGridSessions = MaxConcurrentGridSessions,
             RtspTransport = RtspTransport,
             AutoSdHd = AutoSdHd,
+            AiAcceleration = AiForceCpu ? "force-cpu" : "auto",
             PreferredNetworkInterface = SelectedNetworkInterface?.Value ?? "",
             RecordingsDirOverride = RecordingsDirOverride,
             Language = Language,
