@@ -58,6 +58,10 @@
     <PackageVersion Include="SSH.NET" Version="2025.1.0" />
     <!-- Avalonia.Skia 12.0.3 pulls SkiaSharp 3.119.4-preview.1.1 transitively; match it explicitly. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4-preview.1.1" />
+    <!-- Linux native libSkiaSharp for the Avalonia-less test process. The
+         SkiaSharp package bundles win/osx natives but not Linux; the app itself
+         loads Avalonia.Skia's native at runtime, so this is test-only. -->
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4-preview.1.1" />
     <PackageVersion Include="System.Reactive" Version="6.0.1" />
 
     <PackageVersion Include="Serilog" Version="4.2.0" />
