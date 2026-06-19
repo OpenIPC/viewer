@@ -14,6 +14,7 @@
     <Project Path="src/OpenIPC.Viewer.Video/OpenIPC.Viewer.Video.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/OpenIPC.Viewer.Analytics.Tests/OpenIPC.Viewer.Analytics.Tests.csproj" />
     <Project Path="tests/OpenIPC.Viewer.Core.Tests/OpenIPC.Viewer.Core.Tests.csproj" />
     <Project Path="tests/OpenIPC.Viewer.Infrastructure.Tests/OpenIPC.Viewer.Infrastructure.Tests.csproj">
       <Build Solution="Debug|*" Project="false" />
