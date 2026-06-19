@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Settings;
 using OpenIPC.Viewer.Core.Ssh;
 using Renci.SshNet;
 using Renci.SshNet.Common;
@@ -19,7 +19,8 @@ namespace OpenIPC.Viewer.Infrastructure.Ssh;
 /// </summary>
 internal sealed class SshNetSession : ISshSession
 {
-    private readonly ISecretsStore _secrets;
+    private readonly ISshHostKeyStore _hostKeys;
+    private readonly IUserSettingsAccessor _settings;
     private readonly ILogger _logger;
 
     private SshClient? _ssh;
@@ -28,18 +29,23 @@ internal sealed class SshNetSession : ISshSession
     private string? _knownFingerprint;
     private bool _shouldStore;
     private bool _mismatch;
-    private string _hostKeyKey = "";
+    private bool _strict = true;
+    private string _host = "";
+    private int _port;
 
-    public SshNetSession(ISecretsStore secrets, ILogger logger)
+    public SshNetSession(ISshHostKeyStore hostKeys, IUserSettingsAccessor settings, ILogger logger)
     {
-        _secrets = secrets;
+        _hostKeys = hostKeys;
+        _settings = settings;
         _logger = logger;
     }
 
     public async Task ConnectAsync(SshEndpoint endpoint, CancellationToken ct)
     {
-        _hostKeyKey = $"ssh-hostkey:{endpoint.Host}:{endpoint.Port}";
-        _knownFingerprint = await _secrets.GetAsync(_hostKeyKey, ct).ConfigureAwait(false);
+        _host = endpoint.Host;
+        _port = endpoint.Port;
+        _strict = _settings.SshStrictHostKey;
+        _knownFingerprint = await _hostKeys.GetAsync(endpoint.Host, endpoint.Port, ct).ConfigureAwait(false);
 
         _ssh = new SshClient(BuildConnectionInfo(endpoint));
         _scp = new ScpClient(BuildConnectionInfo(endpoint));
@@ -58,15 +64,16 @@ internal sealed class SshNetSession : ISshSession
 
         if (_shouldStore && _knownFingerprint is { } fp)
         {
-            await _secrets.SetAsync(_hostKeyKey, fp, ct).ConfigureAwait(false);
+            await _hostKeys.SetAsync(endpoint.Host, endpoint.Port, fp, ct).ConfigureAwait(false);
             _logger.LogInformation("Pinned SSH host key for {Host}:{Port} (SHA256 {Fingerprint})",
                 endpoint.Host, endpoint.Port, fp);
         }
     }
 
     // Synchronous TOFU check: the captured fingerprint was loaded before connect
-    // (the event handler can't await). First use trusts and flags for storage;
-    // a later mismatch is rejected.
+    // (the event handler can't await). First use trusts and pins. A changed key
+    // is rejected under strict checking, or accepted and re-pinned when the user
+    // turned strict off (e.g. a camera was reflashed).
     private void OnHostKeyReceived(object? sender, HostKeyEventArgs e)
     {
         var presented = e.FingerPrintSHA256;
@@ -80,10 +87,16 @@ internal sealed class SshNetSession : ISshSession
         {
             e.CanTrust = true;
         }
-        else
+        else if (_strict)
         {
             e.CanTrust = false;
             _mismatch = true;
+        }
+        else
+        {
+            _knownFingerprint = presented;
+            _shouldStore = true;
+            e.CanTrust = true;
         }
     }
 

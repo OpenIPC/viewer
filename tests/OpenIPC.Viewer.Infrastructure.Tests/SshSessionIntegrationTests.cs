@@ -12,7 +12,7 @@ namespace OpenIPC.Viewer.Infrastructure.Tests;
 public sealed class SshSessionIntegrationTests
 {
     private static readonly ISshSessionFactory Factory =
-        new SshNetSessionFactory(new InMemorySecretsStore(), NullLoggerFactory.Instance);
+        new SshNetSessionFactory(new InMemoryHostKeyStore(), new FakeUserSettings(), NullLoggerFactory.Instance);
 
     private static async Task<ISshSession> ConnectAsync()
     {

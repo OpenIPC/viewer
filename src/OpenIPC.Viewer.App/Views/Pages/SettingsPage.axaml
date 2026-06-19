@@ -148,6 +148,19 @@
           <ListBoxItem>
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Path Grid.Column="0" Classes="lucide tile-icon"
+                    Data="{StaticResource IconTerminal}"
+                    Margin="0,0,12,0" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding [Settings.Ssh], Source={x:Static svc:Localizer.Instance}}"
+                         VerticalAlignment="Center" />
+              <Path Grid.Column="2" Classes="lucide tile-chevron"
+                    Data="{StaticResource IconChevronRight}"
+                    IsVisible="{Binding !IsWide}" />
+            </Grid>
+          </ListBoxItem>
+          <ListBoxItem>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Path Grid.Column="0" Classes="lucide tile-icon"
                     Data="{StaticResource IconAdvanced}"
                     Margin="0,0,12,0" />
               <TextBlock Grid.Column="1"
@@ -310,6 +323,52 @@
           <CheckBox IsChecked="{Binding AutoScanLanOnStartup}"
                     Content="{Binding [Settings.Discovery.AutoScan], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
+        </StackPanel>
+
+        <!-- SSH (Phase 13) -->
+        <StackPanel IsVisible="{Binding IsSsh}" Spacing="16">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Path Classes="lucide section-icon" Data="{StaticResource IconTerminal}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Ssh], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+
+          <CheckBox IsChecked="{Binding SshStrictHostKey}"
+                    Content="{Binding [Settings.Ssh.StrictHostKey], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Ssh.DefaultPort], Source={x:Static svc:Localizer.Instance}}" />
+            <NumericUpDown Grid.Column="1" Value="{Binding SshDefaultPort, Mode=TwoWay}"
+                           Minimum="1" Maximum="65535" Increment="1" FormatString="0" MinWidth="120" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Ssh.TerminalFontSize], Source={x:Static svc:Localizer.Instance}}" />
+            <NumericUpDown Grid.Column="1" Value="{Binding SshTerminalFontSize, Mode=TwoWay}"
+                           Minimum="8" Maximum="32" Increment="1" FormatString="0" MinWidth="120" />
+          </Grid>
+
+          <StackPanel Spacing="6">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.Ssh.MajesticPath], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBox Text="{Binding MajesticConfigPath, Mode=TwoWay}"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="{StaticResource FontSizeSm}" />
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Ssh.ResetHostKeys], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ResetHostKeysCommand}"
+                    HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding [Settings.Ssh.HostKeysCleared], Source={x:Static svc:Localizer.Instance}}"
+                       Foreground="{StaticResource AccentBrush}"
+                       FontSize="{StaticResource FontSizeSm}"
+                       IsVisible="{Binding HostKeysJustCleared}" />
+          </StackPanel>
         </StackPanel>
 
         <!-- Advanced -->

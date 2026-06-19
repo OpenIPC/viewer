@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Majestic;
+using OpenIPC.Viewer.Core.Settings;
 using OpenIPC.Viewer.Core.Ssh;
 
 namespace OpenIPC.Viewer.Devices.Majestic;
@@ -18,15 +19,17 @@ public sealed class MajesticSshConfigClient : IMajesticSshConfigClient
     private const string RestartCommand = "killall -HUP majestic";
 
     private readonly ISshSessionFactory _sessions;
+    private readonly IUserSettingsAccessor _settings;
     private readonly ILogger<MajesticSshConfigClient> _logger;
 
-    public MajesticSshConfigClient(ISshSessionFactory sessions, ILogger<MajesticSshConfigClient> logger)
+    public MajesticSshConfigClient(ISshSessionFactory sessions, IUserSettingsAccessor settings, ILogger<MajesticSshConfigClient> logger)
     {
         _sessions = sessions;
+        _settings = settings;
         _logger = logger;
     }
 
-    public string ConfigPath { get; } = "/etc/majestic.yaml";
+    public string ConfigPath => _settings.MajesticConfigPath;
 
     public async Task<bool> ConfigExistsAsync(SshEndpoint endpoint, CancellationToken ct)
     {

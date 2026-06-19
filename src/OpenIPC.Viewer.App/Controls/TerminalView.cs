@@ -31,8 +31,6 @@ public sealed class TerminalView : Control
     private static readonly IBrush DefaultFgBrush = new SolidColorBrush(DefaultFg);
     private static readonly IBrush CursorBrush = new SolidColorBrush(Color.Parse("#d4d4d4"));
 
-    private const double FontSize = 14;
-
     public static readonly StyledProperty<TerminalEmulator?> EmulatorProperty =
         AvaloniaProperty.Register<TerminalView, TerminalEmulator?>(nameof(Emulator));
 
@@ -40,6 +38,15 @@ public sealed class TerminalView : Control
     {
         get => GetValue(EmulatorProperty);
         set => SetValue(EmulatorProperty, value);
+    }
+
+    public static readonly StyledProperty<double> TerminalFontSizeProperty =
+        AvaloniaProperty.Register<TerminalView, double>(nameof(TerminalFontSize), 14);
+
+    public double TerminalFontSize
+    {
+        get => GetValue(TerminalFontSizeProperty);
+        set => SetValue(TerminalFontSizeProperty, value);
     }
 
     /// <summary>Raised with raw text/control bytes the user typed.</summary>
@@ -68,6 +75,15 @@ public sealed class TerminalView : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+
+        if (change.Property == TerminalFontSizeProperty)
+        {
+            EnsureMetrics();
+            RecomputeGrid();
+            InvalidateVisual();
+            return;
+        }
+
         if (change.Property != EmulatorProperty)
             return;
 
@@ -87,7 +103,7 @@ public sealed class TerminalView : Control
     private void EnsureMetrics()
     {
         var sample = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            _typeface, FontSize, DefaultFgBrush);
+            _typeface, TerminalFontSize, DefaultFgBrush);
         _cellWidth = sample.Width;
         _cellHeight = sample.Height;
     }
@@ -152,7 +168,7 @@ public sealed class TerminalView : Control
                 ? DefaultFgBrush
                 : new SolidColorBrush(Palette[runFg & 0x0F]);
             var ft = new FormattedText(run.ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                runBold ? _boldTypeface : _typeface, FontSize, brush);
+                runBold ? _boldTypeface : _typeface, TerminalFontSize, brush);
             context.DrawText(ft, new Point(runStart * _cellWidth, y));
             run.Clear();
         }

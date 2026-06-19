@@ -13,12 +13,18 @@ public sealed class CameraDirectoryService
     private readonly ICameraRepository _cameras;
     private readonly IGroupRepository _groups;
     private readonly ISecretsStore _secrets;
+    private readonly Settings.IUserSettingsAccessor? _settings;
 
-    public CameraDirectoryService(ICameraRepository cameras, IGroupRepository groups, ISecretsStore secrets)
+    public CameraDirectoryService(
+        ICameraRepository cameras,
+        IGroupRepository groups,
+        ISecretsStore secrets,
+        Settings.IUserSettingsAccessor? settings = null)
     {
         _cameras = cameras;
         _groups = groups;
         _secrets = secrets;
+        _settings = settings;
     }
 
     public Task<IReadOnlyList<Camera>> ListAsync(CancellationToken ct) =>
@@ -198,8 +204,10 @@ public sealed class CameraDirectoryService
                     ?? await GetCredentialsAsync(camera.Id, ct).ConfigureAwait(false);
         if (creds is null)
             return null;
+        // Per-camera port wins; otherwise the global default from settings, then 22.
+        var port = camera.SshPort ?? _settings?.SshDefaultPort ?? Ssh.SshEndpoint.DefaultPort;
         return new Ssh.SshEndpoint(
-            camera.Host, camera.SshPortOrDefault, creds.Username, new Ssh.SshAuth.Password(creds.Password));
+            camera.Host, port, creds.Username, new Ssh.SshAuth.Password(creds.Password));
     }
 
     private async Task StoreSshCredentialsAsync(CameraId id, CameraCredentials? credentials, CancellationToken ct)

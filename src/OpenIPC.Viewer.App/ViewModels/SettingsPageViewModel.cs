@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Ssh;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
@@ -17,6 +18,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly UserSettingsService _settings;
     private readonly IFileSystem _fs;
     private readonly IDialogService _dialogs;
+    private readonly ISshHostKeyStore _hostKeys;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -31,6 +33,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [ObservableProperty] private NetworkInterfaceOption? _selectedNetworkInterface;
     [ObservableProperty] private string _language = "system";
+
+    // SSH section (Phase 13).
+    [ObservableProperty] private bool _sshStrictHostKey = true;
+    [ObservableProperty] private int _sshDefaultPort = 22;
+    [ObservableProperty] private int _sshTerminalFontSize = 14;
+    [ObservableProperty] private string _majesticConfigPath = "/etc/majestic.yaml";
+    [ObservableProperty] private bool _hostKeysJustCleared;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EffectiveRecordingsDirectory))]
@@ -47,6 +56,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsVideo))]
     [NotifyPropertyChangedFor(nameof(IsRecording))]
     [NotifyPropertyChangedFor(nameof(IsDiscovery))]
+    [NotifyPropertyChangedFor(nameof(IsSsh))]
     [NotifyPropertyChangedFor(nameof(IsAdvanced))]
     [NotifyPropertyChangedFor(nameof(IsAbout))]
     [NotifyPropertyChangedFor(nameof(ShowList))]
@@ -64,8 +74,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     public bool IsVideo      => SelectedSectionIndex == 1;
     public bool IsRecording  => SelectedSectionIndex == 2;
     public bool IsDiscovery  => SelectedSectionIndex == 3;
-    public bool IsAdvanced   => SelectedSectionIndex == 4;
-    public bool IsAbout      => SelectedSectionIndex == 5;
+    public bool IsSsh        => SelectedSectionIndex == 4;
+    public bool IsAdvanced   => SelectedSectionIndex == 5;
+    public bool IsAbout      => SelectedSectionIndex == 6;
 
     public bool ShowList       => IsWide || SelectedSectionIndex < 0;
     public bool ShowDetail     => IsWide || SelectedSectionIndex >= 0;
@@ -105,11 +116,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         UserSettingsService settings,
         IFileSystem fs,
         IDialogService dialogs,
-        INetworkInterfaceProvider nics)
+        INetworkInterfaceProvider nics,
+        ISshHostKeyStore hostKeys)
     {
         _settings = settings;
         _fs = fs;
         _dialogs = dialogs;
+        _hostKeys = hostKeys;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -142,6 +155,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
                 ?? NetworkInterfaceOptions[0];
             RecordingsDirOverride = s.RecordingsDirOverride;
             Language = s.Language;
+            SshStrictHostKey = s.SshStrictHostKey;
+            SshDefaultPort = s.SshDefaultPort;
+            SshTerminalFontSize = s.SshTerminalFontSize;
+            MajesticConfigPath = s.MajesticConfigPath;
         }
         finally { _suppressSave = false; }
     }
@@ -156,6 +173,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnSelectedNetworkInterfaceChanged(NetworkInterfaceOption? value) => Persist();
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
     partial void OnLanguageChanged(string value) => Persist();
+    partial void OnSshStrictHostKeyChanged(bool value) => Persist();
+    partial void OnSshDefaultPortChanged(int value) => Persist();
+    partial void OnSshTerminalFontSizeChanged(int value) => Persist();
+    partial void OnMajesticConfigPathChanged(string value) => Persist();
 
     private void Persist()
     {
@@ -172,10 +193,29 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             PreferredNetworkInterface = SelectedNetworkInterface?.Value ?? "",
             RecordingsDirOverride = RecordingsDirOverride,
             Language = Language,
+            SshStrictHostKey = SshStrictHostKey,
+            SshDefaultPort = SshDefaultPort,
+            SshTerminalFontSize = SshTerminalFontSize,
+            MajesticConfigPath = MajesticConfigPath,
         };
         // Fire-and-forget; binding setters are synchronous and any save
         // error is logged inside UpdateAsync.
         _ = _settings.UpdateAsync(next, CancellationToken.None);
+    }
+
+    [RelayCommand]
+    private async Task ResetHostKeysAsync()
+    {
+        var confirmed = await _dialogs.ConfirmAsync(
+            Localizer.Instance["Settings.Ssh.ResetTitle"],
+            Localizer.Instance["Settings.Ssh.ResetMessage"],
+            Localizer.Instance["Settings.Ssh.ResetConfirm"],
+            Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+        if (!confirmed)
+            return;
+
+        await _hostKeys.ClearAsync(CancellationToken.None).ConfigureAwait(true);
+        HostKeysJustCleared = true;
     }
 
     [RelayCommand]

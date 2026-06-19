@@ -60,6 +60,8 @@ public static class SharedComposition
 
         // SSH device suite (Phase 13): factory creates per-use sessions; the
         // SSH transport for majestic.yaml is the fallback when HTTP is off.
+        services.AddSingleton<OpenIPC.Viewer.Core.Ssh.ISshHostKeyStore,
+            OpenIPC.Viewer.Infrastructure.Ssh.JsonFileHostKeyStore>();
         services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
         services.AddSingleton<IMajesticSshConfigClient, MajesticSshConfigClient>();
 

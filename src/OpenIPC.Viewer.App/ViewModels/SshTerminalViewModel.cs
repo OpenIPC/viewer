@@ -32,6 +32,7 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
 
     public TerminalEmulator Emulator { get; } = new(80, 24);
     public string Title => $"SSH — {_camera.Name}";
+    public double FontSize { get; }
 
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isConnected;
@@ -40,11 +41,13 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
         Camera camera,
         CameraDirectoryService directory,
         ISshSessionFactory sessions,
+        double fontSize,
         ILogger<SshTerminalViewModel> logger)
     {
         _camera = camera;
         _directory = directory;
         _sessions = sessions;
+        FontSize = fontSize >= 8 ? fontSize : 14;
         _logger = logger;
     }
 

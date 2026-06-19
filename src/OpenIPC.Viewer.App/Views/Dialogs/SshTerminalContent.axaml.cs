@@ -40,6 +40,7 @@ public sealed partial class SshTerminalContent : UserControl
         _started = true;
 
         _term.Emulator = vm.Emulator;
+        _term.TerminalFontSize = vm.FontSize;
         _term.Input += (_, text) => _ = vm.SendAsync(text);
         _term.GridResized += (_, g) => _ = vm.ResizeAsync(g.Columns, g.Rows);
 
