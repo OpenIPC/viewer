@@ -10,11 +10,18 @@ public interface IDialogService
     // full-screen overlay on mobile (Phase 13.3).
     Task OpenSshTerminalAsync(SshTerminalViewModel viewModel);
 
+    // Opens the remote file manager (Phase 13.4) — window on desktop, overlay on mobile.
+    Task OpenFileManagerAsync(FileManagerViewModel viewModel);
+
     Task<CameraEditorResult?> ShowCameraEditorAsync(CameraEditorViewModel viewModel);
 
     Task<DiscoveryDialogResult?> ShowDiscoveryDialogAsync(DiscoveryDialogViewModel viewModel);
 
     Task<bool> ConfirmAsync(string title, string message, string confirmLabel = "Delete", string cancelLabel = "Cancel");
+
+    // Single-line text prompt. Returns the trimmed text, or null if cancelled
+    // or left empty (Phase 13.4 — new remote folder name).
+    Task<string?> PromptAsync(string title, string initial, string okLabel, string cancelLabel);
 
     Task<WelcomeResult> ShowWelcomeAsync();
 
@@ -23,6 +30,12 @@ public interface IDialogService
     Task<string?> PickSaveFileAsync(string suggestedName, string title, string extension);
 
     Task<string?> PickImageFileAsync(string title);
+
+    // File manager (Phase 13.4): pick any local file to upload, or a save
+    // target for a download. Cross-platform via StorageProvider.
+    Task<string?> PickAnyFileAsync(string title);
+
+    Task<string?> PickSaveTargetAsync(string suggestedName, string title);
 
     Task CopyFileToClipboardAsync(string path);
 

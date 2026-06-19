@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+        xmlns:dialogs="using:OpenIPC.Viewer.App.Views.Dialogs"
+        x:Class="OpenIPC.Viewer.App.Views.Dialogs.FileManagerWindow"
+        x:DataType="vm:FileManagerViewModel"
+        Title="{Binding Title}"
+        Width="720" Height="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg1Brush}">
+
+  <dialogs:FileManagerContent Name="InnerContent" />
+
+</Window>

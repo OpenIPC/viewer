@@ -35,6 +35,9 @@ public interface ISshSession : IAsyncDisposable
     /// <summary>Deletes a remote file. Root-level paths are rejected (see <see cref="RemotePathGuard"/>).</summary>
     Task DeleteAsync(string remotePath, CancellationToken ct);
 
+    /// <summary>Creates a remote directory (<c>mkdir -p</c>).</summary>
+    Task CreateDirectoryAsync(string remotePath, CancellationToken ct);
+
     /// <summary>Runs a one-shot command and captures its output and exit code.</summary>
     Task<CommandResult> ExecAsync(string command, CancellationToken ct);
 }

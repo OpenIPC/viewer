@@ -22,6 +22,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     private readonly CameraEditorFactory _editorFactory;
     private readonly DiscoveryDialogFactory _discoveryFactory;
     private readonly SshTerminalFactory _terminalFactory;
+    private readonly FileManagerFactory _fileManagerFactory;
     private readonly ILogger<CameraLibraryPageViewModel> _logger;
 
     public string Title => Localizer.Instance["Library.Title"];
@@ -61,6 +62,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         DiscoveryDialogFactory discoveryFactory,
         ManageGroupsDialogFactory manageGroupsFactory,
         SshTerminalFactory terminalFactory,
+        FileManagerFactory fileManagerFactory,
         UserSettingsService userSettings,
         IDiscoveryService discovery,
         IReachabilityProbe reachability,
@@ -71,6 +73,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _editorFactory = editorFactory;
         _discoveryFactory = discoveryFactory;
         _terminalFactory = terminalFactory;
+        _fileManagerFactory = fileManagerFactory;
         _manageGroupsFactory = manageGroupsFactory;
         _userSettings = userSettings;
         _discovery = discovery;
@@ -392,6 +395,15 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
             return;
         var vm = _terminalFactory.Create(row.Camera);
         await _dialogs.OpenSshTerminalAsync(vm).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task OpenFileManagerAsync(CameraRowViewModel? row)
+    {
+        if (row is null)
+            return;
+        var vm = _fileManagerFactory.Create(row.Camera);
+        await _dialogs.OpenFileManagerAsync(vm).ConfigureAwait(true);
     }
 
     [RelayCommand]

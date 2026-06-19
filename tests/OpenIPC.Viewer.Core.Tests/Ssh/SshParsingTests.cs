@@ -76,4 +76,31 @@ public sealed class SshParsingTests
     {
         Assert.Equal(expected, RemotePathGuard.IsProtected(path));
     }
+
+    [Theory]
+    [InlineData("/", "etc", "/etc")]
+    [InlineData("/etc", "majestic.yaml", "/etc/majestic.yaml")]
+    [InlineData("/etc/", "/sub", "/etc/sub")]
+    public void RemotePath_Combine(string dir, string name, string expected)
+    {
+        Assert.Equal(expected, RemotePath.Combine(dir, name));
+    }
+
+    [Theory]
+    [InlineData("/etc/majestic.yaml", "/etc")]
+    [InlineData("/etc", "/")]
+    [InlineData("/", "/")]
+    public void RemotePath_Parent(string path, string expected)
+    {
+        Assert.Equal(expected, RemotePath.Parent(path));
+    }
+
+    [Theory]
+    [InlineData("/etc/majestic.yaml", "majestic.yaml")]
+    [InlineData("/etc", "etc")]
+    [InlineData("/", "/")]
+    public void RemotePath_Name(string path, string expected)
+    {
+        Assert.Equal(expected, RemotePath.Name(path));
+    }
 }

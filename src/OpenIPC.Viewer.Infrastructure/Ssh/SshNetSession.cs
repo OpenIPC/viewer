@@ -148,6 +148,13 @@ internal sealed class SshNetSession : ISshSession
             throw new SshException($"rm failed for '{remotePath}': {result.StandardError.Trim()}");
     }
 
+    public async Task CreateDirectoryAsync(string remotePath, CancellationToken ct)
+    {
+        var result = await ExecAsync($"mkdir -p {ShellQuote(remotePath)}", ct).ConfigureAwait(false);
+        if (!result.Success)
+            throw new SshException($"mkdir failed for '{remotePath}': {result.StandardError.Trim()}");
+    }
+
     public Task<CommandResult> ExecAsync(string command, CancellationToken ct) =>
         Task.Run(() =>
         {

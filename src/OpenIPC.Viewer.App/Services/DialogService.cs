@@ -66,6 +66,22 @@ public sealed class DialogService : IDialogService
         return result == true;
     }
 
+    public async Task<string?> PromptAsync(string title, string initial, string okLabel, string cancelLabel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new PromptDialogContent();
+            content.Configure(title, initial, okLabel, cancelLabel);
+            return await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+        }
+
+        var owner = ResolveOwner();
+        if (owner is null) return null;
+        var dlg = new PromptDialog();
+        dlg.Configure(title, initial, okLabel, cancelLabel);
+        return await dlg.ShowDialog<string?>(owner).ConfigureAwait(true);
+    }
+
     public Task<WelcomeResult> ShowWelcomeAsync()
     {
         if (OverlayDialogPresenter.IsMobile)
@@ -114,6 +130,32 @@ public sealed class DialogService : IDialogService
             },
         });
         return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickAnyFileAsync(string title)
+    {
+        var owner = ResolveTopLevel();
+        if (owner is null) return null;
+
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+        });
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickSaveTargetAsync(string suggestedName, string title)
+    {
+        var owner = ResolveTopLevel();
+        if (owner is null) return null;
+
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedName,
+        });
+        return file?.TryGetLocalPath();
     }
 
     public async Task<string?> PickSaveFileAsync(string suggestedName, string title, string extension)
@@ -200,6 +242,21 @@ public sealed class DialogService : IDialogService
         var owner = ResolveOwner();
         // Non-modal: the user keeps the live view usable while a terminal is open.
         var window = new SshTerminalWindow { DataContext = viewModel };
+        if (owner is null) window.Show();
+        else window.Show(owner);
+    }
+
+    public async Task OpenFileManagerAsync(ViewModels.FileManagerViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new FileManagerContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            return;
+        }
+
+        var owner = ResolveOwner();
+        var window = new FileManagerWindow { DataContext = viewModel };
         if (owner is null) window.Show();
         else window.Show(owner);
     }
