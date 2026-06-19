@@ -9,16 +9,22 @@ namespace OpenIPC.Viewer.App.Services;
 public sealed class ImageViewerFactory
 {
     private readonly ISnapshotRepository _repo;
+    private readonly ISnapshotService _snapshots;
     private readonly IDialogService _dialogs;
     private readonly ILoggerFactory _loggerFactory;
 
-    public ImageViewerFactory(ISnapshotRepository repo, IDialogService dialogs, ILoggerFactory loggerFactory)
+    public ImageViewerFactory(
+        ISnapshotRepository repo,
+        ISnapshotService snapshots,
+        IDialogService dialogs,
+        ILoggerFactory loggerFactory)
     {
         _repo = repo;
+        _snapshots = snapshots;
         _dialogs = dialogs;
         _loggerFactory = loggerFactory;
     }
 
     public ImageViewerViewModel Create(IReadOnlyList<SnapshotViewEntry> items, int startIndex) =>
-        new(items, startIndex, _repo, _dialogs, _loggerFactory.CreateLogger<ImageViewerViewModel>());
+        new(items, startIndex, _repo, _snapshots, _dialogs, _loggerFactory.CreateLogger<ImageViewerViewModel>());
 }

@@ -16,6 +16,8 @@ namespace OpenIPC.Viewer.App.ViewModels;
 
 public sealed record SnapshotViewEntry(Snapshot Snapshot, string CameraName);
 
+public enum EditTool { Arrow, Rectangle, Text, Crop }
+
 /// <summary>
 /// Phase 14.4 — the in-app image viewer. Navigates prev/next over the browser's
 /// current filtered set, with zoom / pan / rotate / flip / slideshow and
@@ -29,8 +31,19 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
 
     private static readonly TimeSpan SlideshowInterval = TimeSpan.FromSeconds(3);
 
+    // Editor palette (ARGB). Kept small per the phase scope — crop + draw + text.
+    public static readonly uint[] Palette =
+    {
+        0xFFFF3B30, // red
+        0xFFFFCC00, // yellow
+        0xFF34C759, // green
+        0xFFFFFFFF, // white
+        0xFF111111, // near-black
+    };
+
     private readonly List<SnapshotViewEntry> _items;
     private readonly ISnapshotRepository _repo;
+    private readonly ISnapshotService _snapshots;
     private readonly IDialogService _dialogs;
     private readonly ILogger<ImageViewerViewModel> _logger;
     private readonly TaskCompletionSource<bool> _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -111,11 +124,13 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
         IReadOnlyList<SnapshotViewEntry> items,
         int startIndex,
         ISnapshotRepository repo,
+        ISnapshotService snapshots,
         IDialogService dialogs,
         ILogger<ImageViewerViewModel> logger)
     {
         _items = new List<SnapshotViewEntry>(items);
         _repo = repo;
+        _snapshots = snapshots;
         _dialogs = dialogs;
         _logger = logger;
         _index = Math.Clamp(startIndex, 0, Math.Max(0, _items.Count - 1));
@@ -255,6 +270,102 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete from viewer failed for {Id}", e.Snapshot.Id);
+        }
+    }
+
+    // --- editor (14.5) ---
+
+    [ObservableProperty] private bool _isEditing;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsToolArrow))]
+    [NotifyPropertyChangedFor(nameof(IsToolRectangle))]
+    [NotifyPropertyChangedFor(nameof(IsToolText))]
+    [NotifyPropertyChangedFor(nameof(IsToolCrop))]
+    private EditTool _currentTool = EditTool.Arrow;
+
+    [ObservableProperty] private uint _editColor = Palette[0];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsThin))]
+    [NotifyPropertyChangedFor(nameof(IsMedium))]
+    [NotifyPropertyChangedFor(nameof(IsThick))]
+    private double _editThickness = 0.006;
+
+    public bool IsToolArrow => CurrentTool == EditTool.Arrow;
+    public bool IsToolRectangle => CurrentTool == EditTool.Rectangle;
+    public bool IsToolText => CurrentTool == EditTool.Text;
+    public bool IsToolCrop => CurrentTool == EditTool.Crop;
+    public bool IsThin => EditThickness <= 0.004;
+    public bool IsMedium => EditThickness > 0.004 && EditThickness < 0.009;
+    public bool IsThick => EditThickness >= 0.009;
+
+    [RelayCommand]
+    private void EnterEdit()
+    {
+        if (Current is null) return;
+        ResetView();
+        IsEditing = true;
+    }
+
+    [RelayCommand]
+    private void CancelEdit() => IsEditing = false;
+
+    [RelayCommand]
+    private void SetTool(string tool) => CurrentTool = tool switch
+    {
+        "rect" => EditTool.Rectangle,
+        "text" => EditTool.Text,
+        "crop" => EditTool.Crop,
+        _ => EditTool.Arrow,
+    };
+
+    [RelayCommand]
+    private void SetColor(string argbHex)
+    {
+        if (uint.TryParse(argbHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var c))
+            EditColor = c;
+    }
+
+    [RelayCommand]
+    private void SetThickness(string level) => EditThickness = level switch
+    {
+        "thin" => 0.003,
+        "thick" => 0.011,
+        _ => 0.006,
+    };
+
+    /// <summary>Prompts for the text of a text annotation (returns null if cancelled).</summary>
+    public Task<string?> PromptAnnotationTextAsync() =>
+        _dialogs.PromptAsync(
+            Localizer.Instance["Edit.TextPrompt"],
+            string.Empty,
+            Localizer.Instance["Edit.AddText"],
+            Localizer.Instance["Common.Cancel"]);
+
+    /// <summary>
+    /// Renders <paramref name="edit"/> over the current snapshot as a saved copy
+    /// (via <see cref="ISnapshotService.SaveEditAsync"/>), inserts it after the
+    /// current one and navigates to it. Called by the editor view once the user
+    /// commits. The original is never modified.
+    /// </summary>
+    public async Task ApplyEditAsync(SnapshotEdit edit)
+    {
+        if (Current is not { } e) return;
+        try
+        {
+            var saved = await _snapshots.SaveEditAsync(e.Snapshot, edit, CancellationToken.None).ConfigureAwait(true);
+            AnyChanges = true;
+            var entry = new SnapshotViewEntry(saved, e.CameraName);
+            _items.Insert(Index + 1, entry);
+            Index += 1;
+            OnPropertyChanged(nameof(HasMultiple));
+            IsEditing = false;
+            LoadCurrent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save edited snapshot");
         }
     }
 

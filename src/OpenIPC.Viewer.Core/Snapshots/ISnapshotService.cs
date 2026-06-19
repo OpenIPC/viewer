@@ -24,4 +24,11 @@ public interface ISnapshotService
         IVideoSession? liveSession,
         StreamQuality? liveQuality,
         CancellationToken ct);
+
+    /// <summary>
+    /// Renders <paramref name="edit"/> over <paramref name="source"/> and saves
+    /// the result as a new <c>*_edited.jpg</c> copy (the original is untouched),
+    /// generating a thumbnail and a DB row. Returns the new snapshot.
+    /// </summary>
+    Task<Snapshot> SaveEditAsync(Snapshot source, SnapshotEdit edit, CancellationToken ct);
 }

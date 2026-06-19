@@ -31,6 +31,7 @@ public sealed class SnapshotService : ISnapshotService
     private readonly ISnapshotRepository _repo;
     private readonly IFileSystem _fs;
     private readonly IThumbnailGenerator _thumbs;
+    private readonly IImageEditor _editor;
 
     public SnapshotService(
         IMajesticClient majestic,
@@ -38,7 +39,8 @@ public sealed class SnapshotService : ISnapshotService
         ICameraCredentialsProvider credentials,
         ISnapshotRepository repo,
         IFileSystem fs,
-        IThumbnailGenerator thumbs)
+        IThumbnailGenerator thumbs,
+        IImageEditor editor)
     {
         _majestic = majestic;
         _coordinator = coordinator;
@@ -46,6 +48,37 @@ public sealed class SnapshotService : ISnapshotService
         _repo = repo;
         _fs = fs;
         _thumbs = thumbs;
+        _editor = editor;
+    }
+
+    public async Task<Snapshot> SaveEditAsync(Snapshot source, SnapshotEdit edit, CancellationToken ct)
+    {
+        var id = SnapshotId.New();
+        var dir = Path.GetDirectoryName(source.Path) ?? _fs.SnapshotsDir.FullName;
+        var stem = Path.GetFileNameWithoutExtension(source.Path);
+        var outPath = EnsureUnique(Path.Combine(dir, stem + "_edited.jpg"));
+
+        var size = await _editor.RenderAsync(source.Path, edit, outPath, ct).ConfigureAwait(false);
+
+        var thumbDir = Path.Combine(_fs.SnapshotsDir.FullName, ".thumbs");
+        Directory.CreateDirectory(thumbDir);
+        var thumbPath = Path.Combine(thumbDir, id.ToString() + ".jpg");
+        string? savedThumb = thumbPath;
+        try
+        {
+            var bytes = await ReadAllBytesAsync(outPath, ct).ConfigureAwait(false);
+            await _thumbs.GenerateAsync(bytes, thumbPath, ThumbMaxDim, ct).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            savedThumb = null;
+        }
+
+        var snapshot = new Snapshot(
+            id, source.CameraId, DateTime.UtcNow, outPath, savedThumb,
+            size.Width, size.Height, SnapshotSource.Edited, SnapshotKind.Manual);
+        await _repo.AddAsync(snapshot, ct).ConfigureAwait(false);
+        return snapshot;
     }
 
     public async Task<Snapshot> CaptureAsync(
@@ -204,5 +237,17 @@ public sealed class SnapshotService : ISnapshotService
         // File.WriteAllBytesAsync isn't on netstandard2.1; stream it instead.
         using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
         await fs.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsync(string path, CancellationToken ct)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        var buffer = new byte[fs.Length];
+        var offset = 0;
+        int read;
+        while (offset < buffer.Length &&
+               (read = await fs.ReadAsync(buffer, offset, buffer.Length - offset, ct).ConfigureAwait(false)) > 0)
+            offset += read;
+        return buffer;
     }
 }

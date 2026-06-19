@@ -317,6 +317,16 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Viewer.Properties"] = "Details",
         ["Viewer.Prev"] = "Previous",
         ["Viewer.Next"] = "Next",
+        ["Viewer.Edit"] = "Edit",
+
+        ["Edit.Arrow"] = "Arrow",
+        ["Edit.Rect"] = "Box",
+        ["Edit.Text"] = "Text",
+        ["Edit.Crop"] = "Crop",
+        ["Edit.Undo"] = "Undo",
+        ["Edit.Save"] = "Save copy",
+        ["Edit.TextPrompt"] = "Annotation text",
+        ["Edit.AddText"] = "Add",
 
         ["Grid.EmptySlot"] = "no camera",
         ["Tile.Snapshot"] = "Snapshot (HD)",
@@ -598,6 +608,16 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Viewer.Properties"] = "Детали",
         ["Viewer.Prev"] = "Назад",
         ["Viewer.Next"] = "Вперёд",
+        ["Viewer.Edit"] = "Редактор",
+
+        ["Edit.Arrow"] = "Стрелка",
+        ["Edit.Rect"] = "Рамка",
+        ["Edit.Text"] = "Текст",
+        ["Edit.Crop"] = "Обрезка",
+        ["Edit.Undo"] = "Отменить",
+        ["Edit.Save"] = "Сохранить копию",
+        ["Edit.TextPrompt"] = "Текст подписи",
+        ["Edit.AddText"] = "Добавить",
 
         ["Grid.EmptySlot"] = "нет камеры",
         ["Tile.Snapshot"] = "Снимок (HD)",

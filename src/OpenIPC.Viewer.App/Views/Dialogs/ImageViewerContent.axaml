@@ -81,14 +81,23 @@
         </Image.RenderTransform>
       </Image>
 
+      <!-- Editor drawing surface (on top of the image while editing) -->
+      <Canvas x:Name="EditCanvas" Background="#01000000"
+              IsVisible="{Binding IsEditing}"
+              PointerPressed="OnEditPointerPressed"
+              PointerMoved="OnEditPointerMoved"
+              PointerReleased="OnEditPointerReleased" />
+
       <!-- Prev / Next -->
       <Button Classes="navarrow" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0"
-              IsVisible="{Binding HasMultiple}" Command="{Binding PrevCommand}"
+              IsVisible="{Binding !IsEditing}" Command="{Binding PrevCommand}"
+              IsEnabled="{Binding HasMultiple}"
               ToolTip.Tip="{Binding [Viewer.Prev], Source={x:Static svc:Localizer.Instance}}">
         <Path Classes="lucide" Data="{StaticResource IconChevronLeft}" Stroke="White" Width="22" Height="22" />
       </Button>
       <Button Classes="navarrow" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0"
-              IsVisible="{Binding HasMultiple}" Command="{Binding NextCommand}"
+              IsVisible="{Binding !IsEditing}" Command="{Binding NextCommand}"
+              IsEnabled="{Binding HasMultiple}"
               ToolTip.Tip="{Binding [Viewer.Next], Source={x:Static svc:Localizer.Instance}}">
         <Path Classes="lucide" Data="{StaticResource IconChevronRight}" Stroke="White" Width="22" Height="22" />
       </Button>
@@ -104,35 +113,76 @@
 
     <!-- Bottom toolbar -->
     <Border Grid.Row="2" Background="#10141a" Padding="10,8">
-      <WrapPanel HorizontalAlignment="Center" ItemSpacing="6" LineSpacing="6">
-        <Button Classes="tool" Command="{Binding ZoomOutCommand}"
-                ToolTip.Tip="{Binding [Viewer.ZoomOut], Source={x:Static svc:Localizer.Instance}}" Content="−" />
-        <TextBlock Text="{Binding ZoomLabel}" Foreground="#8b94a3" FontFamily="{StaticResource FontMono}"
-                   FontSize="12" VerticalAlignment="Center" MinWidth="44" TextAlignment="Center" />
-        <Button Classes="tool" Command="{Binding ZoomInCommand}"
-                ToolTip.Tip="{Binding [Viewer.ZoomIn], Source={x:Static svc:Localizer.Instance}}" Content="+" />
-        <Button Classes="tool" Command="{Binding FitToScreenCommand}"
-                Content="{Binding [Viewer.Fit], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Classes="tool" Click="OnActualSizeClick" Content="1:1" />
-        <Border Width="1" Background="#2a313b" Margin="4,2" />
-        <Button Classes="tool" Command="{Binding RotateLeftCommand}"
-                ToolTip.Tip="{Binding [Viewer.RotateLeft], Source={x:Static svc:Localizer.Instance}}" Content="↺" />
-        <Button Classes="tool" Command="{Binding RotateRightCommand}"
-                ToolTip.Tip="{Binding [Viewer.RotateRight], Source={x:Static svc:Localizer.Instance}}" Content="↻" />
-        <Button Classes="tool" Command="{Binding FlipHorizontalCommand}"
-                ToolTip.Tip="{Binding [Viewer.FlipH], Source={x:Static svc:Localizer.Instance}}" Content="⇆" />
-        <Button Classes="tool" Command="{Binding FlipVerticalCommand}"
-                ToolTip.Tip="{Binding [Viewer.FlipV], Source={x:Static svc:Localizer.Instance}}" Content="⇅" />
-        <Border Width="1" Background="#2a313b" Margin="4,2" />
-        <Button Classes="tool" Classes.active="{Binding IsSlideshow}" Command="{Binding ToggleSlideshowCommand}"
-                ToolTip.Tip="{Binding [Viewer.Slideshow], Source={x:Static svc:Localizer.Instance}}" Content="▶"
-                IsVisible="{Binding HasMultiple}" />
-        <Button Classes="tool" Command="{Binding CopyCommand}"
-                Content="{Binding [Viewer.Copy], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Classes="tool" Command="{Binding DeleteCommand}"
-                Foreground="#ef4444"
-                Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}" />
-      </WrapPanel>
+      <Grid>
+        <!-- View toolbar -->
+        <WrapPanel HorizontalAlignment="Center" ItemSpacing="6" LineSpacing="6"
+                   IsVisible="{Binding !IsEditing}">
+          <Button Classes="tool" Command="{Binding ZoomOutCommand}"
+                  ToolTip.Tip="{Binding [Viewer.ZoomOut], Source={x:Static svc:Localizer.Instance}}" Content="−" />
+          <TextBlock Text="{Binding ZoomLabel}" Foreground="#8b94a3" FontFamily="{StaticResource FontMono}"
+                     FontSize="12" VerticalAlignment="Center" MinWidth="44" TextAlignment="Center" />
+          <Button Classes="tool" Command="{Binding ZoomInCommand}"
+                  ToolTip.Tip="{Binding [Viewer.ZoomIn], Source={x:Static svc:Localizer.Instance}}" Content="+" />
+          <Button Classes="tool" Command="{Binding FitToScreenCommand}"
+                  Content="{Binding [Viewer.Fit], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Click="OnActualSizeClick" Content="1:1" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Command="{Binding RotateLeftCommand}"
+                  ToolTip.Tip="{Binding [Viewer.RotateLeft], Source={x:Static svc:Localizer.Instance}}" Content="↺" />
+          <Button Classes="tool" Command="{Binding RotateRightCommand}"
+                  ToolTip.Tip="{Binding [Viewer.RotateRight], Source={x:Static svc:Localizer.Instance}}" Content="↻" />
+          <Button Classes="tool" Command="{Binding FlipHorizontalCommand}"
+                  ToolTip.Tip="{Binding [Viewer.FlipH], Source={x:Static svc:Localizer.Instance}}" Content="⇆" />
+          <Button Classes="tool" Command="{Binding FlipVerticalCommand}"
+                  ToolTip.Tip="{Binding [Viewer.FlipV], Source={x:Static svc:Localizer.Instance}}" Content="⇅" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Classes.active="{Binding IsSlideshow}" Command="{Binding ToggleSlideshowCommand}"
+                  ToolTip.Tip="{Binding [Viewer.Slideshow], Source={x:Static svc:Localizer.Instance}}" Content="▶"
+                  IsVisible="{Binding HasMultiple}" />
+          <Button Classes="tool" Command="{Binding EnterEditCommand}"
+                  Content="{Binding [Viewer.Edit], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding CopyCommand}"
+                  Content="{Binding [Viewer.Copy], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding DeleteCommand}"
+                  Foreground="#ef4444"
+                  Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}" />
+        </WrapPanel>
+
+        <!-- Edit toolbar -->
+        <WrapPanel HorizontalAlignment="Center" ItemSpacing="6" LineSpacing="6"
+                   IsVisible="{Binding IsEditing}">
+          <Button Classes="tool" Classes.active="{Binding IsToolArrow}" Command="{Binding SetToolCommand}" CommandParameter="arrow"
+                  Content="{Binding [Edit.Arrow], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolRectangle}" Command="{Binding SetToolCommand}" CommandParameter="rect"
+                  Content="{Binding [Edit.Rect], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolText}" Command="{Binding SetToolCommand}" CommandParameter="text"
+                  Content="{Binding [Edit.Text], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolCrop}" Command="{Binding SetToolCommand}" CommandParameter="crop"
+                  Content="{Binding [Edit.Crop], Source={x:Static svc:Localizer.Instance}}" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#FF3B30"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFF3B30" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#FFCC00"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFFCC00" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#34C759"
+                  Command="{Binding SetColorCommand}" CommandParameter="FF34C759" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="White"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFFFFFF" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#111111"
+                  Command="{Binding SetColorCommand}" CommandParameter="FF111111" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Classes.active="{Binding IsThin}" Command="{Binding SetThicknessCommand}" CommandParameter="thin" Content="S" />
+          <Button Classes="tool" Classes.active="{Binding IsMedium}" Command="{Binding SetThicknessCommand}" CommandParameter="med" Content="M" />
+          <Button Classes="tool" Classes.active="{Binding IsThick}" Command="{Binding SetThicknessCommand}" CommandParameter="thick" Content="L" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Click="OnEditUndoClick"
+                  Content="{Binding [Edit.Undo], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding CancelEditCommand}"
+                  Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool active" Click="OnEditSaveClick"
+                  Content="{Binding [Edit.Save], Source={x:Static svc:Localizer.Instance}}" />
+        </WrapPanel>
+      </Grid>
     </Border>
 
   </Grid>

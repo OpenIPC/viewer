@@ -49,6 +49,7 @@ public static class SharedComposition
 
         // Snapshots (Phase 14): HD-always capture + thumbnail generation.
         services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
+        services.AddSingleton<IImageEditor, OpenIPC.Viewer.Video.Imaging.SkiaImageEditor>();
         services.AddSingleton<ISnapshotService, SnapshotService>();
 
         // Video
