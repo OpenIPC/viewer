@@ -44,6 +44,7 @@ internal static class Composition
             return new IosSecretsStore(sp.GetRequiredService<IFileSystem>().AppDataDir);
         });
         services.AddSingleton<IHwDecoderFactory, VideoToolboxDecoderFactory>();
+        services.AddSingleton<IShareService, IosShareService>();
 
         // Recording — in-process libavformat. iOS won't let surveillance apps
         // run 24/7 in background, so recording is foreground-only (Phase 10

@@ -19,5 +19,14 @@
                android:allowBackup="true"
                android:supportsRtl="true"
                android:name=".MainApplication">
+    <!-- Phase 14.6 — share sheet. FileProvider grants the receiving app a
+         scoped, temporary read URI to a snapshot instead of a file:// path. -->
+    <provider android:name="androidx.core.content.FileProvider"
+              android:authorities="${applicationId}.fileprovider"
+              android:exported="false"
+              android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                 android:resource="@xml/file_paths" />
+    </provider>
   </application>
 </manifest>

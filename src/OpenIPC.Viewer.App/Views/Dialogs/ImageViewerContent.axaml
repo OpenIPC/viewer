@@ -143,6 +143,8 @@
                   Content="{Binding [Viewer.Edit], Source={x:Static svc:Localizer.Instance}}" />
           <Button Classes="tool" Command="{Binding CopyCommand}"
                   Content="{Binding [Viewer.Copy], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding ShareCommand}"
+                  Content="{Binding ShareLabel}" />
           <Button Classes="tool" Command="{Binding DeleteCommand}"
                   Foreground="#ef4444"
                   Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}" />

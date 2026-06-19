@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
 
@@ -31,6 +32,7 @@ public sealed partial class SnapshotBrowserPageViewModel : ViewModelBase
     private readonly CameraDirectoryService _cameras;
     private readonly IDialogService _dialogs;
     private readonly ImageViewerFactory _viewerFactory;
+    private readonly IShareService _share;
     private readonly ILogger<SnapshotBrowserPageViewModel> _logger;
 
     // Guards the auto-reload that SelectedCamera's change handler triggers, so
@@ -83,13 +85,29 @@ public sealed partial class SnapshotBrowserPageViewModel : ViewModelBase
         CameraDirectoryService cameras,
         IDialogService dialogs,
         ImageViewerFactory viewerFactory,
+        IShareService share,
         ILogger<SnapshotBrowserPageViewModel> logger)
     {
         _repo = repo;
         _cameras = cameras;
         _dialogs = dialogs;
         _viewerFactory = viewerFactory;
+        _share = share;
         _logger = logger;
+    }
+
+    public string ShareLabel =>
+        Localizer.Instance[_share.SupportsSystemShare ? "Snapshots.Share" : "Snapshots.Reveal"];
+
+    [RelayCommand]
+    private async Task ShareSelectedAsync()
+    {
+        // Native share sheets take one item; share the first selected snapshot
+        // (on desktop this reveals it in the file manager).
+        var first = Items.FirstOrDefault(i => i.IsSelected);
+        if (first is null) return;
+        try { await _share.ShareFileAsync(first.FilePath, "image/jpeg", CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Share from browser failed"); }
     }
 
     public async Task LoadAsync(CancellationToken ct)

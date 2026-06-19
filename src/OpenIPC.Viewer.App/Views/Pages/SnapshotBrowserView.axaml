@@ -70,11 +70,19 @@
     <!-- Selection toolbar -->
     <Border Grid.Row="1" IsVisible="{Binding HasSelection}"
             Background="{StaticResource Bg2Brush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto">
         <TextBlock Grid.Column="0" Text="{Binding SelectionLabel}"
                    Foreground="{StaticResource TextSecondaryBrush}"
                    VerticalAlignment="Center" FontSize="12" />
         <Button Grid.Column="1"
+                Command="{Binding ShareSelectedCommand}"
+                Content="{Binding ShareLabel}"
+                Margin="0,0,8,0"
+                Padding="10,4" FontSize="12" CornerRadius="4"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="2"
                 Command="{Binding DeleteSelectedCommand}"
                 Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
                 Padding="10,4" FontSize="12" CornerRadius="4"

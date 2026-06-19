@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Snapshots;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -45,6 +46,7 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
     private readonly ISnapshotRepository _repo;
     private readonly ISnapshotService _snapshots;
     private readonly IDialogService _dialogs;
+    private readonly IShareService _share;
     private readonly ILogger<ImageViewerViewModel> _logger;
     private readonly TaskCompletionSource<bool> _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private DispatcherTimer? _slideshowTimer;
@@ -126,12 +128,14 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
         ISnapshotRepository repo,
         ISnapshotService snapshots,
         IDialogService dialogs,
+        IShareService share,
         ILogger<ImageViewerViewModel> logger)
     {
         _items = new List<SnapshotViewEntry>(items);
         _repo = repo;
         _snapshots = snapshots;
         _dialogs = dialogs;
+        _share = share;
         _logger = logger;
         _index = Math.Clamp(startIndex, 0, Math.Max(0, _items.Count - 1));
         LoadCurrent();
@@ -240,6 +244,17 @@ public sealed partial class ImageViewerViewModel : ViewModelBase
         if (Current is not { } e) return;
         try { await _dialogs.CopyFileToClipboardAsync(e.Snapshot.Path).ConfigureAwait(true); }
         catch (Exception ex) { _logger.LogWarning(ex, "Copy from viewer failed"); }
+    }
+
+    public string ShareLabel =>
+        Localizer.Instance[_share.SupportsSystemShare ? "Viewer.Share" : "Viewer.Reveal"];
+
+    [RelayCommand]
+    private async Task ShareAsync()
+    {
+        if (Current is not { } e) return;
+        try { await _share.ShareFileAsync(e.Snapshot.Path, "image/jpeg", CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Share from viewer failed"); }
     }
 
     [RelayCommand]

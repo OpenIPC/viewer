@@ -318,6 +318,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Viewer.Prev"] = "Previous",
         ["Viewer.Next"] = "Next",
         ["Viewer.Edit"] = "Edit",
+        ["Viewer.Share"] = "Share",
+        ["Viewer.Reveal"] = "Reveal",
+        ["Snapshots.Share"] = "Share",
+        ["Snapshots.Reveal"] = "Reveal",
 
         ["Edit.Arrow"] = "Arrow",
         ["Edit.Rect"] = "Box",
@@ -609,6 +613,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Viewer.Prev"] = "Назад",
         ["Viewer.Next"] = "Вперёд",
         ["Viewer.Edit"] = "Редактор",
+        ["Viewer.Share"] = "Поделиться",
+        ["Viewer.Reveal"] = "Показать в папке",
+        ["Snapshots.Share"] = "Поделиться",
+        ["Snapshots.Reveal"] = "Показать в папке",
 
         ["Edit.Arrow"] = "Стрелка",
         ["Edit.Rect"] = "Рамка",

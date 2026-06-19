@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider exposure for the share sheet (Phase 14.6). Snapshots live in
+     the app's external files dir under Pictures/; cache covers temporary copies. -->
+<paths>
+  <external-files-path name="snapshots" path="Pictures/" />
+  <external-files-path name="external_root" path="." />
+  <files-path name="internal" path="." />
+  <cache-path name="cache" path="." />
+</paths>
