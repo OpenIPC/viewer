@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -187,6 +188,31 @@ public sealed class DialogService : IDialogService
         return dlg.ShowDialog<string?>(owner);
     }
 
+    public async Task<bool> OpenUrlAsync(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+
+        var top = ResolveTopLevel();
+        if (top?.Launcher is null)
+            return false;
+
+        return await top.Launcher.LaunchUriAsync(uri).ConfigureAwait(true);
+    }
+
     private static Window? ResolveOwner() =>
         (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+    // Resolves the active TopLevel on both heads: the desktop MainWindow, or
+    // the single-view MainView on mobile (where there is no Window).
+    private static TopLevel? ResolveTopLevel()
+    {
+        Control? root = Application.Current?.ApplicationLifetime switch
+        {
+            IClassicDesktopStyleApplicationLifetime desk => desk.MainWindow,
+            ISingleViewApplicationLifetime sv => sv.MainView,
+            _ => null,
+        };
+        return root is null ? null : TopLevel.GetTopLevel(root);
+    }
 }

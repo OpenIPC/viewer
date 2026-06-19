@@ -87,6 +87,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Library.Title"] = "Cameras",
         ["Library.EmptyTitle"] = "No cameras yet",
+        ["Library.RowOpenWeb"] = "Open web",
         ["Library.RowEdit"] = "Edit",
         ["Library.RowDelete"] = "Delete",
         ["Library.RowShowInGrid"] = "Show in grid",
@@ -297,6 +298,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Library.Title"] = "Камеры",
         ["Library.EmptyTitle"] = "Камер пока нет",
+        ["Library.RowOpenWeb"] = "Веб-интерфейс",
         ["Library.RowEdit"] = "Изменить",
         ["Library.RowDelete"] = "Удалить",
         ["Library.RowShowInGrid"] = "В гриде",

@@ -10,6 +10,7 @@ using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Ssh;
 using OpenIPC.Viewer.Core.Video;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
@@ -56,6 +57,9 @@ public static class SharedComposition
 
         // Majestic HTTP
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+
+        // SSH device suite (Phase 13): factory creates per-use sessions.
+        services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
 
         // Recording lifecycle (IRecorder itself is registered by the platform
         // host — FFmpeg subprocess on desktop, FFmpegKit on Android, etc).

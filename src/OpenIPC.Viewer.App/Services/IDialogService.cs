@@ -25,4 +25,8 @@ public interface IDialogService
 
     // Returns the edited JSON if the user clicked Apply, null if cancelled.
     Task<string?> ShowRawConfigEditorAsync(string initialJson);
+
+    // Opens a URI in the system browser via the platform launcher. Returns
+    // false if no TopLevel is available or the launch was rejected.
+    Task<bool> OpenUrlAsync(string url);
 }

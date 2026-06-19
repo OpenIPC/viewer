@@ -372,6 +372,17 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task OpenWebInterfaceAsync(CameraRowViewModel? row)
+    {
+        if (row is null)
+            return;
+
+        var url = row.Camera.WebInterfaceUrl;
+        if (!await _dialogs.OpenUrlAsync(url).ConfigureAwait(true))
+            _logger.LogWarning("Failed to open web interface for {CameraId} at {Url}", row.Camera.Id, url);
+    }
+
+    [RelayCommand]
     private async Task EditCameraAsync(CameraRowViewModel? row)
     {
         if (row is null)
