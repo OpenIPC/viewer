@@ -132,6 +132,7 @@ public static class SharedComposition
         services.AddSingleton<RecordingsPageViewModel>();
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
+        services.AddSingleton<AnalyticsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
 
         return services;

@@ -29,6 +29,9 @@
     <DataTemplate DataType="vm:EventsPageViewModel">
       <pages:EventsPage />
     </DataTemplate>
+    <DataTemplate DataType="vm:AnalyticsPageViewModel">
+      <pages:AnalyticsPage />
+    </DataTemplate>
     <DataTemplate DataType="vm:SettingsPageViewModel">
       <pages:SettingsPage />
     </DataTemplate>

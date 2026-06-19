@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.AnalyticsPage"
+             x:DataType="vm:AnalyticsPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Header -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding Title}"
+                 FontSize="{StaticResource FontSizeXl}"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource TextPrimaryBrush}"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1"
+              Content="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding RefreshCommand}"
+              Padding="10,6" CornerRadius="6"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+    </Grid>
+
+    <ScrollViewer Grid.Row="1">
+      <StackPanel Spacing="16">
+
+        <!-- Overview / diagnostics -->
+        <Border Background="{StaticResource Bg2Brush}" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding [Analytics.Overview], Source={x:Static svc:Localizer.Instance}}"
+                       FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" >
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Analytics.Provider], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ActiveProvider}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Analytics.ActiveCameras], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveCameras}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Analytics.Processed], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FramesProcessed}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [Analytics.Dropped], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FramesDropped}" Foreground="{StaticResource TextPrimaryBrush}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,*">
+              <TextBlock Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}">
+                <Run Text="{Binding [Analytics.Queue], Source={x:Static svc:Localizer.Instance}}" />
+                <Run Text="{Binding QueueDepth}" Foreground="{StaticResource TextPrimaryBrush}" />
+              </TextBlock>
+              <TextBlock Grid.Column="1" Foreground="{StaticResource TextSecondaryBrush}">
+                <Run Text="{Binding [Analytics.Latency], Source={x:Static svc:Localizer.Instance}}" />
+                <Run Text="{Binding AverageLatencyMs, StringFormat='{}{0:F0} ms'}" Foreground="{StaticResource TextPrimaryBrush}" />
+              </TextBlock>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Cameras with analytics on -->
+        <TextBlock Text="{Binding [Analytics.Cameras], Source={x:Static svc:Localizer.Instance}}"
+                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+        <ItemsControl ItemsSource="{Binding Cameras}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:AnalyticsCameraRow">
+              <Border Background="{StaticResource Bg2Brush}" CornerRadius="6" Padding="12" Margin="0,0,0,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="{Binding Name}" FontWeight="Medium" Foreground="{StaticResource TextPrimaryBrush}" />
+                    <TextBlock Text="{Binding Classes}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding Fps, StringFormat='{}{0} fps'}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" HorizontalAlignment="Right" />
+                    <TextBlock Text="{Binding Threshold, StringFormat='≥ {0:F2}'}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" HorizontalAlignment="Right" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Recent detection events -->
+        <TextBlock Text="{Binding [Analytics.RecentDetections], Source={x:Static svc:Localizer.Instance}}"
+                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+        <ItemsControl ItemsSource="{Binding RecentDetections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:DetectionEventRow">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+                <TextBlock Grid.Column="0" Text="{Binding CameraName}" FontWeight="Medium" Foreground="{StaticResource TextPrimaryBrush}" MinWidth="120" />
+                <TextBlock Grid.Column="1" Text="{Binding Summary}" Foreground="{StaticResource TextSecondaryBrush}" Margin="8,0,0,0" />
+                <TextBlock Grid.Column="2" Text="{Binding OccurredAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                           Foreground="{StaticResource TextTertiaryBrush}" FontFamily="{StaticResource FontMono}" FontSize="11" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </StackPanel>
+    </ScrollViewer>
+
+  </Grid>
+
+</UserControl>

@@ -23,6 +23,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     public CameraLibraryPageViewModel Library { get; }
     public RecordingsPageViewModel Recordings { get; }
     public EventsPageViewModel Events { get; }
+    public AnalyticsPageViewModel Analytics { get; }
     public SettingsPageViewModel Settings { get; }
 
     [ObservableProperty]
@@ -30,6 +31,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     [NotifyPropertyChangedFor(nameof(IsLibrarySelected))]
     [NotifyPropertyChangedFor(nameof(IsRecordingsSelected))]
     [NotifyPropertyChangedFor(nameof(IsEventsSelected))]
+    [NotifyPropertyChangedFor(nameof(IsAnalyticsSelected))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSelected))]
     private ViewModelBase _currentPage;
 
@@ -45,6 +47,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     public bool IsLibrarySelected => CurrentPage is CameraLibraryPageViewModel or SingleCameraPageViewModel;
     public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel;
     public bool IsEventsSelected => CurrentPage is EventsPageViewModel;
+    public bool IsAnalyticsSelected => CurrentPage is AnalyticsPageViewModel;
     public bool IsSettingsSelected => CurrentPage is SettingsPageViewModel;
 
     public MainWindowViewModel(
@@ -52,6 +55,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         CameraLibraryPageViewModel library,
         RecordingsPageViewModel recordings,
         EventsPageViewModel events,
+        AnalyticsPageViewModel analytics,
         SettingsPageViewModel settings,
         CameraDirectoryService directory,
         SingleCameraPageFactory singleCameraFactory,
@@ -61,6 +65,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         Library = library;
         Recordings = recordings;
         Events = events;
+        Analytics = analytics;
         Settings = settings;
         _directory = directory;
         _singleCameraFactory = singleCameraFactory;
@@ -113,6 +118,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
             "library" => Library,
             "recordings" => Recordings,
             "events" => Events,
+            "analytics" => Analytics,
             "settings" => Settings,
             _ => CurrentPage,
         };
