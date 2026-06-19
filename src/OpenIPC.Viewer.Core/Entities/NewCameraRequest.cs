@@ -1,4 +1,5 @@
 using System;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Core.Entities;
@@ -17,4 +18,5 @@ public sealed record NewCameraRequest(
     // the SSH login may differ. Null SshCredentials means "no SSH-specific
     // login" (the resolver falls back to the main credentials).
     CameraCredentials? SshCredentials = null,
-    int? SshPort = null);
+    int? SshPort = null,
+    AnalyticsSettings? Analytics = null);

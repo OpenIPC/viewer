@@ -1,3 +1,5 @@
+using OpenIPC.Viewer.Core.Analytics;
+
 namespace OpenIPC.Viewer.Core.Settings;
 
 // Thin read-only view onto the UI's UserSettings that Core services can
@@ -22,4 +24,7 @@ public interface IUserSettingsAccessor
     bool SshStrictHostKey { get; }
     int SshDefaultPort { get; }
     string MajesticConfigPath { get; }
+
+    // Local AI analytics acceleration preference (Phase 15.2).
+    AiAcceleration AiAcceleration { get; }
 }

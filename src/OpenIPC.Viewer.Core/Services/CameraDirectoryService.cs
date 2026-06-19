@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Platform;
@@ -79,7 +80,8 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
             CreatedAt: now,
             UpdatedAt: now,
             StreamQualityOverride: req.StreamQualityOverride,
-            SshPort: req.SshPort);
+            SshPort: req.SshPort,
+            Analytics: req.Analytics);
 
         return await _cameras.AddAsync(camera, ct).ConfigureAwait(false);
     }
@@ -110,9 +112,23 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
             GroupId = req.GroupId,
             StreamQualityOverride = req.StreamQualityOverride,
             SshPort = req.SshPort,
+            // Null keeps the stored analytics config (mirrors credentials).
+            Analytics = req.Analytics ?? existing.Analytics,
             UpdatedAt = DateTime.UtcNow,
         };
 
+        await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Updates only a camera's analytics config (Phase 15) — used by the AI
+    /// control center / tile toggles without touching credentials or geometry.
+    /// </summary>
+    public async Task SetAnalyticsAsync(CameraId id, AnalyticsSettings analytics, CancellationToken ct)
+    {
+        var existing = await _cameras.GetAsync(id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Camera {id} not found");
+        var updated = existing with { Analytics = analytics, UpdatedAt = DateTime.UtcNow };
         await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
     }
 

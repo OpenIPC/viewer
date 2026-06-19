@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\OpenIPC.Viewer.Analytics\OpenIPC.Viewer.Analytics.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.App\OpenIPC.Viewer.App.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.Devices\OpenIPC.Viewer.Devices.csproj" />
