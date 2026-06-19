@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Video;
@@ -53,6 +54,16 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
 
     [ObservableProperty] private StreamQualityOption? _selectedStreamQuality;
 
+    // AI analytics (Phase 15.4). Threshold 0..1; fps clamped 1..10 by the engine.
+    [ObservableProperty] private bool _aiEnabled;
+    [ObservableProperty] private double _aiThreshold = 0.5;
+    [ObservableProperty] private int _aiFps = 3;
+    [ObservableProperty] private bool _aiAutoRecord;
+    [ObservableProperty] private int _aiPostEventSeconds = 15;
+
+    // Curated, surveillance-relevant subset of COCO classes the user can toggle.
+    public ObservableCollection<DetectionClassOption> AnalyticsClasses { get; } = new();
+
     // Includes a leading null entry so the user can pick "no group".
     public ObservableCollection<CameraGroup?> AvailableGroups { get; } = new();
 
@@ -74,6 +85,21 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         _userSettings = userSettings;
         _logger = logger;
         SelectedStreamQuality = StreamQualityOptions[0]; // Auto
+        PopulateAnalyticsClasses();
+    }
+
+    // Surveillance-relevant COCO classes. person is pre-selected so a fresh
+    // enable does something sensible; the user can broaden/narrow from here.
+    private static readonly (int Id, bool Default)[] CuratedClasses =
+    {
+        (0, true), (1, false), (2, false), (3, false), (5, false), (7, false), (15, false), (16, false),
+    };
+
+    private void PopulateAnalyticsClasses()
+    {
+        if (AnalyticsClasses.Count > 0) return;
+        foreach (var (id, def) in CuratedClasses)
+            AnalyticsClasses.Add(new DetectionClassOption(id, CocoClasses.Names[id]) { IsSelected = def });
     }
 
     public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, CameraCredentials? sshCredentials, IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
@@ -94,6 +120,19 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         _pendingGroupId = existing.GroupId;
         SelectedStreamQuality = StreamQualityOptions.FirstOrDefault(o => o.Value == existing.StreamQualityOverride)
             ?? StreamQualityOptions[0];
+
+        var ai = existing.AnalyticsOrDefault;
+        AiEnabled = ai.Enabled;
+        AiThreshold = ai.ConfidenceThreshold;
+        AiFps = ai.AnalyticsFps;
+        AiAutoRecord = ai.AutoRecord;
+        AiPostEventSeconds = ai.PostEventSeconds;
+        if (ai.ClassIds is { Count: > 0 } ids)
+        {
+            var set = new HashSet<int>(ids);
+            foreach (var opt in AnalyticsClasses)
+                opt.IsSelected = set.Contains(opt.ClassId);
+        }
     }
 
     public async Task LoadGroupsAsync(CancellationToken ct)
@@ -187,6 +226,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             : new CameraCredentials(SshUsername, SshPassword);
 
         var quality = SelectedStreamQuality?.Value ?? StreamQualityOverride.Auto;
+        var analytics = BuildAnalyticsSettings();
 
         if (EditingId is null)
         {
@@ -201,7 +241,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 GroupId: SelectedGroup?.Id,
                 StreamQualityOverride: quality,
                 SshCredentials: sshCredentials,
-                SshPort: sshPort);
+                SshPort: sshPort,
+                Analytics: analytics);
         }
         else
         {
@@ -216,7 +257,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 GroupId: SelectedGroup?.Id,
                 StreamQualityOverride: quality,
                 SshCredentials: sshCredentials,
-                SshPort: sshPort);
+                SshPort: sshPort,
+                Analytics: analytics);
         }
 
         return ok;
@@ -298,11 +340,38 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         return true;
     }
 
+    private AnalyticsSettings BuildAnalyticsSettings()
+    {
+        var classIds = AnalyticsClasses.Where(c => c.IsSelected).Select(c => c.ClassId).ToArray();
+        return new AnalyticsSettings(
+            Enabled: AiEnabled,
+            ClassIds: classIds.Length > 0 ? classIds : null,
+            ConfidenceThreshold: (float)AiThreshold,
+            AnalyticsFps: AiFps,
+            AutoRecord: AiAutoRecord,
+            PostEventSeconds: AiPostEventSeconds);
+    }
+
     private static RtspTransport ParseTransport(string? s) => s?.ToLowerInvariant() switch
     {
         "udp" => RtspTransport.Udp,
         _ => RtspTransport.Tcp,
     };
+}
+
+// Toggleable detection class in the editor (Phase 15.4).
+public sealed partial class DetectionClassOption : ObservableObject
+{
+    public DetectionClassOption(int classId, string name)
+    {
+        ClassId = classId;
+        Name = name;
+    }
+
+    public int ClassId { get; }
+    public string Name { get; }
+
+    [ObservableProperty] private bool _isSelected;
 }
 
 public sealed record CameraEditorResult(NewCameraRequest? NewRequest, UpdateCameraRequest? UpdateRequest);

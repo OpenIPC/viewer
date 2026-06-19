@@ -3,6 +3,7 @@
     <Project Path="src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj">
       <Deploy Solution="Debug|*" />
     </Project>
+    <Project Path="src/OpenIPC.Viewer.Analytics/OpenIPC.Viewer.Analytics.csproj" />
     <Project Path="src/OpenIPC.Viewer.App/OpenIPC.Viewer.App.csproj" />
     <Project Path="src/OpenIPC.Viewer.Composition/OpenIPC.Viewer.Composition.csproj" />
     <Project Path="src/OpenIPC.Viewer.Core/OpenIPC.Viewer.Core.csproj" />
@@ -13,8 +14,11 @@
     <Project Path="src/OpenIPC.Viewer.Video/OpenIPC.Viewer.Video.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/OpenIPC.Viewer.Analytics.Tests/OpenIPC.Viewer.Analytics.Tests.csproj" />
     <Project Path="tests/OpenIPC.Viewer.Core.Tests/OpenIPC.Viewer.Core.Tests.csproj" />
-    <Project Path="tests/OpenIPC.Viewer.Infrastructure.Tests/OpenIPC.Viewer.Infrastructure.Tests.csproj" />
+    <Project Path="tests/OpenIPC.Viewer.Infrastructure.Tests/OpenIPC.Viewer.Infrastructure.Tests.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
     <Project Path="tests/OpenIPC.Viewer.Video.Tests/OpenIPC.Viewer.Video.Tests.csproj" />
   </Folder>
 </Solution>

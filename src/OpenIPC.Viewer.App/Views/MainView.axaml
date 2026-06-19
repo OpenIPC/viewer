@@ -82,6 +82,18 @@
             </StackPanel>
           </RadioButton>
           <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsAnalyticsSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="analytics">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <!-- IconRadar is a stroke-designed Lucide path → render via Path.lucide,
+                   not PathIcon (which fills the open arcs into a blob). -->
+              <Path Classes="lucide" Data="{StaticResource IconRadar}"
+                    Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Analytics], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
                        IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
                        Command="{Binding NavigateCommand}"
                        CommandParameter="settings">

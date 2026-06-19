@@ -73,6 +73,22 @@ public static class SharedComposition
         services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
         services.AddSingleton<IMajesticSshConfigClient, MajesticSshConfigClient>();
 
+        // Local AI analytics (Phase 15). One shared detector + engine; the model
+        // is fetched on first enable and inference falls back to CPU when a GPU
+        // EP is unavailable, so registering this on every head is boot-safe
+        // (analytics is opt-in per camera and only initializes when enabled).
+        services.AddSingleton<OpenIPC.Viewer.Core.Analytics.IModelProvider,
+            OpenIPC.Viewer.Analytics.ModelProvider>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Analytics.IObjectDetector,
+            OpenIPC.Viewer.Analytics.OnnxObjectDetector>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine,
+            OpenIPC.Viewer.Analytics.ObjectDetectionEngine>();
+        // Auto-record on detection (Phase 15.6). Started by the App analytics
+        // bootstrap once the engine is initialized.
+        services.AddSingleton<OpenIPC.Viewer.Core.Analytics.AutoRecordCoordinator>();
+        // Lazily initializes the engine on first analytics-enabled tile (15.4).
+        services.AddSingleton<AnalyticsBootstrap>();
+
         // Recording lifecycle (IRecorder itself is registered by the platform
         // host — FFmpeg subprocess on desktop, FFmpegKit on Android, etc).
         services.AddSingleton<RecordingService>();
@@ -80,6 +96,8 @@ public static class SharedComposition
         // Events
         services.AddSingleton<ManualMotionEventSource>();
         services.AddSingleton<IMotionEventSource>(sp => sp.GetRequiredService<ManualMotionEventSource>());
+        // AI detections feed the same ingestion path as motion (Phase 15.7).
+        services.AddSingleton<IMotionEventSource, AnalyticsMotionEventSource>();
         services.AddSingleton<EventIngestionService>();
 
         // UI services
@@ -114,6 +132,7 @@ public static class SharedComposition
         services.AddSingleton<RecordingsPageViewModel>();
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
+        services.AddSingleton<AnalyticsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
 
         return services;

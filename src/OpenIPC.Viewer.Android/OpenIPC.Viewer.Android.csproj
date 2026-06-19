@@ -27,8 +27,15 @@
       verification, which we don't perform — credentials are AES-GCM via
       EncryptedFileSecretsStore, RTSP auth is HTTP digest. Revisit when MS
       ships a patched servicing release.
+
+      XA0141 suppression: ONNX Runtime's android native (libonnxruntime4j_jni.so,
+      pulled transitively by the Phase 15 analytics engine) isn't yet aligned to
+      the 16 KB page size Android 16 will require. It's an upstream packaging
+      advisory, not our code; on-device analytics on Android is a later polish
+      item (capability-flagged, desktop-first). Revisit when ORT ships aligned
+      mobile binaries.
     -->
-    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <NoWarn>$(NoWarn);NU1903;XA0141</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

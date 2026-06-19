@@ -249,6 +249,10 @@
                     Content="{Binding [Settings.Video.AutoSdHd], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
 
+          <CheckBox IsChecked="{Binding AiForceCpu}"
+                    Content="{Binding [Settings.Video.AiForceCpu], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Grid.Column="0" Classes="field-label"
                        Text="{Binding [Settings.Video.MaxGridSessions], Source={x:Static svc:Localizer.Instance}}" />

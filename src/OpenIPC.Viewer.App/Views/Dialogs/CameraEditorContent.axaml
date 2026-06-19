@@ -126,6 +126,47 @@
                     HorizontalAlignment="Stretch" />
         </StackPanel>
 
+        <!-- AI analytics (Phase 15.4). Collapsed details until enabled. -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="{Binding [CameraEditor.Analytics.Section], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <CheckBox IsChecked="{Binding AiEnabled, Mode=TwoWay}"
+                    Content="{Binding [CameraEditor.Analytics.Enable], Source={x:Static svc:Localizer.Instance}}" />
+
+          <StackPanel Spacing="10" IsVisible="{Binding AiEnabled}" Margin="4,0,0,0">
+            <TextBlock Text="{Binding [CameraEditor.Analytics.Classes], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+            <ItemsControl ItemsSource="{Binding AnalyticsClasses}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:DetectionClassOption">
+                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Content="{Binding Name}" Margin="0,0,12,0" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid ColumnDefinitions="*,12,120">
+              <StackPanel Grid.Column="0" Spacing="6">
+                <TextBlock Text="{Binding [CameraEditor.Analytics.Threshold], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+                <Slider Minimum="0.1" Maximum="0.95" Value="{Binding AiThreshold, Mode=TwoWay}" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Spacing="6">
+                <TextBlock Text="{Binding [CameraEditor.Analytics.Fps], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+                <NumericUpDown Value="{Binding AiFps, Mode=TwoWay}" Minimum="1" Maximum="10" Increment="1" FormatString="0" />
+              </StackPanel>
+            </Grid>
+
+            <CheckBox IsChecked="{Binding AiAutoRecord, Mode=TwoWay}"
+                      Content="{Binding [CameraEditor.Analytics.AutoRecord], Source={x:Static svc:Localizer.Instance}}" />
+            <StackPanel Spacing="6" IsVisible="{Binding AiAutoRecord}" Margin="4,0,0,0">
+              <TextBlock Text="{Binding [CameraEditor.Analytics.PostEvent], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+              <NumericUpDown Value="{Binding AiPostEventSeconds, Mode=TwoWay}" Minimum="3" Maximum="120" Increment="1" FormatString="0" Width="120" HorizontalAlignment="Left" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+
         <TextBlock Text="{Binding ErrorMessage}"
                    Foreground="{StaticResource DangerBrush}"
                    FontSize="{StaticResource FontSizeSm}"

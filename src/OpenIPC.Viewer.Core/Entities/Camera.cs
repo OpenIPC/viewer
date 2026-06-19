@@ -1,4 +1,5 @@
 using System;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Ssh;
 using OpenIPC.Viewer.Core.Video;
 
@@ -30,8 +31,14 @@ public sealed record Camera(
     StreamQualityOverride StreamQualityOverride = StreamQualityOverride.Auto,
     // SSH port for the device suite (Phase 13). Null → default 22. Credentials
     // live in the secrets store under cam:{id}:ssh:* keys, not on the entity.
-    int? SshPort = null)
+    int? SshPort = null,
+    // Per-camera AI object detection (Phase 15). Disabled by default; stored
+    // flat across the Ai* columns and recomposed here.
+    AnalyticsSettings? Analytics = null)
 {
+    /// <summary>The camera's analytics config, never null (defaults to disabled).</summary>
+    public AnalyticsSettings AnalyticsOrDefault => Analytics ?? AnalyticsSettings.Disabled;
+
     /// <summary>The SSH port to connect to, defaulting to 22 when unset.</summary>
     public int SshPortOrDefault => SshPort ?? SshEndpoint.DefaultPort;
 

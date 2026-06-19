@@ -27,6 +27,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly LiveStreamCoordinator _coordinator;
     private readonly UserSettingsService _userSettings;
     private readonly ISnapshotService _snapshots;
+    private readonly OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine _analytics;
+    private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<GridPageViewModel> _logger;
 
@@ -52,12 +54,16 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         LiveStreamCoordinator coordinator,
         UserSettingsService userSettings,
         ISnapshotService snapshots,
+        OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine analytics,
+        AnalyticsBootstrap analyticsBootstrap,
         ILoggerFactory loggerFactory)
     {
         _directory = directory;
         _coordinator = coordinator;
         _userSettings = userSettings;
         _snapshots = snapshots;
+        _analytics = analytics;
+        _analyticsBootstrap = analyticsBootstrap;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<GridPageViewModel>();
 
@@ -126,7 +132,10 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             var existing = Tiles.FirstOrDefault(t => t.Camera.Id == camera.Id);
             if (existing is not null)
             {
-                if (!StreamUriChanged(existing.Camera, camera))
+                // Rebuild on a stream-URL change OR an analytics-settings change:
+                // the tile holds an immutable Camera snapshot, so toggling
+                // analytics in the editor only takes effect by rebuilding it.
+                if (!StreamUriChanged(existing.Camera, camera) && !AnalyticsChanged(existing.Camera, camera))
                 {
                     // Kept tile — re-evaluate SD/HD against the (possibly new)
                     // layout. No-op when quality is unchanged.
@@ -140,7 +149,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 try { await existing.DisposeAsync().ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
-                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _loggerFactory.CreateLogger<CameraTileViewModel>());
                 rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
@@ -148,7 +157,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 continue;
             }
 
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _loggerFactory.CreateLogger<CameraTileViewModel>());
             tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }
@@ -169,6 +178,23 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     // record) avoids churning sessions on cosmetic edits like a rename.
     private static bool StreamUriChanged(Camera a, Camera b) =>
         (a.RtspSubUri ?? a.RtspMainUri) != (b.RtspSubUri ?? b.RtspMainUri);
+
+    // True when a camera's analytics config changed (Phase 15) — the tile's
+    // frame tap reads its immutable Camera snapshot, so any change needs a
+    // rebuild. Compared field-by-field because AnalyticsSettings.ClassIds is a
+    // collection (record equality would compare it by reference).
+    private static bool AnalyticsChanged(Camera a, Camera b)
+    {
+        var x = a.AnalyticsOrDefault;
+        var y = b.AnalyticsOrDefault;
+        if (x.Enabled != y.Enabled || x.AutoRecord != y.AutoRecord || x.AnalyticsFps != y.AnalyticsFps
+            || x.PostEventSeconds != y.PostEventSeconds
+            || Math.Abs(x.ConfidenceThreshold - y.ConfidenceThreshold) > 0.001f)
+            return true;
+        var xc = (x.ClassIds ?? Array.Empty<int>()).OrderBy(i => i);
+        var yc = (y.ClassIds ?? Array.Empty<int>()).OrderBy(i => i);
+        return !xc.SequenceEqual(yc);
+    }
 
     // Auto SD/HD policy (Phase 12.2): mainstream only when a single tile fills
     // the view (1×1 layout) and the user hasn't disabled the feature; otherwise

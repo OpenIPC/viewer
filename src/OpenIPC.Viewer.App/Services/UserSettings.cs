@@ -32,7 +32,10 @@ public sealed record UserSettings(
     bool SshStrictHostKey = true,
     int SshDefaultPort = 22,
     int SshTerminalFontSize = 14,
-    string MajesticConfigPath = "/etc/majestic.yaml")
+    string MajesticConfigPath = "/etc/majestic.yaml",
+    // Local AI analytics (Phase 15.2). "auto" lets the detector pick the
+    // platform execution provider with a CPU fallback; "force-cpu" pins CPU.
+    string AiAcceleration = "auto")
 {
     public static UserSettings Default => new();
 }

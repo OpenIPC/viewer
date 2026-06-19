@@ -1,4 +1,5 @@
 using System;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Core.Entities;
@@ -16,4 +17,6 @@ public sealed record UpdateCameraRequest(
     // SSH device suite (Phase 13). Null SshCredentials keeps the stored SSH
     // login untouched (mirrors how null Credentials keeps the main login).
     CameraCredentials? SshCredentials = null,
-    int? SshPort = null);
+    int? SshPort = null,
+    // Null keeps the stored analytics config untouched.
+    AnalyticsSettings? Analytics = null);

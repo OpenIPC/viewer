@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Video;
@@ -47,13 +48,15 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 RtspMainUri, RtspSubUri, UsernameRef, PasswordRef,
                 OnvifEnabled, OnvifProfileToken, ChipModel, FirmwareVersion,
                 IncludedInGrid, HasPtz, IsMajestic, SortOrder, CreatedAt, UpdatedAt,
-                StreamQualityOverride, SshPort)
+                StreamQualityOverride, SshPort,
+                AiEnabled, AiClasses, AiThreshold, AiFps, AiAutoRecord, AiPostEventSeconds)
             VALUES (
                 @Id, @GroupId, @Name, @Host, @OnvifPort, @HttpPort,
                 @RtspMainUri, @RtspSubUri, @UsernameRef, @PasswordRef,
                 @OnvifEnabled, @OnvifProfileToken, @ChipModel, @FirmwareVersion,
                 @IncludedInGrid, @HasPtz, @IsMajestic, @SortOrder, @CreatedAt, @UpdatedAt,
-                @StreamQualityOverride, @SshPort);
+                @StreamQualityOverride, @SshPort,
+                @AiEnabled, @AiClasses, @AiThreshold, @AiFps, @AiAutoRecord, @AiPostEventSeconds);
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -86,7 +89,13 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 SortOrder          = @SortOrder,
                 UpdatedAt          = @UpdatedAt,
                 StreamQualityOverride = @StreamQualityOverride,
-                SshPort            = @SshPort
+                SshPort            = @SshPort,
+                AiEnabled          = @AiEnabled,
+                AiClasses          = @AiClasses,
+                AiThreshold        = @AiThreshold,
+                AiFps              = @AiFps,
+                AiAutoRecord       = @AiAutoRecord,
+                AiPostEventSeconds = @AiPostEventSeconds
             WHERE Id = @Id;
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
@@ -144,7 +153,14 @@ public sealed class SqliteCameraRepository : ICameraRepository
         CreatedAt: DateTime.Parse(row.CreatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
         UpdatedAt: DateTime.Parse(row.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
         StreamQualityOverride: (StreamQualityOverride)row.StreamQualityOverride,
-        SshPort: row.SshPort is null ? null : (int)row.SshPort.Value);
+        SshPort: row.SshPort is null ? null : (int)row.SshPort.Value,
+        Analytics: new AnalyticsSettings(
+            Enabled: row.AiEnabled != 0,
+            ClassIds: ParseClassIds(row.AiClasses),
+            ConfidenceThreshold: (float)row.AiThreshold,
+            AnalyticsFps: row.AiFps,
+            AutoRecord: row.AiAutoRecord != 0,
+            PostEventSeconds: row.AiPostEventSeconds));
 
     private static object ToRow(Camera c) => new
     {
@@ -170,7 +186,29 @@ public sealed class SqliteCameraRepository : ICameraRepository
         UpdatedAt = c.UpdatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
         StreamQualityOverride = (int)c.StreamQualityOverride,
         c.SshPort,
+        AiEnabled = c.AnalyticsOrDefault.Enabled ? 1 : 0,
+        AiClasses = FormatClassIds(c.AnalyticsOrDefault.ClassIds),
+        AiThreshold = c.AnalyticsOrDefault.ConfidenceThreshold,
+        AiFps = c.AnalyticsOrDefault.AnalyticsFps,
+        AiAutoRecord = c.AnalyticsOrDefault.AutoRecord ? 1 : 0,
+        AiPostEventSeconds = c.AnalyticsOrDefault.PostEventSeconds,
     };
+
+    // AiClasses is a CSV of COCO class ids; null/empty means "all classes".
+    private static IReadOnlyCollection<int>? ParseClassIds(string? csv)
+    {
+        if (string.IsNullOrWhiteSpace(csv)) return null;
+        var ids = new List<int>();
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                ids.Add(id);
+        }
+        return ids.Count == 0 ? null : ids;
+    }
+
+    private static string? FormatClassIds(IReadOnlyCollection<int>? ids) =>
+        ids is { Count: > 0 } ? string.Join(',', ids) : null;
 
     private sealed class CameraRow
     {
@@ -196,5 +234,11 @@ public sealed class SqliteCameraRepository : ICameraRepository
         public string UpdatedAt { get; init; } = default!;
         public int StreamQualityOverride { get; init; }
         public long? SshPort { get; init; }
+        public int AiEnabled { get; init; }
+        public string? AiClasses { get; init; }
+        public double AiThreshold { get; init; }
+        public int AiFps { get; init; }
+        public int AiAutoRecord { get; init; }
+        public int AiPostEventSeconds { get; init; }
     }
 }

@@ -20,4 +20,12 @@ public interface IMotionEventSource
     IDisposable Watch(CameraId cameraId, IObserver<MotionTick> observer, CancellationToken ct);
 }
 
-public readonly record struct MotionTick(CameraId CameraId, DateTime At, string Source);
+// Kind/Summary default to a plain motion tick; analytics sources set Kind to
+// Detection and Summary to the class counts (Phase 15.7) so the same ingestion
+// path produces both motion and detection events.
+public readonly record struct MotionTick(
+    CameraId CameraId,
+    DateTime At,
+    string Source,
+    EventKind Kind = EventKind.Motion,
+    string? Summary = null);

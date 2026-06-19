@@ -68,11 +68,13 @@ public sealed class EventIngestionService : IAsyncDisposable
         {
             if (!_open.TryGetValue(tick.CameraId, out state))
             {
-                state = new OpenEventState(EventId.New(), tick.CameraId, tick.At, tick.Source);
+                state = new OpenEventState(EventId.New(), tick.CameraId, tick.At, tick.Source, tick.Kind);
                 _open[tick.CameraId] = state;
                 isNew = true;
             }
             state.LastTickAt = tick.At;
+            // Latest tick's summary wins (e.g. peak class counts during the episode).
+            if (tick.Summary is not null) state.Summary = tick.Summary;
             state.QuietTimer?.Change(CloseAfterQuiet, Timeout.InfiniteTimeSpan);
             state.QuietTimer ??= new Timer(CloseQuietState, state, CloseAfterQuiet, Timeout.InfiniteTimeSpan);
         }
@@ -86,12 +88,12 @@ public sealed class EventIngestionService : IAsyncDisposable
         var ev = new CameraEvent(
             Id: state.EventId,
             CameraId: state.CameraId,
-            Kind: EventKind.Motion,
+            Kind: state.Kind,
             Severity: EventSeverity.Info,
             OccurredAt: state.StartedAt,
             EndedAt: null,
             Source: state.Source,
-            Summary: null);
+            Summary: state.Summary);
         try { await _repo.AddAsync(ev, CancellationToken.None).ConfigureAwait(false); }
         catch { /* surface via finalize event instead — swallow here */ }
 
@@ -122,12 +124,12 @@ public sealed class EventIngestionService : IAsyncDisposable
         var finalized = new CameraEvent(
             Id: state.EventId,
             CameraId: state.CameraId,
-            Kind: EventKind.Motion,
+            Kind: state.Kind,
             Severity: EventSeverity.Info,
             OccurredAt: state.StartedAt,
             EndedAt: state.LastTickAt,
             Source: state.Source,
-            Summary: null);
+            Summary: state.Summary);
         try { await _repo.UpdateAsync(finalized, CancellationToken.None).ConfigureAwait(false); }
         catch { /* swallow */ }
 
@@ -169,15 +171,18 @@ public sealed class EventIngestionService : IAsyncDisposable
         public DateTime StartedAt { get; }
         public DateTime LastTickAt { get; set; }
         public string? Source { get; }
+        public EventKind Kind { get; }
+        public string? Summary { get; set; }
         public Timer? QuietTimer { get; set; }
 
-        public OpenEventState(EventId id, CameraId cam, DateTime started, string? source)
+        public OpenEventState(EventId id, CameraId cam, DateTime started, string? source, EventKind kind)
         {
             EventId = id;
             CameraId = cam;
             StartedAt = started;
             LastTickAt = started;
             Source = source;
+            Kind = kind;
         }
     }
 
