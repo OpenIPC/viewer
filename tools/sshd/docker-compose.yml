@@ -1,0 +1,19 @@
+# Test sshd for the SSH device-suite integration tests (phase-13 §13.6).
+#   docker compose -f tools/sshd/docker-compose.yml up -d
+#   dotnet test tests/OpenIPC.Viewer.Infrastructure.Tests
+#   docker compose -f tools/sshd/docker-compose.yml down
+#
+# Credentials/port are mirrored in SshdFixture. OpenSSH here ships scp + the
+# usual coreutils, enough to exercise exec/list/scp/mkdir/delete round-trips.
+services:
+  sshd:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - PASSWORD_ACCESS=true
+      - USER_NAME=tester
+      - USER_PASSWORD=testpass
+      - SUDO_ACCESS=false
+    ports:
+      - "2222:2222"
