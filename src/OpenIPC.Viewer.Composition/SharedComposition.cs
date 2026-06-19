@@ -110,6 +110,7 @@ public static class SharedComposition
         services.AddSingleton<GridPageViewModel>();
         services.AddSingleton<CameraLibraryPageViewModel>();
         services.AddSingleton<RecordingsPageViewModel>();
+        services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
 

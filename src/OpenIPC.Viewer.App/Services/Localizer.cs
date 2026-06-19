@@ -290,6 +290,21 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Snapshot.SaveAsTitle"] = "Save snapshot",
 
+        ["Snapshots.Title"] = "Snapshots",
+        ["Snapshots.AllCameras"] = "All cameras",
+        ["Snapshots.PresetAll"] = "All",
+        ["Snapshots.PresetToday"] = "Today",
+        ["Snapshots.Preset7"] = "7 days",
+        ["Snapshots.Preset30"] = "30 days",
+        ["Snapshots.SortNewest"] = "Newest first",
+        ["Snapshots.SortOldest"] = "Oldest first",
+        ["Snapshots.Empty"] = "No snapshots yet",
+        ["Snapshots.LoadError"] = "Couldn't load snapshots",
+        ["Snapshots.SelectedFormat"] = "{0} selected",
+        ["Snapshots.Dialog.DeleteTitle"] = "Delete snapshots",
+        ["Snapshots.Dialog.DeleteOneMessage"] = "Delete this snapshot? This can't be undone.",
+        ["Snapshots.Dialog.DeleteManyMessageFormat"] = "Delete {0} snapshots? This can't be undone.",
+
         ["Grid.EmptySlot"] = "no camera",
         ["Tile.Snapshot"] = "Snapshot (HD)",
 
@@ -542,6 +557,21 @@ public sealed class Localizer : INotifyPropertyChanged
         ["CameraPage.Tooltip.RemovePreset"] = "Удалить пресет",
 
         ["Snapshot.SaveAsTitle"] = "Сохранить снимок",
+
+        ["Snapshots.Title"] = "Снимки",
+        ["Snapshots.AllCameras"] = "Все камеры",
+        ["Snapshots.PresetAll"] = "Все",
+        ["Snapshots.PresetToday"] = "Сегодня",
+        ["Snapshots.Preset7"] = "7 дней",
+        ["Snapshots.Preset30"] = "30 дней",
+        ["Snapshots.SortNewest"] = "Сначала новые",
+        ["Snapshots.SortOldest"] = "Сначала старые",
+        ["Snapshots.Empty"] = "Снимков пока нет",
+        ["Snapshots.LoadError"] = "Не удалось загрузить снимки",
+        ["Snapshots.SelectedFormat"] = "Выбрано: {0}",
+        ["Snapshots.Dialog.DeleteTitle"] = "Удаление снимков",
+        ["Snapshots.Dialog.DeleteOneMessage"] = "Удалить этот снимок? Действие необратимо.",
+        ["Snapshots.Dialog.DeleteManyMessageFormat"] = "Удалить снимков: {0}? Действие необратимо.",
 
         ["Grid.EmptySlot"] = "нет камеры",
         ["Tile.Snapshot"] = "Снимок (HD)",

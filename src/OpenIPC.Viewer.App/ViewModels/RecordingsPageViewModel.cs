@@ -14,6 +14,8 @@ using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
+public enum MediaTab { Recordings, Snapshots }
+
 public sealed partial class RecordingsPageViewModel : ViewModelBase
 {
     private readonly IRecordingRepository _repo;
@@ -22,6 +24,23 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     private readonly ILogger<RecordingsPageViewModel> _logger;
 
     public string Title => Localizer.Instance["Nav.Recordings"];
+
+    // Phase 14: the Recordings page doubles as the captured-media browser. A
+    // segmented header flips between the recordings list and the snapshot
+    // gallery; the snapshot tab loads lazily on first view.
+    public SnapshotBrowserPageViewModel Snapshots { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRecordings))]
+    [NotifyPropertyChangedFor(nameof(ShowSnapshots))]
+    [NotifyPropertyChangedFor(nameof(IsRecordingsTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsSnapshotsTabActive))]
+    private MediaTab _selectedTab = MediaTab.Recordings;
+
+    public bool ShowRecordings => SelectedTab == MediaTab.Recordings;
+    public bool ShowSnapshots => SelectedTab == MediaTab.Snapshots;
+    public bool IsRecordingsTabActive => SelectedTab == MediaTab.Recordings;
+    public bool IsSnapshotsTabActive => SelectedTab == MediaTab.Snapshots;
 
     public ObservableCollection<RecordingRowViewModel> Items { get; } = new();
 
@@ -47,12 +66,25 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         IRecordingRepository repo,
         CameraDirectoryService cameras,
         IDialogService dialogs,
+        SnapshotBrowserPageViewModel snapshots,
         ILogger<RecordingsPageViewModel> logger)
     {
         _repo = repo;
         _cameras = cameras;
         _dialogs = dialogs;
+        Snapshots = snapshots;
         _logger = logger;
+    }
+
+    [RelayCommand]
+    private void SelectRecordings() => SelectedTab = MediaTab.Recordings;
+
+    [RelayCommand]
+    private async Task SelectSnapshotsAsync()
+    {
+        SelectedTab = MediaTab.Snapshots;
+        if (!Snapshots.IsLoaded && !Snapshots.IsLoading)
+            await Snapshots.LoadAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     public async Task LoadAsync(CancellationToken ct)
