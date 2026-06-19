@@ -172,6 +172,15 @@
                           Foreground="{StaticResource TextPrimaryBrush}"
                           Command="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).OpenWebInterfaceCommand}"
                           CommandParameter="{Binding}" />
+                  <Button Content="{Binding [Library.RowSsh], Source={x:Static svc:Localizer.Instance}}"
+                          Padding="10,6"
+                          Background="Transparent"
+                          BorderBrush="{StaticResource BorderMediumBrush}"
+                          BorderThickness="1"
+                          CornerRadius="6"
+                          Foreground="{StaticResource TextPrimaryBrush}"
+                          Command="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).OpenSshTerminalCommand}"
+                          CommandParameter="{Binding}" />
                   <Button Content="{Binding [Library.RowEdit], Source={x:Static svc:Localizer.Instance}}"
                           Padding="10,6"
                           Background="Transparent"

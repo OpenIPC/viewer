@@ -188,6 +188,22 @@ public sealed class DialogService : IDialogService
         return dlg.ShowDialog<string?>(owner);
     }
 
+    public async Task OpenSshTerminalAsync(ViewModels.SshTerminalViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new SshTerminalContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            return;
+        }
+
+        var owner = ResolveOwner();
+        // Non-modal: the user keeps the live view usable while a terminal is open.
+        var window = new SshTerminalWindow { DataContext = viewModel };
+        if (owner is null) window.Show();
+        else window.Show(owner);
+    }
+
     public async Task<bool> OpenUrlAsync(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))

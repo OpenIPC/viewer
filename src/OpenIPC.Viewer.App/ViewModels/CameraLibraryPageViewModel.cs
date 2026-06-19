@@ -21,6 +21,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly CameraEditorFactory _editorFactory;
     private readonly DiscoveryDialogFactory _discoveryFactory;
+    private readonly SshTerminalFactory _terminalFactory;
     private readonly ILogger<CameraLibraryPageViewModel> _logger;
 
     public string Title => Localizer.Instance["Library.Title"];
@@ -59,6 +60,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         CameraEditorFactory editorFactory,
         DiscoveryDialogFactory discoveryFactory,
         ManageGroupsDialogFactory manageGroupsFactory,
+        SshTerminalFactory terminalFactory,
         UserSettingsService userSettings,
         IDiscoveryService discovery,
         IReachabilityProbe reachability,
@@ -68,6 +70,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _dialogs = dialogs;
         _editorFactory = editorFactory;
         _discoveryFactory = discoveryFactory;
+        _terminalFactory = terminalFactory;
         _manageGroupsFactory = manageGroupsFactory;
         _userSettings = userSettings;
         _discovery = discovery;
@@ -380,6 +383,15 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         var url = row.Camera.WebInterfaceUrl;
         if (!await _dialogs.OpenUrlAsync(url).ConfigureAwait(true))
             _logger.LogWarning("Failed to open web interface for {CameraId} at {Url}", row.Camera.Id, url);
+    }
+
+    [RelayCommand]
+    private async Task OpenSshTerminalAsync(CameraRowViewModel? row)
+    {
+        if (row is null)
+            return;
+        var vm = _terminalFactory.Create(row.Camera);
+        await _dialogs.OpenSshTerminalAsync(vm).ConfigureAwait(true);
     }
 
     [RelayCommand]
