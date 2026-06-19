@@ -15,6 +15,9 @@ public interface IAnalyticsEngine : IAsyncDisposable
     bool IsReady { get; }
     ExecutionProvider ActiveProvider { get; }
 
+    // Coarse lifecycle for the control-center status line (Phase 15.7).
+    AnalyticsEngineStatus Status { get; }
+
     IObservable<DetectionResult> Results { get; }
     AnalyticsDiagnostics Diagnostics { get; }
 

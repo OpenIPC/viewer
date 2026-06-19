@@ -32,15 +32,17 @@
           <StackPanel Spacing="10">
             <TextBlock Text="{Binding [Analytics.Overview], Source={x:Static svc:Localizer.Instance}}"
                        FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" >
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Analytics.Provider], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ActiveProvider}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Analytics.ActiveCameras], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveCameras}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Analytics.Processed], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FramesProcessed}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [Analytics.Dropped], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FramesDropped}" Foreground="{StaticResource TextPrimaryBrush}" />
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Analytics.Status], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding EngineStatus}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="Medium" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Analytics.Provider], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveProvider}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Analytics.ActiveCameras], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveCameras}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [Analytics.Processed], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FramesProcessed}" Foreground="{StaticResource TextPrimaryBrush}" />
+              <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [Analytics.Dropped], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FramesDropped}" Foreground="{StaticResource TextPrimaryBrush}" />
             </Grid>
             <Grid ColumnDefinitions="*,*">
               <TextBlock Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}">

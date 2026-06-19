@@ -29,6 +29,7 @@ public sealed partial class AnalyticsPageViewModel : ViewModelBase
     public string Title => Localizer.Instance["Nav.Analytics"];
 
     [ObservableProperty] private bool _engineReady;
+    [ObservableProperty] private string _engineStatus = "";
     [ObservableProperty] private string _activeProvider = "—";
     [ObservableProperty] private long _framesProcessed;
     [ObservableProperty] private long _framesDropped;
@@ -101,6 +102,7 @@ public sealed partial class AnalyticsPageViewModel : ViewModelBase
     {
         var d = _engine.Diagnostics;
         EngineReady = _engine.IsReady;
+        EngineStatus = StatusLabel(_engine.Status);
         ActiveProvider = _engine.ActiveProvider.ToString();
         FramesProcessed = d.FramesProcessed;
         FramesDropped = d.FramesDropped;
@@ -108,6 +110,15 @@ public sealed partial class AnalyticsPageViewModel : ViewModelBase
         AverageLatencyMs = d.AverageLatencyMs;
         ActiveCameras = d.ActiveCameras;
     }
+
+    private static string StatusLabel(AnalyticsEngineStatus status) => status switch
+    {
+        AnalyticsEngineStatus.Preparing => Localizer.Instance["Analytics.Status.Preparing"],
+        AnalyticsEngineStatus.Loading => Localizer.Instance["Analytics.Status.Loading"],
+        AnalyticsEngineStatus.Ready => Localizer.Instance["Analytics.Status.Ready"],
+        AnalyticsEngineStatus.Failed => Localizer.Instance["Analytics.Status.Failed"],
+        _ => Localizer.Instance["Analytics.Status.NotStarted"],
+    };
 
     private static string ClassesSummary(IReadOnlyCollection<int>? ids)
     {

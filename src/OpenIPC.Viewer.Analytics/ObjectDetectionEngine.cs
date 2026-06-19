@@ -56,6 +56,7 @@ public sealed class ObjectDetectionEngine : IAnalyticsEngine
 
     public bool IsReady => _detector.IsLoaded;
     public ExecutionProvider ActiveProvider => _detector.ActiveProvider;
+    public AnalyticsEngineStatus Status { get; private set; } = AnalyticsEngineStatus.NotStarted;
     public IObservable<DetectionResult> Results => _results;
 
     public AnalyticsDiagnostics Diagnostics
@@ -83,11 +84,19 @@ public sealed class ObjectDetectionEngine : IAnalyticsEngine
         try
         {
             if (_initialized) return;
+            Status = AnalyticsEngineStatus.Preparing;
             var spec = await _modelProvider.EnsureModelAsync(ct).ConfigureAwait(false);
+            Status = AnalyticsEngineStatus.Loading;
             await _detector.LoadAsync(spec, acceleration, ct).ConfigureAwait(false);
             _worker = Task.Run(() => WorkerLoopAsync(_shutdown.Token));
             _initialized = true;
+            Status = AnalyticsEngineStatus.Ready;
             _log.LogInformation("Analytics engine ready on {Provider}.", _detector.ActiveProvider);
+        }
+        catch
+        {
+            Status = AnalyticsEngineStatus.Failed;
+            throw;
         }
         finally
         {
