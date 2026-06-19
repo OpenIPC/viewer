@@ -94,6 +94,8 @@ public static class SharedComposition
         // Events
         services.AddSingleton<ManualMotionEventSource>();
         services.AddSingleton<IMotionEventSource>(sp => sp.GetRequiredService<ManualMotionEventSource>());
+        // AI detections feed the same ingestion path as motion (Phase 15.7).
+        services.AddSingleton<IMotionEventSource, AnalyticsMotionEventSource>();
         services.AddSingleton<EventIngestionService>();
 
         // UI services
