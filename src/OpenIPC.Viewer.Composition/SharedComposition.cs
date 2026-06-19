@@ -86,6 +86,8 @@ public static class SharedComposition
         // Auto-record on detection (Phase 15.6). Started by the App analytics
         // bootstrap once the engine is initialized.
         services.AddSingleton<OpenIPC.Viewer.Core.Analytics.AutoRecordCoordinator>();
+        // Lazily initializes the engine on first analytics-enabled tile (15.4).
+        services.AddSingleton<AnalyticsBootstrap>();
 
         // Recording lifecycle (IRecorder itself is registered by the platform
         // host — FFmpeg subprocess on desktop, FFmpegKit on Android, etc).

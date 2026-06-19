@@ -75,10 +75,22 @@
                           PointerPressed="OnTilePointerPressed">
                       <controls:RtspVideoView Session="{Binding Session}" />
 
+                      <!-- AI detection boxes (Phase 15.5), above the video. -->
+                      <controls:DetectionOverlay Detections="{Binding Detections}"
+                                                 ShowBoxes="{Binding AnalyticsEnabled}"
+                                                 IsHitTestVisible="False" />
+
                       <!-- Top-left: name -->
                       <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
                               Background="#90000000" CornerRadius="3" Padding="6,2">
                         <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="Medium" />
+                      </Border>
+
+                      <!-- Bottom-center: object counter -->
+                      <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="8"
+                              Background="#90000000" CornerRadius="3" Padding="6,2"
+                              IsVisible="{Binding HasDetections}">
+                        <TextBlock Text="{Binding DetectionCounter}" Foreground="White" FontSize="11" FontWeight="Medium" />
                       </Border>
 
                       <!-- Top-right: state badge -->

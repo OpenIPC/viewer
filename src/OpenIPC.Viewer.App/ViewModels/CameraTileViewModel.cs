@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +10,9 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Events;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Video;
@@ -22,6 +25,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly CameraDirectoryService _directory;
     private readonly UserSettingsService _userSettings;
     private readonly ISnapshotService _snapshots;
+    private readonly IAnalyticsEngine _analytics;
+    private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly ILogger<CameraTileViewModel> _logger;
 
     // Auto SD/HD (Phase 12.2): substream in the grid, mainstream when a single
@@ -31,8 +36,10 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private StreamQuality _quality = StreamQuality.Sub;
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
+    private IDisposable? _resultsSub;
     private bool _started;
     private bool _disposed;
+    private bool _suspended;
 
     public Camera Camera { get; }
 
@@ -53,6 +60,20 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ErrorDetail))]
     private string? _errorMessage;
+
+    // Latest detections for this tile (Phase 15.5), normalized 0..1 boxes drawn
+    // by the DetectionOverlay control. Updated off the inference worker thread.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetectionCounter))]
+    [NotifyPropertyChangedFor(nameof(HasDetections))]
+    private IReadOnlyList<Detection> _detections = Array.Empty<Detection>();
+
+    public bool AnalyticsEnabled => Camera.AnalyticsOrDefault.Enabled;
+
+    // Bottom-center counter badge, e.g. "person ×2, car ×1".
+    public string DetectionCounter => AnalyticsMotionEventSource.Summarize(Detections);
+
+    public bool HasDetections => AnalyticsEnabled && Detections.Count > 0;
 
     public string Name => Camera.Name;
     public string StateLabel => State switch
@@ -116,6 +137,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         CameraDirectoryService directory,
         UserSettingsService userSettings,
         ISnapshotService snapshots,
+        IAnalyticsEngine analytics,
+        AnalyticsBootstrap analyticsBootstrap,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
@@ -123,9 +146,17 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _directory = directory;
         _userSettings = userSettings;
         _snapshots = snapshots;
+        _analytics = analytics;
+        _analyticsBootstrap = analyticsBootstrap;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
+
+        // Always listen for results for this camera; they only arrive while the
+        // tile is attached + the engine is ready, so this is cheap otherwise.
+        _resultsSub = _analytics.Results
+            .Where(r => r.CameraId == Camera.Id)
+            .Subscribe(r => Dispatcher.UIThread.Post(() => Detections = r.Detections));
     }
 
     // Set the stream quality before the first ActivateAsync. No-op once started
@@ -145,6 +176,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         if (_disposed || quality == _quality) return;
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        DetachAnalytics();
         if (Session is not null)
         {
             Session = null;
@@ -188,12 +220,35 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
 
             if (session.State == SessionState.Idle)
                 await session.StartAsync(ct).ConfigureAwait(true);
+
+            AttachAnalytics(session);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to start tile session for camera {Id}", Camera.Id);
             State = SessionState.Failed;
         }
+    }
+
+    // Tap this session's frames for object detection (Phase 15.3) when the
+    // camera has analytics on. Kicks the engine bootstrap (model load) in the
+    // background; frames are dropped until it's ready. isActive gates analytics
+    // off for a Smart-Paused / non-playing tile.
+    private void AttachAnalytics(IVideoSession session)
+    {
+        if (!Camera.AnalyticsOrDefault.Enabled) return;
+        _ = _analyticsBootstrap.EnsureStartedAsync();
+        _analytics.Attach(
+            Camera.Id,
+            session.Frames,
+            () => Camera.AnalyticsOrDefault,
+            () => !_suspended && State == SessionState.Playing);
+    }
+
+    private void DetachAnalytics()
+    {
+        _analytics.Detach(Camera.Id);
+        Detections = Array.Empty<Detection>();
     }
 
     // Coordinator dropped every cached session (e.g. RtspTransport flipped in
@@ -209,6 +264,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
             {
                 _stateSub?.Dispose();
                 _telemetrySub?.Dispose();
+                DetachAnalytics();
                 Session = null;
                 State = SessionState.Idle;
                 _started = false;
@@ -261,6 +317,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         ErrorMessage = null;
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        DetachAnalytics();
         if (Session is not null)
         {
             Session = null;
@@ -278,9 +335,20 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         WeakReferenceMessenger.Default.Send(new CloseTileMessage(Camera.Id));
 
     // Smart Pause (Phase 12.1): suspend/resume decode without dropping the
-    // session, so the last frame stays frozen for an instant resume.
-    public void Pause() => Session?.PauseDecode();
-    public void Resume() => Session?.Resume();
+    // session, so the last frame stays frozen for an instant resume. Analytics
+    // pauses with the tile (12.1 ↔ 15.3) — isActive reads _suspended.
+    public void Pause()
+    {
+        _suspended = true;
+        Session?.PauseDecode();
+        Detections = Array.Empty<Detection>();
+    }
+
+    public void Resume()
+    {
+        _suspended = false;
+        Session?.Resume();
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -288,6 +356,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _resultsSub?.Dispose();
+        DetachAnalytics();
         if (Session is not null)
         {
             Session = null;
