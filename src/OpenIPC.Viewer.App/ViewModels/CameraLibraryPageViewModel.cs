@@ -389,7 +389,8 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
             return;
 
         var creds = await _directory.GetCredentialsAsync(row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
-        var editor = _editorFactory.CreateForEdit(row.Camera, creds);
+        var sshCreds = await _directory.GetSshCredentialsAsync(row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
+        var editor = _editorFactory.CreateForEdit(row.Camera, creds, sshCreds);
         var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
         if (result?.UpdateRequest is not { } req)
             return;

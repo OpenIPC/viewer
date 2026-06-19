@@ -37,6 +37,12 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private CameraGroup? _selectedGroup;
 
+    // SSH device suite (Phase 13). Blank SSH fields = reuse the main login;
+    // blank port = default 22.
+    [ObservableProperty] private string _sshUsername = "";
+    [ObservableProperty] private string _sshPassword = "";
+    [ObservableProperty] private string _sshPortText = "";
+
     // Per-camera SD/HD override (Phase 12.2).
     public IReadOnlyList<StreamQualityOption> StreamQualityOptions { get; } = new[]
     {
@@ -70,7 +76,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         SelectedStreamQuality = StreamQualityOptions[0]; // Auto
     }
 
-    public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
+    public CameraEditorViewModel(Camera existing, CameraCredentials? credentials, CameraCredentials? sshCredentials, IVideoEngine engine, CameraDirectoryService directory, UserSettingsService userSettings, ILogger<CameraEditorViewModel> logger)
         : this(engine, directory, userSettings, logger)
     {
         EditingId = existing.Id;
@@ -82,6 +88,9 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         RtspSubText = existing.RtspSubUri?.ToString() ?? "";
         Username = credentials?.Username ?? "";
         Password = credentials?.Password ?? "";
+        SshUsername = sshCredentials?.Username ?? "";
+        SshPassword = sshCredentials?.Password ?? "";
+        SshPortText = existing.SshPort?.ToString() ?? "";
         _pendingGroupId = existing.GroupId;
         SelectedStreamQuality = StreamQualityOptions.FirstOrDefault(o => o.Value == existing.StreamQualityOverride)
             ?? StreamQualityOptions[0];
@@ -116,7 +125,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     {
         if (_engine is null) return;
 
-        if (!TryValidate(out _, out var rtspMain, out _, out _))
+        if (!TryValidate(out _, out var rtspMain, out _, out _, out _))
         {
             TestStatus = ErrorMessage;
             return;
@@ -164,12 +173,18 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         newRequest = null;
         updateRequest = null;
 
-        if (!TryValidate(out var ok, out var rtspMain, out var rtspSub, out var onvifPort))
+        if (!TryValidate(out var ok, out var rtspMain, out var rtspSub, out var onvifPort, out var sshPort))
             return false;
 
         var credentials = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
             ? null
             : new CameraCredentials(Username, Password);
+
+        // Built only when both SSH fields are set; the both-or-neither rule is
+        // enforced in TryValidate so we never store a half credential.
+        var sshCredentials = string.IsNullOrEmpty(SshUsername) && string.IsNullOrEmpty(SshPassword)
+            ? null
+            : new CameraCredentials(SshUsername, SshPassword);
 
         var quality = SelectedStreamQuality?.Value ?? StreamQualityOverride.Auto;
 
@@ -184,7 +199,9 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 RtspSubUri: rtspSub,
                 Credentials: credentials,
                 GroupId: SelectedGroup?.Id,
-                StreamQualityOverride: quality);
+                StreamQualityOverride: quality,
+                SshCredentials: sshCredentials,
+                SshPort: sshPort);
         }
         else
         {
@@ -197,18 +214,21 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 RtspSubUri: rtspSub,
                 Credentials: credentials,
                 GroupId: SelectedGroup?.Id,
-                StreamQualityOverride: quality);
+                StreamQualityOverride: quality,
+                SshCredentials: sshCredentials,
+                SshPort: sshPort);
         }
 
         return ok;
     }
 
-    private bool TryValidate(out bool ok, out Uri rtspMain, out Uri? rtspSub, out int? onvifPort)
+    private bool TryValidate(out bool ok, out Uri rtspMain, out Uri? rtspSub, out int? onvifPort, out int? sshPort)
     {
         ok = false;
         rtspMain = default!;
         rtspSub = null;
         onvifPort = null;
+        sshPort = null;
         ErrorMessage = null;
 
         if (string.IsNullOrWhiteSpace(Name))
@@ -254,6 +274,23 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         if (HttpPort < 1 || HttpPort > 65535)
         {
             ErrorMessage = Localizer.Instance["CameraEditor.Error.HttpPortInvalid"];
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SshPortText))
+        {
+            if (!int.TryParse(SshPortText.Trim(), out var sp) || sp < 1 || sp > 65535)
+            {
+                ErrorMessage = Localizer.Instance["CameraEditor.Error.SshPortInvalid"];
+                return false;
+            }
+            sshPort = sp;
+        }
+
+        // SSH login is password-based here — both fields, or neither.
+        if (string.IsNullOrEmpty(SshUsername) != string.IsNullOrEmpty(SshPassword))
+        {
+            ErrorMessage = Localizer.Instance["CameraEditor.Error.SshCredsIncomplete"];
             return false;
         }
 

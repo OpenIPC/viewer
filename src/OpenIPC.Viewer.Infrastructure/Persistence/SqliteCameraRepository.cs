@@ -47,13 +47,13 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 RtspMainUri, RtspSubUri, UsernameRef, PasswordRef,
                 OnvifEnabled, OnvifProfileToken, ChipModel, FirmwareVersion,
                 IncludedInGrid, HasPtz, IsMajestic, SortOrder, CreatedAt, UpdatedAt,
-                StreamQualityOverride)
+                StreamQualityOverride, SshPort)
             VALUES (
                 @Id, @GroupId, @Name, @Host, @OnvifPort, @HttpPort,
                 @RtspMainUri, @RtspSubUri, @UsernameRef, @PasswordRef,
                 @OnvifEnabled, @OnvifProfileToken, @ChipModel, @FirmwareVersion,
                 @IncludedInGrid, @HasPtz, @IsMajestic, @SortOrder, @CreatedAt, @UpdatedAt,
-                @StreamQualityOverride);
+                @StreamQualityOverride, @SshPort);
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -85,7 +85,8 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 IsMajestic         = @IsMajestic,
                 SortOrder          = @SortOrder,
                 UpdatedAt          = @UpdatedAt,
-                StreamQualityOverride = @StreamQualityOverride
+                StreamQualityOverride = @StreamQualityOverride,
+                SshPort            = @SshPort
             WHERE Id = @Id;
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
@@ -142,7 +143,8 @@ public sealed class SqliteCameraRepository : ICameraRepository
         SortOrder: row.SortOrder,
         CreatedAt: DateTime.Parse(row.CreatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
         UpdatedAt: DateTime.Parse(row.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-        StreamQualityOverride: (StreamQualityOverride)row.StreamQualityOverride);
+        StreamQualityOverride: (StreamQualityOverride)row.StreamQualityOverride,
+        SshPort: row.SshPort is null ? null : (int)row.SshPort.Value);
 
     private static object ToRow(Camera c) => new
     {
@@ -167,6 +169,7 @@ public sealed class SqliteCameraRepository : ICameraRepository
         CreatedAt = c.CreatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
         UpdatedAt = c.UpdatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
         StreamQualityOverride = (int)c.StreamQualityOverride,
+        c.SshPort,
     };
 
     private sealed class CameraRow
@@ -192,5 +195,6 @@ public sealed class SqliteCameraRepository : ICameraRepository
         public string CreatedAt { get; init; } = default!;
         public string UpdatedAt { get; init; } = default!;
         public int StreamQualityOverride { get; init; }
+        public long? SshPort { get; init; }
     }
 }

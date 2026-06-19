@@ -89,6 +89,17 @@
           </StackPanel>
         </Grid>
 
+        <!-- SSH device suite (Phase 13). Optional — blank fields reuse the main
+             login and default port 22. -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.SshSection], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <Grid ColumnDefinitions="*,12,140">
+            <TextBox Grid.Column="0" Text="{Binding SshUsername, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.SshUser], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBox Grid.Column="2" Text="{Binding SshPortText, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.SshPort], Source={x:Static svc:Localizer.Instance}}" FontFamily="{StaticResource FontMono}" />
+          </Grid>
+          <TextBox Text="{Binding SshPassword, Mode=TwoWay}" PasswordChar="•" PlaceholderText="{Binding [CameraEditor.Placeholder.SshPassword], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+
         <StackPanel Spacing="6">
           <TextBlock Text="{Binding [CameraEditor.Label.Group], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
           <ComboBox ItemsSource="{Binding AvailableGroups}"

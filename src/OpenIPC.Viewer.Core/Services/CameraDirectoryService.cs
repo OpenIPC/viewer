@@ -48,6 +48,7 @@ public sealed class CameraDirectoryService
     {
         var id = CameraId.New();
         var (usernameRef, passwordRef) = await StoreCredentialsAsync(id, req.Credentials, ct).ConfigureAwait(false);
+        await StoreSshCredentialsAsync(id, req.SshCredentials, ct).ConfigureAwait(false);
 
         var now = DateTime.UtcNow;
         var camera = new Camera(
@@ -71,7 +72,8 @@ public sealed class CameraDirectoryService
             SortOrder: 0,
             CreatedAt: now,
             UpdatedAt: now,
-            StreamQualityOverride: req.StreamQualityOverride);
+            StreamQualityOverride: req.StreamQualityOverride,
+            SshPort: req.SshPort);
 
         return await _cameras.AddAsync(camera, ct).ConfigureAwait(false);
     }
@@ -85,6 +87,10 @@ public sealed class CameraDirectoryService
             ? (existing.UsernameRef, existing.PasswordRef)
             : await StoreCredentialsAsync(id, req.Credentials, ct).ConfigureAwait(false);
 
+        // Null SshCredentials = keep what's stored (mirrors main-credential handling).
+        if (req.SshCredentials is not null)
+            await StoreSshCredentialsAsync(id, req.SshCredentials, ct).ConfigureAwait(false);
+
         var updated = existing with
         {
             Name = req.Name,
@@ -97,6 +103,7 @@ public sealed class CameraDirectoryService
             PasswordRef = passwordRef,
             GroupId = req.GroupId,
             StreamQualityOverride = req.StreamQualityOverride,
+            SshPort = req.SshPort,
             UpdatedAt = DateTime.UtcNow,
         };
 
@@ -151,6 +158,8 @@ public sealed class CameraDirectoryService
     {
         await _secrets.RemoveAsync(UsernameKey(id), ct).ConfigureAwait(false);
         await _secrets.RemoveAsync(PasswordKey(id), ct).ConfigureAwait(false);
+        await _secrets.RemoveAsync(SshUsernameKey(id), ct).ConfigureAwait(false);
+        await _secrets.RemoveAsync(SshPasswordKey(id), ct).ConfigureAwait(false);
         await _cameras.RemoveAsync(id, ct).ConfigureAwait(false);
     }
 
@@ -161,6 +170,48 @@ public sealed class CameraDirectoryService
         if (username is null || password is null)
             return null;
         return new CameraCredentials(username, password);
+    }
+
+    /// <summary>
+    /// SSH-specific credentials, or null if none are stored. Does NOT fall back
+    /// to the main login — the editor uses this to decide whether to pre-fill
+    /// the SSH fields (blank = "reuse main login").
+    /// </summary>
+    public async Task<CameraCredentials?> GetSshCredentialsAsync(CameraId id, CancellationToken ct)
+    {
+        var username = await _secrets.GetAsync(SshUsernameKey(id), ct).ConfigureAwait(false);
+        var password = await _secrets.GetAsync(SshPasswordKey(id), ct).ConfigureAwait(false);
+        return username is not null && password is not null
+            ? new CameraCredentials(username, password)
+            : null;
+    }
+
+    /// <summary>
+    /// Builds the SSH connection target for a camera (Phase 13): SSH-specific
+    /// credentials if set, otherwise the main RTSP/ONVIF login (OpenIPC root
+    /// often matches). Returns null when no credentials exist at all — the
+    /// caller prompts rather than attempting an anonymous login.
+    /// </summary>
+    public async Task<Ssh.SshEndpoint?> GetSshEndpointAsync(Camera camera, CancellationToken ct)
+    {
+        var creds = await GetSshCredentialsAsync(camera.Id, ct).ConfigureAwait(false)
+                    ?? await GetCredentialsAsync(camera.Id, ct).ConfigureAwait(false);
+        if (creds is null)
+            return null;
+        return new Ssh.SshEndpoint(
+            camera.Host, camera.SshPortOrDefault, creds.Username, new Ssh.SshAuth.Password(creds.Password));
+    }
+
+    private async Task StoreSshCredentialsAsync(CameraId id, CameraCredentials? credentials, CancellationToken ct)
+    {
+        if (credentials is null)
+        {
+            await _secrets.RemoveAsync(SshUsernameKey(id), ct).ConfigureAwait(false);
+            await _secrets.RemoveAsync(SshPasswordKey(id), ct).ConfigureAwait(false);
+            return;
+        }
+        await _secrets.SetAsync(SshUsernameKey(id), credentials.Username, ct).ConfigureAwait(false);
+        await _secrets.SetAsync(SshPasswordKey(id), credentials.Password, ct).ConfigureAwait(false);
     }
 
     private async Task<(string? UsernameRef, string? PasswordRef)> StoreCredentialsAsync(
@@ -182,4 +233,6 @@ public sealed class CameraDirectoryService
 
     private static string UsernameKey(CameraId id) => $"cam:{id}:username";
     private static string PasswordKey(CameraId id) => $"cam:{id}:password";
+    private static string SshUsernameKey(CameraId id) => $"cam:{id}:ssh:username";
+    private static string SshPasswordKey(CameraId id) => $"cam:{id}:ssh:password";
 }
