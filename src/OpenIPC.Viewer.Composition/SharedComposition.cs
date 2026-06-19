@@ -89,6 +89,7 @@ public static class SharedComposition
         services.AddSingleton<ManageGroupsDialogFactory>();
         services.AddSingleton<SshTerminalFactory>();
         services.AddSingleton<FileManagerFactory>();
+        services.AddSingleton<ImageViewerFactory>();
 
         // User-tweakable settings (Phase 11). Side-effects (e.g. live Serilog
         // level switching) are wired by each platform composition after the

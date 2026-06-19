@@ -30,6 +30,7 @@ public sealed partial class SnapshotBrowserPageViewModel : ViewModelBase
     private readonly ISnapshotRepository _repo;
     private readonly CameraDirectoryService _cameras;
     private readonly IDialogService _dialogs;
+    private readonly ImageViewerFactory _viewerFactory;
     private readonly ILogger<SnapshotBrowserPageViewModel> _logger;
 
     // Guards the auto-reload that SelectedCamera's change handler triggers, so
@@ -81,11 +82,13 @@ public sealed partial class SnapshotBrowserPageViewModel : ViewModelBase
         ISnapshotRepository repo,
         CameraDirectoryService cameras,
         IDialogService dialogs,
+        ImageViewerFactory viewerFactory,
         ILogger<SnapshotBrowserPageViewModel> logger)
     {
         _repo = repo;
         _cameras = cameras;
         _dialogs = dialogs;
+        _viewerFactory = viewerFactory;
         _logger = logger;
     }
 
@@ -225,23 +228,21 @@ public sealed partial class SnapshotBrowserPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Open(SnapshotItemViewModel? item)
+    private async Task OpenAsync(SnapshotItemViewModel? item)
     {
-        // Placeholder until the in-app viewer (14.4) replaces this — opens with
-        // the OS image viewer on desktop.
-        if (item is null || string.IsNullOrEmpty(item.FilePath)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = item.FilePath,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Open snapshot failed");
-        }
+        if (item is null) return;
+        var start = Items.IndexOf(item);
+        if (start < 0) return;
+
+        var entries = Items
+            .Select(i => new SnapshotViewEntry(i.Snapshot, i.CameraName))
+            .ToList();
+        var vm = _viewerFactory.Create(entries, start);
+        await _dialogs.ShowImageViewerAsync(vm).ConfigureAwait(true);
+
+        // Deletions inside the viewer are reflected by reloading the gallery.
+        if (vm.AnyChanges)
+            await LoadAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     [RelayCommand]

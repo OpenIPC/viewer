@@ -8,6 +8,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
 using OpenIPC.Viewer.App.Views.Dialogs;
 
@@ -259,6 +260,34 @@ public sealed class DialogService : IDialogService
         var window = new FileManagerWindow { DataContext = viewModel };
         if (owner is null) window.Show();
         else window.Show(owner);
+    }
+
+    public async Task ShowImageViewerAsync(ViewModels.ImageViewerViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new ImageViewerContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, viewModel.Completion, fullScreen: true).ConfigureAwait(true);
+            viewModel.Cleanup();
+            return;
+        }
+
+        var owner = ResolveOwner();
+        var window = new ImageViewerWindow { DataContext = viewModel };
+        // Bridge both directions: the VM's Close command closes the window, and
+        // closing the window (X / Esc-less) completes the VM so the awaiter
+        // returns and cleanup runs.
+        _ = viewModel.Completion.ContinueWith(
+            _ => Dispatcher.UIThread.Post(window.Close),
+            TaskScheduler.Default);
+        window.Closing += (_, _) => viewModel.RequestClose();
+
+        if (owner is null)
+            window.Show();
+        else
+            await window.ShowDialog(owner).ConfigureAwait(true);
+
+        viewModel.Cleanup();
     }
 
     public async Task<bool> OpenUrlAsync(string url)

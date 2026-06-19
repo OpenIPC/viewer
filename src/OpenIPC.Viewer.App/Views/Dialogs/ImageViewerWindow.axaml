@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+        xmlns:dialogs="using:OpenIPC.Viewer.App.Views.Dialogs"
+        x:Class="OpenIPC.Viewer.App.Views.Dialogs.ImageViewerWindow"
+        x:DataType="vm:ImageViewerViewModel"
+        Title="{Binding CameraName}"
+        Width="900" Height="640"
+        WindowStartupLocation="CenterOwner"
+        Background="#0c0f14">
+
+  <dialogs:ImageViewerContent Name="InnerContent" />
+
+</Window>
