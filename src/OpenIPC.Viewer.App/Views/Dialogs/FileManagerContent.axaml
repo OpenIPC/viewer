@@ -4,7 +4,7 @@
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Dialogs.FileManagerContent"
              x:DataType="vm:FileManagerViewModel"
-             MinWidth="540" MinHeight="420"
+             MinWidth="300" MinHeight="360"
              Background="{StaticResource Bg1Brush}"
              FontFamily="{StaticResource FontSans}"
              FontSize="{StaticResource FontSizeBase}"

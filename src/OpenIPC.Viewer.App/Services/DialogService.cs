@@ -235,7 +235,7 @@ public sealed class DialogService : IDialogService
         if (OverlayDialogPresenter.IsMobile)
         {
             var content = new SshTerminalContent { DataContext = viewModel };
-            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion, fullScreen: true).ConfigureAwait(true);
             return;
         }
 
@@ -251,7 +251,7 @@ public sealed class DialogService : IDialogService
         if (OverlayDialogPresenter.IsMobile)
         {
             var content = new FileManagerContent { DataContext = viewModel };
-            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion, fullScreen: true).ConfigureAwait(true);
             return;
         }
 

@@ -5,7 +5,7 @@
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              x:Class="OpenIPC.Viewer.App.Views.Dialogs.SshTerminalContent"
              x:DataType="vm:SshTerminalViewModel"
-             MinWidth="520" MinHeight="360"
+             MinWidth="280" MinHeight="320"
              Background="#0c0f14">
 
   <Grid RowDefinitions="Auto,Auto,*">
