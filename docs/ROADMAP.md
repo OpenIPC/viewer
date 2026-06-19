@@ -38,7 +38,7 @@ Polish items still open before tagging the betas:
 - [ ] In-app auto-update (Velopack) + native installers
 - [ ] Code signing (Windows / macOS) and Play / TestFlight signing
 - [ ] F-Droid packaging
-- [ ] Snapshot share sheet
+- [x] Snapshot share sheet
 - [ ] Localization polish (English / Russian)
 
 > **Validation caveat.** Linux / macOS / Android / iOS code paths build and
@@ -55,7 +55,7 @@ and scope live in the planning docs (`dashboard-ideas-roadmap-ru.md`).
 |---|---|---|:---:|
 | 12 | Streaming hardening | Smart-pause hidden tiles, auto SD/HD, watchdog + backoff, last-frame hold, error tile | ✅ Done |
 | 13 | SSH device suite | SSH terminal, SCP file manager, open-in-browser, config push | ✅ Done |
-| 14 | Snapshots & viewer | Always-HD snapshot, snapshot browser, built-in viewer + basic editor | 📋 Planned |
+| 14 | Snapshots & viewer | Always-HD snapshot, snapshot browser, built-in viewer + basic editor | ✅ Done |
 | 15 | Local AI analytics | ONNX object detection per camera, auto-record, control center, CPU fallback | 📋 Planned |
 | 16 | Archive pro | Fragmented MP4, activity calendar, timeline zoom, clip export | 📋 Planned |
 | 17 | Community & app-level | Tabbed layouts, config export/import, notifications, white-label, issue reporter, RBAC | 📋 Planned |

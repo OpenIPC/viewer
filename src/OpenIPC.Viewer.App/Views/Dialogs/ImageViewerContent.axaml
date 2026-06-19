@@ -1,0 +1,192 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.ImageViewerContent"
+             x:DataType="vm:ImageViewerViewModel"
+             Focusable="True"
+             KeyDown="OnKeyDown"
+             Background="#0c0f14">
+
+  <UserControl.Styles>
+    <Style Selector="Button.tool">
+      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="MinWidth" Value="36" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Background" Value="#1b2027" />
+      <Setter Property="Foreground" Value="#e6e9ef" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2a313b" />
+    </Style>
+    <Style Selector="Button.tool.active">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.navarrow">
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="72" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="#70000000" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Top bar -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,*" Margin="14,10" VerticalAlignment="Center">
+      <StackPanel Grid.Column="0" VerticalAlignment="Center">
+        <TextBlock Text="{Binding CameraName}" Foreground="#e6e9ef" FontSize="14" FontWeight="Medium" />
+        <TextBlock Text="{Binding TimeLabel}" Foreground="#8b94a3"
+                   FontFamily="{StaticResource FontMono}" FontSize="11" />
+      </StackPanel>
+
+      <TextBlock Grid.Column="1" Text="{Binding CounterLabel}" Foreground="#8b94a3"
+                 FontFamily="{StaticResource FontMono}" FontSize="12"
+                 VerticalAlignment="Center" HorizontalAlignment="Center"
+                 IsVisible="{Binding HasMultiple}" />
+
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+        <Button Classes="tool" Classes.active="{Binding ShowProperties}"
+                Command="{Binding TogglePropertiesCommand}"
+                ToolTip.Tip="{Binding [Viewer.Properties], Source={x:Static svc:Localizer.Instance}}"
+                Content="{Binding [Viewer.Properties], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="tool" Command="{Binding CloseCommand}"
+                ToolTip.Tip="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconClose}" Stroke="#e6e9ef" Width="15" Height="15" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- Viewport -->
+    <Grid Grid.Row="1" x:Name="Viewport" ClipToBounds="True" Background="Transparent"
+          PointerWheelChanged="OnViewportWheel"
+          PointerPressed="OnViewportPointerPressed"
+          PointerMoved="OnViewportPointerMoved"
+          PointerReleased="OnViewportPointerReleased">
+      <Image x:Name="ViewImage" Source="{Binding CurrentImage}" Stretch="Uniform"
+             RenderTransformOrigin="0.5,0.5">
+        <Image.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform ScaleX="{Binding ScaleX}" ScaleY="{Binding ScaleY}" />
+            <RotateTransform Angle="{Binding Rotation}" />
+            <TranslateTransform X="{Binding TranslateX}" Y="{Binding TranslateY}" />
+          </TransformGroup>
+        </Image.RenderTransform>
+      </Image>
+
+      <!-- Editor drawing surface (on top of the image while editing) -->
+      <Canvas x:Name="EditCanvas" Background="#01000000"
+              IsVisible="{Binding IsEditing}"
+              PointerPressed="OnEditPointerPressed"
+              PointerMoved="OnEditPointerMoved"
+              PointerReleased="OnEditPointerReleased" />
+
+      <!-- Prev / Next -->
+      <Button Classes="navarrow" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0"
+              IsVisible="{Binding !IsEditing}" Command="{Binding PrevCommand}"
+              IsEnabled="{Binding HasMultiple}"
+              ToolTip.Tip="{Binding [Viewer.Prev], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}" Stroke="White" Width="22" Height="22" />
+      </Button>
+      <Button Classes="navarrow" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0"
+              IsVisible="{Binding !IsEditing}" Command="{Binding NextCommand}"
+              IsEnabled="{Binding HasMultiple}"
+              ToolTip.Tip="{Binding [Viewer.Next], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconChevronRight}" Stroke="White" Width="22" Height="22" />
+      </Button>
+
+      <!-- Properties panel -->
+      <Border IsVisible="{Binding ShowProperties}"
+              HorizontalAlignment="Right" VerticalAlignment="Top" Margin="14"
+              Background="#d0151a21" CornerRadius="8" Padding="14,10">
+        <TextBlock Text="{Binding PropertiesText}" Foreground="#e6e9ef"
+                   FontFamily="{StaticResource FontMono}" FontSize="12" />
+      </Border>
+    </Grid>
+
+    <!-- Bottom toolbar -->
+    <Border Grid.Row="2" Background="#10141a" Padding="10,8">
+      <Grid>
+        <!-- View toolbar -->
+        <WrapPanel HorizontalAlignment="Center" ItemSpacing="6" LineSpacing="6"
+                   IsVisible="{Binding !IsEditing}">
+          <Button Classes="tool" Command="{Binding ZoomOutCommand}"
+                  ToolTip.Tip="{Binding [Viewer.ZoomOut], Source={x:Static svc:Localizer.Instance}}" Content="−" />
+          <TextBlock Text="{Binding ZoomLabel}" Foreground="#8b94a3" FontFamily="{StaticResource FontMono}"
+                     FontSize="12" VerticalAlignment="Center" MinWidth="44" TextAlignment="Center" />
+          <Button Classes="tool" Command="{Binding ZoomInCommand}"
+                  ToolTip.Tip="{Binding [Viewer.ZoomIn], Source={x:Static svc:Localizer.Instance}}" Content="+" />
+          <Button Classes="tool" Command="{Binding FitToScreenCommand}"
+                  Content="{Binding [Viewer.Fit], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Click="OnActualSizeClick" Content="1:1" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Command="{Binding RotateLeftCommand}"
+                  ToolTip.Tip="{Binding [Viewer.RotateLeft], Source={x:Static svc:Localizer.Instance}}" Content="↺" />
+          <Button Classes="tool" Command="{Binding RotateRightCommand}"
+                  ToolTip.Tip="{Binding [Viewer.RotateRight], Source={x:Static svc:Localizer.Instance}}" Content="↻" />
+          <Button Classes="tool" Command="{Binding FlipHorizontalCommand}"
+                  ToolTip.Tip="{Binding [Viewer.FlipH], Source={x:Static svc:Localizer.Instance}}" Content="⇆" />
+          <Button Classes="tool" Command="{Binding FlipVerticalCommand}"
+                  ToolTip.Tip="{Binding [Viewer.FlipV], Source={x:Static svc:Localizer.Instance}}" Content="⇅" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Classes.active="{Binding IsSlideshow}" Command="{Binding ToggleSlideshowCommand}"
+                  ToolTip.Tip="{Binding [Viewer.Slideshow], Source={x:Static svc:Localizer.Instance}}" Content="▶"
+                  IsVisible="{Binding HasMultiple}" />
+          <Button Classes="tool" Command="{Binding EnterEditCommand}"
+                  Content="{Binding [Viewer.Edit], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding CopyCommand}"
+                  Content="{Binding [Viewer.Copy], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding ShareCommand}"
+                  Content="{Binding ShareLabel}" />
+          <Button Classes="tool" Command="{Binding DeleteCommand}"
+                  Foreground="#ef4444"
+                  Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}" />
+        </WrapPanel>
+
+        <!-- Edit toolbar -->
+        <WrapPanel HorizontalAlignment="Center" ItemSpacing="6" LineSpacing="6"
+                   IsVisible="{Binding IsEditing}">
+          <Button Classes="tool" Classes.active="{Binding IsToolArrow}" Command="{Binding SetToolCommand}" CommandParameter="arrow"
+                  Content="{Binding [Edit.Arrow], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolRectangle}" Command="{Binding SetToolCommand}" CommandParameter="rect"
+                  Content="{Binding [Edit.Rect], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolText}" Command="{Binding SetToolCommand}" CommandParameter="text"
+                  Content="{Binding [Edit.Text], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Classes.active="{Binding IsToolCrop}" Command="{Binding SetToolCommand}" CommandParameter="crop"
+                  Content="{Binding [Edit.Crop], Source={x:Static svc:Localizer.Instance}}" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#FF3B30"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFF3B30" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#FFCC00"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFFCC00" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#34C759"
+                  Command="{Binding SetColorCommand}" CommandParameter="FF34C759" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="White"
+                  Command="{Binding SetColorCommand}" CommandParameter="FFFFFFFF" />
+          <Button Width="22" Height="22" Padding="0" CornerRadius="11" Background="#111111"
+                  Command="{Binding SetColorCommand}" CommandParameter="FF111111" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Classes.active="{Binding IsThin}" Command="{Binding SetThicknessCommand}" CommandParameter="thin" Content="S" />
+          <Button Classes="tool" Classes.active="{Binding IsMedium}" Command="{Binding SetThicknessCommand}" CommandParameter="med" Content="M" />
+          <Button Classes="tool" Classes.active="{Binding IsThick}" Command="{Binding SetThicknessCommand}" CommandParameter="thick" Content="L" />
+          <Border Width="1" Background="#2a313b" Margin="4,2" />
+          <Button Classes="tool" Click="OnEditUndoClick"
+                  Content="{Binding [Edit.Undo], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool" Command="{Binding CancelEditCommand}"
+                  Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="tool active" Click="OnEditSaveClick"
+                  Content="{Binding [Edit.Save], Source={x:Static svc:Localizer.Instance}}" />
+        </WrapPanel>
+      </Grid>
+    </Border>
+
+  </Grid>
+
+</UserControl>

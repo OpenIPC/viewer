@@ -1,0 +1,204 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.SnapshotBrowserView"
+             x:DataType="vm:SnapshotBrowserPageViewModel">
+
+  <UserControl.Styles>
+    <!-- Segmented filter buttons: subtle by default, accent when active. -->
+    <Style Selector="Button.seg">
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.seg.active">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.daychip">
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderWeakBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.daychip.active">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+    <!-- Filters -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+      <ComboBox Grid.Column="0"
+                MinWidth="160"
+                ItemsSource="{Binding CameraOptions}"
+                SelectedItem="{Binding SelectedCamera}" />
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0"
+                  VerticalAlignment="Center">
+        <Button Classes="seg" Classes.active="{Binding IsPresetAll}"
+                Command="{Binding SetPresetCommand}" CommandParameter="all"
+                Content="{Binding [Snapshots.PresetAll], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="seg" Classes.active="{Binding IsPresetToday}"
+                Command="{Binding SetPresetCommand}" CommandParameter="today"
+                Content="{Binding [Snapshots.PresetToday], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="seg" Classes.active="{Binding IsPreset7}"
+                Command="{Binding SetPresetCommand}" CommandParameter="7"
+                Content="{Binding [Snapshots.Preset7], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="seg" Classes.active="{Binding IsPreset30}"
+                Command="{Binding SetPresetCommand}" CommandParameter="30"
+                Content="{Binding [Snapshots.Preset30], Source={x:Static svc:Localizer.Instance}}" />
+      </StackPanel>
+
+      <Button Grid.Column="2" Classes="seg"
+              Command="{Binding ToggleSortCommand}"
+              Content="{Binding SortLabel}" />
+    </Grid>
+
+    <!-- Selection toolbar -->
+    <Border Grid.Row="1" IsVisible="{Binding HasSelection}"
+            Background="{StaticResource Bg2Brush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding SelectionLabel}"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   VerticalAlignment="Center" FontSize="12" />
+        <Button Grid.Column="1"
+                Command="{Binding ShareSelectedCommand}"
+                Content="{Binding ShareLabel}"
+                Margin="0,0,8,0"
+                Padding="10,4" FontSize="12" CornerRadius="4"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="2"
+                Command="{Binding DeleteSelectedCommand}"
+                Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
+                Padding="10,4" FontSize="12" CornerRadius="4"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource DangerBrush}" />
+      </Grid>
+    </Border>
+
+    <!-- Timeline (per-day counts) -->
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                  IsVisible="{Binding DayCounts.Count}" Margin="0,0,0,10">
+      <ItemsControl ItemsSource="{Binding DayCounts}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="6" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:SnapshotDayCount">
+            <Button Classes="daychip" Classes.active="{Binding IsActive}"
+                    Command="{Binding $parent[ItemsControl].((vm:SnapshotBrowserPageViewModel)DataContext).FilterByDayCommand}"
+                    CommandParameter="{Binding}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding DayLabel}" />
+                <TextBlock Text="{Binding Count}" Opacity="0.7" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- Gallery. WrapPanel-in-ItemsControl mirrors the camera library gallery;
+         thumbnails decode capped at 320px via the converter to bound memory. -->
+    <ScrollViewer Grid.Row="3" IsVisible="{Binding !IsEmpty}">
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="10" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:SnapshotItemViewModel">
+            <Border Width="190" Background="{StaticResource Bg0Brush}"
+                    BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
+                    CornerRadius="8" ClipToBounds="True">
+              <Grid RowDefinitions="*,Auto">
+                <!-- Thumbnail (tap to open) -->
+                <Button Grid.Row="0" Padding="0" Background="Transparent" BorderThickness="0"
+                        Cursor="Hand" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                        Command="{Binding $parent[ItemsControl].((vm:SnapshotBrowserPageViewModel)DataContext).OpenCommand}"
+                        CommandParameter="{Binding}">
+                  <Image Source="{Binding ThumbSource, Converter={x:Static conv:PathToThumbnailConverter.Instance}}"
+                         Stretch="UniformToFill" Height="120" />
+                </Button>
+
+                <!-- Selection checkbox -->
+                <CheckBox HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6"
+                          IsChecked="{Binding IsSelected}" />
+
+                <!-- Per-item delete -->
+                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6"
+                        Width="24" Height="24" Padding="0" CornerRadius="12"
+                        Background="#90000000"
+                        Command="{Binding $parent[ItemsControl].((vm:SnapshotBrowserPageViewModel)DataContext).DeleteCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}">
+                  <Path Classes="lucide" Data="{StaticResource IconClose}"
+                        Stroke="White" Width="13" Height="13" />
+                </Button>
+
+                <!-- Caption -->
+                <StackPanel Grid.Row="1" Spacing="1" Margin="8,5" Background="{StaticResource Bg1Brush}">
+                  <TextBlock Text="{Binding CameraName}"
+                             FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding TimeLabel}"
+                             FontFamily="{StaticResource FontMono}" FontSize="10"
+                             Foreground="{StaticResource TextTertiaryBrush}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- Empty state -->
+    <TextBlock Grid.Row="3" IsVisible="{Binding IsEmpty}"
+               Text="{Binding [Snapshots.Empty], Source={x:Static svc:Localizer.Instance}}"
+               Foreground="{StaticResource TextSecondaryBrush}"
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+    <!-- Error -->
+    <StackPanel Grid.Row="3" IsVisible="{Binding HasLoadError}"
+                VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+      <TextBlock Text="{Binding LoadError}"
+                 FontSize="{StaticResource FontSizeLg}" Foreground="{StaticResource DangerBrush}"
+                 HorizontalAlignment="Center" />
+      <Button Content="{Binding [Common.Retry], Source={x:Static svc:Localizer.Instance}}"
+              Command="{Binding ReloadCommand}"
+              Padding="14,8" Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              CornerRadius="8" Foreground="{StaticResource TextPrimaryBrush}"
+              HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <!-- Loading (on top) -->
+    <StackPanel Grid.Row="3" IsVisible="{Binding IsLoading}"
+                VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+      <ProgressBar IsIndeterminate="True" Width="160" />
+      <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+                 Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+    </StackPanel>
+
+  </Grid>
+
+</UserControl>

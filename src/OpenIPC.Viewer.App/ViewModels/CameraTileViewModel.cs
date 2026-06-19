@@ -11,6 +11,7 @@ using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -20,6 +21,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly LiveStreamCoordinator _coordinator;
     private readonly CameraDirectoryService _directory;
     private readonly UserSettingsService _userSettings;
+    private readonly ISnapshotService _snapshots;
     private readonly ILogger<CameraTileViewModel> _logger;
 
     // Auto SD/HD (Phase 12.2): substream in the grid, mainstream when a single
@@ -113,12 +115,14 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         LiveStreamCoordinator coordinator,
         CameraDirectoryService directory,
         UserSettingsService userSettings,
+        ISnapshotService snapshots,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
         _coordinator = coordinator;
         _directory = directory;
         _userSettings = userSettings;
+        _snapshots = snapshots;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
@@ -226,6 +230,27 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     [RelayCommand]
     private void OpenSingle() =>
         WeakReferenceMessenger.Default.Send(new OpenCameraMessage(Camera.Id));
+
+    // Brief "captured" confirmation flashed over the tile after a snapshot. The
+    // tile streams the substream, but SnapshotService still grabs an HD source
+    // (Majestic HTTP or a brief mainstream open) — never the SD frame on screen.
+    [ObservableProperty] private bool _snapshotFlash;
+
+    [RelayCommand]
+    private async Task SnapshotAsync()
+    {
+        try
+        {
+            await _snapshots.CaptureAsync(Camera, Session, _quality, CancellationToken.None).ConfigureAwait(true);
+            SnapshotFlash = true;
+            await Task.Delay(900).ConfigureAwait(true);
+            SnapshotFlash = false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tile snapshot failed for {Camera}", Camera.Name);
+        }
+    }
 
     // Retry button on the error cell. Mirrors OnCoordinatorInvalidated: drop the
     // dead session, reset state, and re-run the full Activate path.

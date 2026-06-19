@@ -41,6 +41,7 @@ internal static class Composition
         services.AddSingleton<ISecretsStore>(sp =>
             new AndroidSecretsStore(context, sp.GetRequiredService<IFileSystem>().AppDataDir));
         services.AddSingleton<IHwDecoderFactory, MediaCodecDecoderFactory>();
+        services.AddSingleton<IShareService>(_ => new AndroidShareService(context));
 
         // Recording — in-process libavformat (no subprocess on Android) +
         // foreground service for OS keep-alive. Phase 9c.

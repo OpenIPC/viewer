@@ -37,6 +37,9 @@ internal static class Composition
 
         AddPlatformServices(services);
 
+        // Share (Phase 14.6): no native sheet on desktop — reveal in file manager.
+        services.AddSingleton<IShareService, DesktopShareService>();
+
         // Recording backend — ffmpeg subprocess works on all three desktop OSes
         // (resolves bundled binary or system PATH per FfmpegSubprocessRecorder).
         services.AddSingleton<IRecorder>(sp =>

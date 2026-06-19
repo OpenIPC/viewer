@@ -10,6 +10,7 @@ using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Ssh;
 using OpenIPC.Viewer.Core.Video;
 using OpenIPC.Viewer.Devices.Majestic;
@@ -39,10 +40,17 @@ public static class SharedComposition
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
         services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
         services.AddSingleton<IEventRepository, SqliteEventRepository>();
+        services.AddSingleton<ISnapshotRepository, SqliteSnapshotRepository>();
 
         // Domain services
         services.AddSingleton<CameraDirectoryService>();
+        services.AddSingleton<ICameraCredentialsProvider>(sp => sp.GetRequiredService<CameraDirectoryService>());
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
+
+        // Snapshots (Phase 14): HD-always capture + thumbnail generation.
+        services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
+        services.AddSingleton<IImageEditor, OpenIPC.Viewer.Video.Imaging.SkiaImageEditor>();
+        services.AddSingleton<ISnapshotService, SnapshotService>();
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();
@@ -82,6 +90,7 @@ public static class SharedComposition
         services.AddSingleton<ManageGroupsDialogFactory>();
         services.AddSingleton<SshTerminalFactory>();
         services.AddSingleton<FileManagerFactory>();
+        services.AddSingleton<ImageViewerFactory>();
 
         // User-tweakable settings (Phase 11). Side-effects (e.g. live Serilog
         // level switching) are wired by each platform composition after the
@@ -103,6 +112,7 @@ public static class SharedComposition
         services.AddSingleton<GridPageViewModel>();
         services.AddSingleton<CameraLibraryPageViewModel>();
         services.AddSingleton<RecordingsPageViewModel>();
+        services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
 

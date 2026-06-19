@@ -13,6 +13,10 @@ public interface IDialogService
     // Opens the remote file manager (Phase 13.4) — window on desktop, overlay on mobile.
     Task OpenFileManagerAsync(FileManagerViewModel viewModel);
 
+    // Opens the in-app snapshot viewer (Phase 14.4) — modal window on desktop,
+    // full-screen overlay on mobile. Completes when the viewer is closed.
+    Task ShowImageViewerAsync(ImageViewerViewModel viewModel);
+
     Task<CameraEditorResult?> ShowCameraEditorAsync(CameraEditorViewModel viewModel);
 
     Task<DiscoveryDialogResult?> ShowDiscoveryDialogAsync(DiscoveryDialogViewModel viewModel);
