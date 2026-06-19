@@ -44,7 +44,12 @@ public static class SharedComposition
 
         // Domain services
         services.AddSingleton<CameraDirectoryService>();
+        services.AddSingleton<ICameraCredentialsProvider>(sp => sp.GetRequiredService<CameraDirectoryService>());
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
+
+        // Snapshots (Phase 14): HD-always capture + thumbnail generation.
+        services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
+        services.AddSingleton<ISnapshotService, SnapshotService>();
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();

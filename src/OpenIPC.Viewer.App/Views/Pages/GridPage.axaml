@@ -97,6 +97,22 @@
                                    FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="White" />
                       </Border>
 
+                      <!-- Bottom-left: HD snapshot. The tile streams SD, but the
+                           service grabs an HD source (Majestic HTTP / brief main). -->
+                      <Button HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
+                              Command="{Binding SnapshotCommand}"
+                              IsVisible="{Binding !IsFailed}"
+                              Background="#80000000" CornerRadius="14"
+                              Width="28" Height="28" Padding="0"
+                              ToolTip.Tip="{Binding [Tile.Snapshot], Source={x:Static svc:Localizer.Instance}}">
+                        <Path Classes="lucide" Data="{StaticResource IconCamera}"
+                              Stroke="White" Width="16" Height="16" />
+                      </Button>
+
+                      <!-- Brief "captured" flash. -->
+                      <Border IsVisible="{Binding SnapshotFlash}" Background="#50FFFFFF"
+                              IsHitTestVisible="False" />
+
                       <!-- Connecting / reconnecting dim overlay with spinner. -->
                       <Border IsVisible="{Binding IsConnecting}" Background="#80000000">
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">

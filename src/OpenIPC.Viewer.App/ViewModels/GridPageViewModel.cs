@@ -12,6 +12,7 @@ using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -25,6 +26,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly CameraDirectoryService _directory;
     private readonly LiveStreamCoordinator _coordinator;
     private readonly UserSettingsService _userSettings;
+    private readonly ISnapshotService _snapshots;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<GridPageViewModel> _logger;
 
@@ -49,11 +51,13 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         CameraDirectoryService directory,
         LiveStreamCoordinator coordinator,
         UserSettingsService userSettings,
+        ISnapshotService snapshots,
         ILoggerFactory loggerFactory)
     {
         _directory = directory;
         _coordinator = coordinator;
         _userSettings = userSettings;
+        _snapshots = snapshots;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<GridPageViewModel>();
 
@@ -136,7 +140,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 try { await existing.DisposeAsync().ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
-                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _loggerFactory.CreateLogger<CameraTileViewModel>());
                 rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
@@ -144,7 +148,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 continue;
             }
 
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _loggerFactory.CreateLogger<CameraTileViewModel>());
             tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }

@@ -13,9 +13,9 @@ using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
-using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Core.Video;
 using Avalonia.Threading;
 
@@ -29,9 +29,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly IMajesticClient _majestic;
     private readonly IMajesticSshConfigClient _majesticSsh;
     private readonly RecordingService _recordings;
-    private readonly IFileSystem _fs;
     private readonly UserSettingsService _userSettings;
     private readonly IDialogService _dialogs;
+    private readonly ISnapshotService _snapshots;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
@@ -144,9 +144,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         IMajesticClient majestic,
         IMajesticSshConfigClient majesticSsh,
         RecordingService recordings,
-        IFileSystem fs,
         UserSettingsService userSettings,
         IDialogService dialogs,
+        ISnapshotService snapshots,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -156,9 +156,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _majestic = majestic;
         _majesticSsh = majesticSsh;
         _recordings = recordings;
-        _fs = fs;
         _userSettings = userSettings;
         _dialogs = dialogs;
+        _snapshots = snapshots;
         _logger = logger;
 
         IsRecording = _recordings.IsRecording(_camera.Id);
@@ -668,27 +668,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         try
         {
-            byte[] bytes;
-            if (IsMajestic)
-            {
-                // /image.jpg is ~50–100ms vs ~hundreds of ms decoding a video frame.
-                var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
-                var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                bytes = await _majestic.SnapshotJpegAsync(endpoint, new MajesticSnapshotOptions(), cts.Token).ConfigureAwait(true);
-            }
-            else if (Session is not null)
-            {
-                bytes = await Session.SnapshotAsync(SnapshotFormat.Jpeg, CancellationToken.None).ConfigureAwait(true);
-            }
-            else return;
-
-            var dir = Path.Combine(_fs.SnapshotsDir.FullName, SafeFileName(_camera.Name));
-            Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{DateTime.Now:yyyy-MM-dd-HHmmss}.jpg");
-            await File.WriteAllBytesAsync(path, bytes).ConfigureAwait(true);
-            SnapshotPath = path;
-            _logger.LogInformation("Snapshot saved {Path}", path);
+            // The shared service picks the HD source (live mainstream → Majestic
+            // HTTP → brief mainstream open) and indexes the result; we just hand
+            // it our live session so an already-decoded frame is grabbed for free.
+            var snapshot = await _snapshots
+                .CaptureAsync(_camera, Session, _quality, CancellationToken.None)
+                .ConfigureAwait(true);
+            SnapshotPath = snapshot.Path;
         }
         catch (Exception ex)
         {
@@ -791,18 +777,6 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         // NOTE: we deliberately do NOT stop the recording on page close —
         // the camera keeps recording in the background until the user
         // explicitly stops it (or app exits, see RecordingService.DisposeAsync).
-    }
-
-    private static string SafeFileName(string name)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var chars = name.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-        {
-            if (Array.IndexOf(invalid, chars[i]) >= 0)
-                chars[i] = '_';
-        }
-        return new string(chars);
     }
 
     private static RtspTransport ParseTransport(string? s) => s?.ToLowerInvariant() switch

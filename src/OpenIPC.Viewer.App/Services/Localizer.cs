@@ -291,6 +291,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Snapshot.SaveAsTitle"] = "Save snapshot",
 
         ["Grid.EmptySlot"] = "no camera",
+        ["Tile.Snapshot"] = "Snapshot (HD)",
 
         ["Welcome.Language"] = "Language",
 
@@ -543,6 +544,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Snapshot.SaveAsTitle"] = "Сохранить снимок",
 
         ["Grid.EmptySlot"] = "нет камеры",
+        ["Tile.Snapshot"] = "Снимок (HD)",
 
         ["Welcome.Language"] = "Язык",
 

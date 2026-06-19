@@ -8,7 +8,7 @@ using OpenIPC.Viewer.Core.Platform;
 
 namespace OpenIPC.Viewer.Core.Services;
 
-public sealed class CameraDirectoryService
+public sealed class CameraDirectoryService : ICameraCredentialsProvider
 {
     private readonly ICameraRepository _cameras;
     private readonly IGroupRepository _groups;
