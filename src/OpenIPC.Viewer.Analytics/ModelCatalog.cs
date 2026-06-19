@@ -17,14 +17,13 @@ public sealed record ModelDescriptor(
 // checked into the repo.
 public static class ModelCatalog
 {
-    // Official YOLOX-tiny ONNX export from the upstream release assets.
-    // TODO: pin Sha256Hex once the asset is downloaded and verified in CI;
-    // until then integrity checking is skipped (logged).
+    // Official YOLOX-tiny ONNX export from the upstream release assets
+    // (~20 MB). SHA-256 verified against the 0.1.1rc0 asset on 2026-06-19.
     public static ModelDescriptor YoloxTiny { get; } = new(
         Name: "YOLOX-tiny",
         FileName: "yolox_tiny.onnx",
         DownloadUri: new Uri("https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.onnx"),
-        Sha256Hex: null,
+        Sha256Hex: "427CC366D34E27FF7A03E2899B5E3671425C262EA2291F88BB942BC1CC70B0F7",
         CreateSpec: ModelSpec.YoloxTiny);
 
     public static ModelDescriptor Default => YoloxTiny;
