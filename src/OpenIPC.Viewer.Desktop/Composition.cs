@@ -125,6 +125,8 @@ internal static class Composition
                     sp.GetRequiredService<ILoggerFactory>());
             });
             services.AddSingleton<IHwDecoderFactory, VaapiDecoderFactory>();
+            // Talk/backchannel (Phase 17.6) — ALSA mic capture.
+            services.AddSingleton<IAudioInput, Audio.AlsaAudioInput>();
         }
         else if (OperatingSystem.IsMacOS())
         {
@@ -135,6 +137,8 @@ internal static class Composition
                 return new KeychainSecretsStore(sp.GetRequiredService<ILoggerFactory>());
             });
             services.AddSingleton<IHwDecoderFactory, VideoToolboxDecoderFactory>();
+            // Talk/backchannel (Phase 17.6) — CoreAudio mic capture.
+            services.AddSingleton<IAudioInput, Audio.CoreAudioInput>();
         }
         else
         {
