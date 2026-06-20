@@ -37,6 +37,23 @@ public sealed partial class SingleCameraPage : UserControl
         VideoArea.AddHandler(InputElement.PointerPressedEvent, OnVideoPointerPressed, RoutingStrategies.Tunnel);
         VideoArea.AddHandler(InputElement.PointerReleasedEvent, OnVideoPointerReleased, RoutingStrategies.Tunnel);
         VideoArea.PointerWheelChanged += OnVideoPointerWheel;
+
+        // Push-to-talk: hold the mic button to transmit (Phase 17.6). Pointer-up
+        // and pointer-leave both end the transmission so a drag-off can't leave
+        // the mic stuck open.
+        TalkButton.AddHandler(InputElement.PointerPressedEvent, OnTalkPressed, RoutingStrategies.Tunnel);
+        TalkButton.AddHandler(InputElement.PointerReleasedEvent, OnTalkReleased, RoutingStrategies.Tunnel);
+        TalkButton.PointerExited += OnTalkReleased;
+    }
+
+    private async void OnTalkPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Vm is { } vm) await vm.BeginTalkAsync();
+    }
+
+    private async void OnTalkReleased(object? sender, PointerEventArgs e)
+    {
+        if (Vm is { } vm) await vm.EndTalkAsync();
     }
 
     private SingleCameraPageViewModel? Vm => DataContext as SingleCameraPageViewModel;

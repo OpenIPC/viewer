@@ -456,7 +456,7 @@
       <!-- Push-to-talk (Phase 17.6): mic → camera speaker. Shown when a mic
            exists; active state highlighted. -->
       <Button Grid.Column="3"
-              Command="{Binding ToggleTalkCommand}"
+              x:Name="TalkButton"
               IsVisible="{Binding CanTalk}"
               Background="Transparent"
               BorderBrush="{StaticResource BorderMediumBrush}"

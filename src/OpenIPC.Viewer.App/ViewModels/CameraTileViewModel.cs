@@ -138,9 +138,11 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         : $"{kbps:F0} kb/s";
 
     // --- Audio listen (Phase 17): per-tile speaker toggle --------------------
-    // Shown when a native sink exists. Tapping makes THIS tile the single audio
-    // source (one-source policy in AudioMonitor); tapping again stops it.
-    public bool AudioAvailable => _audio.IsAvailable;
+    // Shown when a native sink exists and we don't positively know the camera
+    // has no mic. Same lenient ONVIF gate as the talk button: only hide when a
+    // probed camera reports no audio-in (non-ONVIF/unprobed cameras still show).
+    public bool AudioAvailable =>
+        _audio.IsAvailable && !(Camera.OnvifEnabled && !Camera.HasAudioIn);
     public bool IsListening => _audio.AttachedCamera == Camera.Id;
 
     [RelayCommand]

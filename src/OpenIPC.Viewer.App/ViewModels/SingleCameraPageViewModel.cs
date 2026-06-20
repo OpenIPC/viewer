@@ -328,15 +328,15 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private bool _isTalking;
     [ObservableProperty] private string? _talkError;
 
-    [RelayCommand]
-    private async Task ToggleTalkAsync()
+    // Push-to-talk is press-and-hold: BeginTalk on pointer-down, EndTalk on
+    // pointer-up (wired in the view code-behind). _talkHeld guards the case where
+    // the user releases before the backchannel finishes opening.
+    private bool _talkHeld;
+
+    public async Task BeginTalkAsync()
     {
-        if (!_talk.IsAvailable) return;
-        if (_talk.IsTalking)
-        {
-            await _talk.StopAsync().ConfigureAwait(true);
-            return;
-        }
+        if (!_talk.IsAvailable || _talk.IsTalking) return;
+        _talkHeld = true;
         TalkError = null;
         try
         {
@@ -344,12 +344,20 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             var ep = new BackchannelEndpoint(_camera.RtspMainUri, creds);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await _talk.StartAsync(ep, cts.Token).ConfigureAwait(true);
+            // Released mid-connect → don't leave the mic hot.
+            if (!_talkHeld) await _talk.StopAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Start talk failed");
             TalkError = ex.Message;
         }
+    }
+
+    public async Task EndTalkAsync()
+    {
+        _talkHeld = false;
+        await _talk.StopAsync().ConfigureAwait(true);
     }
 
     private void OnTalkChanged(object? sender, EventArgs e)
