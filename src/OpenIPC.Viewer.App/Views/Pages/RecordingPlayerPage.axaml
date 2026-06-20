@@ -64,56 +64,67 @@
       </Border>
     </Grid>
 
-    <!-- Transport bar: play/pause · position · seek · duration · restart -->
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,12,0,0">
-      <Button Grid.Column="0"
-              Command="{Binding PlayPauseCommand}"
-              Background="{StaticResource AccentBrush}"
-              CornerRadius="6"
-              Padding="10,8"
-              VerticalAlignment="Center">
-        <Panel>
-          <Path Classes="lucide" Data="{StaticResource IconPause}" Stroke="White" Width="16" Height="16"
-                IsVisible="{Binding IsPlaying}" />
-          <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="16" Height="16"
-                IsVisible="{Binding !IsPlaying}" />
-        </Panel>
-      </Button>
+    <!-- Timeline + transport bar -->
+    <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0">
 
-      <TextBlock Grid.Column="1"
-                 Text="{Binding PositionLabel}"
-                 FontFamily="{StaticResource FontMono}"
-                 FontSize="{StaticResource FontSizeSm}"
-                 Foreground="{StaticResource TextSecondaryBrush}"
-                 VerticalAlignment="Center"
-                 Margin="12,0,12,0" MinWidth="56" />
+      <!-- Canvas timeline: segments + motion/detection markers, wheel-zoom to
+           cursor, click/marker-tap to seek (16.4). -->
+      <controls:TimelineControl Height="60"
+                                TotalStart="{Binding TimelineStart}"
+                                TotalEnd="{Binding TimelineEnd}"
+                                Segments="{Binding Segments}"
+                                Markers="{Binding Markers}"
+                                Position="{Binding PlayheadTime}"
+                                SeekCommand="{Binding SeekToTimeCommand}"
+                                TrackBrush="{StaticResource Bg2Brush}"
+                                SegmentBrush="{StaticResource Bg3Brush}"
+                                PlayheadBrush="{StaticResource AccentBrush}"
+                                LabelBrush="{StaticResource TextSecondaryBrush}" />
 
-      <Slider Grid.Column="2"
-              Minimum="0"
-              Maximum="{Binding DurationSeconds}"
-              Value="{Binding PositionSeconds, Mode=TwoWay}"
-              VerticalAlignment="Center" />
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+        <Button Grid.Column="0"
+                Command="{Binding PlayPauseCommand}"
+                Background="{StaticResource AccentBrush}"
+                CornerRadius="6"
+                Padding="10,8"
+                VerticalAlignment="Center">
+          <Panel>
+            <Path Classes="lucide" Data="{StaticResource IconPause}" Stroke="White" Width="16" Height="16"
+                  IsVisible="{Binding IsPlaying}" />
+            <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="16" Height="16"
+                  IsVisible="{Binding !IsPlaying}" />
+          </Panel>
+        </Button>
 
-      <TextBlock Grid.Column="3"
-                 Text="{Binding DurationLabel}"
-                 FontFamily="{StaticResource FontMono}"
-                 FontSize="{StaticResource FontSizeSm}"
-                 Foreground="{StaticResource TextSecondaryBrush}"
-                 VerticalAlignment="Center"
-                 Margin="12,0,12,0" MinWidth="56" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding PositionLabel}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   VerticalAlignment="Center"
+                   Margin="12,0,0,0" MinWidth="56" />
 
-      <Button Grid.Column="4"
-              Command="{Binding RestartCommand}"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Padding="8,8"
-              VerticalAlignment="Center">
-        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
-              Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
-      </Button>
-    </Grid>
+        <TextBlock Grid.Column="3"
+                   Text="{Binding DurationLabel}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,0" MinWidth="56" />
+
+        <Button Grid.Column="4"
+                Command="{Binding RestartCommand}"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="8,8"
+                VerticalAlignment="Center">
+          <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+        </Button>
+      </Grid>
+    </StackPanel>
 
   </Grid>
 
