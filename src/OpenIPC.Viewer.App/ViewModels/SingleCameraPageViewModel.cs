@@ -319,10 +319,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     }
 
     // --- Push-to-talk (Phase 17.6) ----------------------------------------
-    // Shown when a mic exists. Tapping opens the ONVIF backchannel and streams
-    // the mic to the camera's speaker; tapping again stops. If the camera has no
-    // backchannel the open fails and TalkError surfaces.
-    public bool CanTalk => _talk.IsAvailable;
+    // Shown when a mic exists AND we don't positively know the camera lacks a
+    // speaker. ONVIF probe sets HasAudioOut; only hide when a probed camera
+    // reports no backchannel. Non-ONVIF / unprobed cameras still show the button
+    // (the open fails gracefully into TalkError if unsupported).
+    public bool CanTalk => _talk.IsAvailable && !(_camera.OnvifEnabled && !_camera.HasAudioOut);
 
     [ObservableProperty] private bool _isTalking;
     [ObservableProperty] private string? _talkError;

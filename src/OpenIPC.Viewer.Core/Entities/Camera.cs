@@ -34,7 +34,12 @@ public sealed record Camera(
     int? SshPort = null,
     // Per-camera AI object detection (Phase 15). Disabled by default; stored
     // flat across the Ai* columns and recomposed here.
-    AnalyticsSettings? Analytics = null)
+    AnalyticsSettings? Analytics = null,
+    // Audio capabilities from the ONVIF probe (Phase 17). HasAudioIn = camera mic
+    // (gates "listen" hint); HasAudioOut = camera speaker / backchannel (gates the
+    // push-to-talk button). 0 until the next probe for pre-existing rows.
+    bool HasAudioIn = false,
+    bool HasAudioOut = false)
 {
     /// <summary>The camera's analytics config, never null (defaults to disabled).</summary>
     public AnalyticsSettings AnalyticsOrDefault => Analytics ?? AnalyticsSettings.Disabled;

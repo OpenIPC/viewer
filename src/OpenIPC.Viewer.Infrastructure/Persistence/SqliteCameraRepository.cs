@@ -49,14 +49,16 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 OnvifEnabled, OnvifProfileToken, ChipModel, FirmwareVersion,
                 IncludedInGrid, HasPtz, IsMajestic, SortOrder, CreatedAt, UpdatedAt,
                 StreamQualityOverride, SshPort,
-                AiEnabled, AiClasses, AiThreshold, AiFps, AiAutoRecord, AiPostEventSeconds)
+                AiEnabled, AiClasses, AiThreshold, AiFps, AiAutoRecord, AiPostEventSeconds,
+                HasAudioIn, HasAudioOut)
             VALUES (
                 @Id, @GroupId, @Name, @Host, @OnvifPort, @HttpPort,
                 @RtspMainUri, @RtspSubUri, @UsernameRef, @PasswordRef,
                 @OnvifEnabled, @OnvifProfileToken, @ChipModel, @FirmwareVersion,
                 @IncludedInGrid, @HasPtz, @IsMajestic, @SortOrder, @CreatedAt, @UpdatedAt,
                 @StreamQualityOverride, @SshPort,
-                @AiEnabled, @AiClasses, @AiThreshold, @AiFps, @AiAutoRecord, @AiPostEventSeconds);
+                @AiEnabled, @AiClasses, @AiThreshold, @AiFps, @AiAutoRecord, @AiPostEventSeconds,
+                @HasAudioIn, @HasAudioOut);
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -95,7 +97,9 @@ public sealed class SqliteCameraRepository : ICameraRepository
                 AiThreshold        = @AiThreshold,
                 AiFps              = @AiFps,
                 AiAutoRecord       = @AiAutoRecord,
-                AiPostEventSeconds = @AiPostEventSeconds
+                AiPostEventSeconds = @AiPostEventSeconds,
+                HasAudioIn         = @HasAudioIn,
+                HasAudioOut        = @HasAudioOut
             WHERE Id = @Id;
             """,
             ToRow(camera), transaction: tx).ConfigureAwait(false);
@@ -160,7 +164,9 @@ public sealed class SqliteCameraRepository : ICameraRepository
             ConfidenceThreshold: (float)row.AiThreshold,
             AnalyticsFps: row.AiFps,
             AutoRecord: row.AiAutoRecord != 0,
-            PostEventSeconds: row.AiPostEventSeconds));
+            PostEventSeconds: row.AiPostEventSeconds),
+        HasAudioIn: row.HasAudioIn != 0,
+        HasAudioOut: row.HasAudioOut != 0);
 
     private static object ToRow(Camera c) => new
     {
@@ -192,6 +198,8 @@ public sealed class SqliteCameraRepository : ICameraRepository
         AiFps = c.AnalyticsOrDefault.AnalyticsFps,
         AiAutoRecord = c.AnalyticsOrDefault.AutoRecord ? 1 : 0,
         AiPostEventSeconds = c.AnalyticsOrDefault.PostEventSeconds,
+        HasAudioIn = c.HasAudioIn ? 1 : 0,
+        HasAudioOut = c.HasAudioOut ? 1 : 0,
     };
 
     // AiClasses is a CSV of COCO class ids; null/empty means "all classes".
@@ -240,5 +248,7 @@ public sealed class SqliteCameraRepository : ICameraRepository
         public int AiFps { get; init; }
         public int AiAutoRecord { get; init; }
         public int AiPostEventSeconds { get; init; }
+        public int HasAudioIn { get; init; }
+        public int HasAudioOut { get; init; }
     }
 }
