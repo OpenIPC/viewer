@@ -38,6 +38,10 @@ public sealed class OnvifProbeService
             HasPtz: caps.HasPtz && profile.PtzConfigurationToken is not null,
             Manufacturer: info.Manufacturer,
             Model: info.Model,
-            FirmwareVersion: info.FirmwareVersion);
+            FirmwareVersion: info.FirmwareVersion,
+            // Audio capability is camera-wide, so OR across every profile (the
+            // backchannel may live on a different profile than the main stream).
+            HasAudioIn: profiles.Any(p => p.HasAudioIn),
+            HasAudioOut: profiles.Any(p => p.HasAudioOut));
     }
 }
