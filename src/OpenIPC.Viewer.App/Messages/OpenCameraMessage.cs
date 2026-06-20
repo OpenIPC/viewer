@@ -1,10 +1,18 @@
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Recording;
 
 namespace OpenIPC.Viewer.App.Messages;
 
 public sealed record OpenCameraMessage(CameraId CameraId);
 
 public sealed record GoBackToLibraryMessage;
+
+// Phase 16: open the recordings player on a recorded segment, and return to
+// the recordings list. CameraName travels with the message so the player can
+// label itself without another directory lookup.
+public sealed record OpenRecordingMessage(Recording Recording, string CameraName);
+
+public sealed record GoBackToRecordingsMessage;
 
 public sealed record WindowMinimizedMessage;
 

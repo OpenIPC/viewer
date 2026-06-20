@@ -54,6 +54,11 @@ public static class SharedComposition
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();
+        // FfmpegVideoEngine also implements IPlaybackEngine (Phase 16 file
+        // playback) — expose the same singleton under that contract.
+        services.AddSingleton<IPlaybackEngine>(sp =>
+            (IPlaybackEngine)sp.GetRequiredService<IVideoEngine>());
+        services.AddSingleton<IMediaProbe, OpenIPC.Viewer.Video.Pipeline.FfmpegMediaProbe>();
         services.AddSingleton<LiveStreamCoordinator>();
 
         // ONVIF
@@ -103,6 +108,7 @@ public static class SharedComposition
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<SingleCameraPageFactory>();
+        services.AddSingleton<RecordingPlayerPageFactory>();
         services.AddSingleton<CameraEditorFactory>();
         services.AddSingleton<DiscoveryDialogFactory>();
         services.AddSingleton<ManageGroupsDialogFactory>();

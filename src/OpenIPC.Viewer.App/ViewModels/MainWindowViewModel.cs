@@ -11,13 +11,19 @@ using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
-public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<OpenCameraMessage>, IRecipient<GoBackToLibraryMessage>
+public sealed partial class MainWindowViewModel : ViewModelBase,
+    IRecipient<OpenCameraMessage>,
+    IRecipient<GoBackToLibraryMessage>,
+    IRecipient<OpenRecordingMessage>,
+    IRecipient<GoBackToRecordingsMessage>
 {
     private readonly CameraDirectoryService _directory;
     private readonly SingleCameraPageFactory _singleCameraFactory;
+    private readonly RecordingPlayerPageFactory _playerFactory;
     private readonly ILogger<MainWindowViewModel> _logger;
 
     private SingleCameraPageViewModel? _activeSingleCamera;
+    private RecordingPlayerPageViewModel? _activePlayer;
 
     public GridPageViewModel Live { get; }
     public CameraLibraryPageViewModel Library { get; }
@@ -45,7 +51,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
 
     public bool IsLiveSelected => CurrentPage is GridPageViewModel;
     public bool IsLibrarySelected => CurrentPage is CameraLibraryPageViewModel or SingleCameraPageViewModel;
-    public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel;
+    public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel or RecordingPlayerPageViewModel;
     public bool IsEventsSelected => CurrentPage is EventsPageViewModel;
     public bool IsAnalyticsSelected => CurrentPage is AnalyticsPageViewModel;
     public bool IsSettingsSelected => CurrentPage is SettingsPageViewModel;
@@ -59,6 +65,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         SettingsPageViewModel settings,
         CameraDirectoryService directory,
         SingleCameraPageFactory singleCameraFactory,
+        RecordingPlayerPageFactory playerFactory,
         ILogger<MainWindowViewModel> logger)
     {
         Live = live;
@@ -69,11 +76,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         Settings = settings;
         _directory = directory;
         _singleCameraFactory = singleCameraFactory;
+        _playerFactory = playerFactory;
         _logger = logger;
         _currentPage = library;
 
         WeakReferenceMessenger.Default.Register<OpenCameraMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);
+        WeakReferenceMessenger.Default.Register<OpenRecordingMessage>(this);
+        WeakReferenceMessenger.Default.Register<GoBackToRecordingsMessage>(this);
 
         // While a mobile overlay dialog is open the bottom nav must not switch
         // pages under it — the dim layer doesn't reliably swallow those taps.
@@ -111,6 +121,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
     {
         if (_activeSingleCamera is not null && target != "library")
             _ = DisposeActiveSingleCameraAsync();
+
+        // The recordings player lives under the Recordings tab; any nav (incl.
+        // tapping Recordings again) returns to the list and tears it down.
+        if (_activePlayer is not null)
+            _ = DisposeActivePlayerAsync();
 
         CurrentPage = target switch
         {
@@ -151,6 +166,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         CurrentPage = Library;
     }
 
+    public void Receive(OpenRecordingMessage message)
+    {
+        try
+        {
+            _ = DisposeActivePlayerAsync();
+            _activePlayer = _playerFactory.Create(message.Recording, message.CameraName);
+            CurrentPage = _activePlayer;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open recording {Path}", message.Recording.FilePath);
+        }
+    }
+
+    public async void Receive(GoBackToRecordingsMessage message)
+    {
+        await DisposeActivePlayerAsync().ConfigureAwait(true);
+        CurrentPage = Recordings;
+    }
+
     private async Task DisposeActiveSingleCameraAsync()
     {
         if (_activeSingleCamera is null)
@@ -165,6 +200,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IRecipient<Open
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error disposing single camera page");
+        }
+    }
+
+    private async Task DisposeActivePlayerAsync()
+    {
+        if (_activePlayer is null)
+            return;
+
+        var vm = _activePlayer;
+        _activePlayer = null;
+        try
+        {
+            await vm.DisposeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error disposing recording player page");
         }
     }
 }

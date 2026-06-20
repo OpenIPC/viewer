@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Recording;
@@ -120,6 +122,13 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private Task ReloadAsync() => LoadAsync(CancellationToken.None);
+
+    [RelayCommand]
+    private void Play(RecordingRowViewModel? row)
+    {
+        if (row is null) return;
+        WeakReferenceMessenger.Default.Send(new OpenRecordingMessage(row.Recording, row.CameraName));
+    }
 
     [RelayCommand]
     private async Task DeleteAsync(RecordingRowViewModel? row)

@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingPlayerPage"
+             x:DataType="vm:RecordingPlayerPageViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Header: back + file name + camera -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+      <Button Grid.Column="0"
+              Command="{Binding BackCommand}"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="6"
+              Padding="8,6"
+              VerticalAlignment="Center">
+        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+              Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+      </Button>
+      <StackPanel Grid.Column="1" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Title}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="{StaticResource FontSizeLg}"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding CameraName}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Video surface + overlays -->
+    <Grid Grid.Row="1" ClipToBounds="True" Background="Black">
+      <controls:RtspVideoView Session="{Binding VideoSession}" />
+
+      <!-- Error strip -->
+      <Border HorizontalAlignment="Stretch" VerticalAlignment="Top"
+              Background="{StaticResource DangerBrush}"
+              Padding="12,8"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="White" TextWrapping="Wrap" />
+      </Border>
+
+      <!-- Failed overlay -->
+      <Border IsVisible="{Binding IsFailed}" Background="#A0000000">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420">
+          <TextBlock Text="{Binding [Stream.Disconnected], Source={x:Static svc:Localizer.Instance}}"
+                     Foreground="White"
+                     FontSize="{StaticResource FontSizeLg}"
+                     FontWeight="SemiBold"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding ErrorMessage}"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     FontSize="{StaticResource FontSizeBase}"
+                     TextWrapping="Wrap"
+                     TextAlignment="Center"
+                     HorizontalAlignment="Center"
+                     IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Transport bar: play/pause · position · seek · duration · restart -->
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,12,0,0">
+      <Button Grid.Column="0"
+              Command="{Binding PlayPauseCommand}"
+              Background="{StaticResource AccentBrush}"
+              CornerRadius="6"
+              Padding="10,8"
+              VerticalAlignment="Center">
+        <Panel>
+          <Path Classes="lucide" Data="{StaticResource IconPause}" Stroke="White" Width="16" Height="16"
+                IsVisible="{Binding IsPlaying}" />
+          <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="16" Height="16"
+                IsVisible="{Binding !IsPlaying}" />
+        </Panel>
+      </Button>
+
+      <TextBlock Grid.Column="1"
+                 Text="{Binding PositionLabel}"
+                 FontFamily="{StaticResource FontMono}"
+                 FontSize="{StaticResource FontSizeSm}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 VerticalAlignment="Center"
+                 Margin="12,0,12,0" MinWidth="56" />
+
+      <Slider Grid.Column="2"
+              Minimum="0"
+              Maximum="{Binding DurationSeconds}"
+              Value="{Binding PositionSeconds, Mode=TwoWay}"
+              VerticalAlignment="Center" />
+
+      <TextBlock Grid.Column="3"
+                 Text="{Binding DurationLabel}"
+                 FontFamily="{StaticResource FontMono}"
+                 FontSize="{StaticResource FontSizeSm}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 VerticalAlignment="Center"
+                 Margin="12,0,12,0" MinWidth="56" />
+
+      <Button Grid.Column="4"
+              Command="{Binding RestartCommand}"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="6"
+              Padding="8,8"
+              VerticalAlignment="Center">
+        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+              Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+      </Button>
+    </Grid>
+
+  </Grid>
+
+</UserControl>
