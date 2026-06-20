@@ -28,6 +28,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     private readonly ILogger _logger;
 
     private readonly Subject<VideoFrame> _frames = new();
+    private readonly Subject<AudioFrame> _audioFrames = new();
     private readonly Subject<SessionState> _stateChanged = new();
     private readonly Subject<SessionTelemetry> _telemetry = new();
 
@@ -58,6 +59,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     public SessionState State { get { lock (_stateLock) return _state; } }
     public string? LastError { get { lock (_stateLock) return _lastError; } }
     public IObservable<VideoFrame> Frames => _frames;
+    public IObservable<AudioFrame> AudioFrames => _audioFrames;
     public IObservable<SessionState> StateChanged => _stateChanged;
     public IObservable<SessionTelemetry> Telemetry => _telemetry;
 
@@ -100,6 +102,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
         if (_activeInner is not null)
             await _activeInner.DisposeAsync().ConfigureAwait(false);
         _frames.OnCompleted();
+        _audioFrames.OnCompleted();
         _stateChanged.OnCompleted();
         _telemetry.OnCompleted();
         _cts?.Dispose();
@@ -131,6 +134,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
                 if (!sawFrame) { sawFrame = true; attempt = 0; }
                 _frames.OnNext(f);
             });
+            using var audioSub = inner.AudioFrames.Subscribe(_audioFrames.OnNext);
             using var telemetrySub = inner.Telemetry.Subscribe(_telemetry.OnNext);
             using var stateSub = inner.StateChanged.Subscribe(s =>
             {

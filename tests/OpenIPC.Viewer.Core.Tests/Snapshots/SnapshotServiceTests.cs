@@ -110,6 +110,7 @@ public sealed class SnapshotServiceTests
         public string? LastError => null;
         public IObservable<SessionState> StateChanged { get; } = new NeverObservable<SessionState>();
         public IObservable<VideoFrame> Frames { get; } = new NeverObservable<VideoFrame>();
+        public IObservable<AudioFrame> AudioFrames { get; } = new NeverObservable<AudioFrame>();
         public IObservable<SessionTelemetry> Telemetry { get; } = new NeverObservable<SessionTelemetry>();
         public Task StartAsync(CancellationToken ct) { State = SessionState.Playing; return Task.CompletedTask; }
         public Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct)

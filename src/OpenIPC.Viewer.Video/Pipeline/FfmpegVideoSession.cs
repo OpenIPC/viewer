@@ -19,8 +19,15 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private readonly ILogger<FfmpegVideoSession> _logger;
 
     private readonly Subject<VideoFrame> _frames = new();
+    private readonly Subject<AudioFrame> _audioFrames = new();
     private readonly Subject<SessionState> _stateChanged = new();
     private readonly Subject<SessionTelemetry> _telemetry = new();
+
+    // Audio output is normalized to this format for every camera (Phase 17.1):
+    // signed-16 interleaved, stereo, 48 kHz. swresample does the heavy lifting;
+    // the native sink (WASAPI etc.) only converts to the device mix format.
+    private const int AudioOutSampleRate = 48000;
+    private const int AudioOutChannels = 2;
 
     private readonly object _stateLock = new();
     private readonly object _snapshotLock = new();
@@ -73,6 +80,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
     }
 
     public IObservable<VideoFrame> Frames => _frames;
+    public IObservable<AudioFrame> AudioFrames => _audioFrames;
     public IObservable<SessionState> StateChanged => _stateChanged;
     public IObservable<SessionTelemetry> Telemetry => _telemetry;
 
@@ -145,6 +153,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
             await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
         }
         _frames.OnCompleted();
+        _audioFrames.OnCompleted();
         _stateChanged.OnCompleted();
         _telemetry.OnCompleted();
         _cts?.Dispose();
@@ -161,7 +170,11 @@ internal sealed class FfmpegVideoSession : IVideoSession
         SwsContext* sws = null;
         AVDictionary* opts = null;
         AVBufferRef* hwDeviceCtx = null;
+        AVCodecContext* audioCtx = null;
+        AVFrame* audioFrame = null;
+        SwrContext* swr = null;
         var videoStreamIndex = -1;
+        var audioStreamIndex = -1;
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         var hwActive = false;
 
@@ -225,6 +238,16 @@ internal sealed class FfmpegVideoSession : IVideoSession
             frame = ffmpeg.av_frame_alloc();
             if (hwActive) swFrame = ffmpeg.av_frame_alloc();
 
+            // Audio (Phase 17.1) — opt-in, best-effort. Any failure here disables
+            // audio and lets video play on; a camera with no audio track is the
+            // common case and must not break the stream.
+            if (_options.EnableAudio)
+            {
+                audioStreamIndex = SetupAudio(fmtCtx, &audioCtx, &swr, &audioFrame);
+                if (audioStreamIndex < 0)
+                    _logger.LogInformation("No audio track decoded for {Host}", _options.RtspUri.Host);
+            }
+
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
 
@@ -250,6 +273,13 @@ internal sealed class FfmpegVideoSession : IVideoSession
                     }
                     _logger.LogWarning("av_read_frame failed: {Err}", FfmpegError.Describe(ret));
                     break;
+                }
+
+                if (packet->stream_index == audioStreamIndex)
+                {
+                    DecodeAudio(audioCtx, swr, audioFrame, packet, ct);
+                    ffmpeg.av_packet_unref(packet);
+                    continue;
                 }
 
                 if (packet->stream_index != videoStreamIndex)
@@ -324,10 +354,13 @@ internal sealed class FfmpegVideoSession : IVideoSession
         finally
         {
             if (sws != null) ffmpeg.sws_freeContext(sws);
+            if (swr != null) { var p = swr; ffmpeg.swr_free(&p); }
             if (frame != null) { var p = frame; ffmpeg.av_frame_free(&p); }
             if (swFrame != null) { var p = swFrame; ffmpeg.av_frame_free(&p); }
+            if (audioFrame != null) { var p = audioFrame; ffmpeg.av_frame_free(&p); }
             if (packet != null) { var p = packet; ffmpeg.av_packet_free(&p); }
             if (codecCtx != null) { var p = codecCtx; ffmpeg.avcodec_free_context(&p); }
+            if (audioCtx != null) { var p = audioCtx; ffmpeg.avcodec_free_context(&p); }
             if (hwDeviceCtx != null) { var p = hwDeviceCtx; ffmpeg.av_buffer_unref(&p); }
             if (fmtCtx != null) ffmpeg.avformat_close_input(&fmtCtx);
             if (opts != null) ffmpeg.av_dict_free(&opts);
@@ -430,6 +463,162 @@ internal sealed class FfmpegVideoSession : IVideoSession
         finally
         {
             ArrayPool<byte>.Shared.Return(bgra);
+        }
+    }
+
+    // Finds the first audio stream, opens its decoder and a swresample context
+    // that normalizes to S16/48 kHz/stereo. Returns the stream index, or -1 if
+    // there is no audio or setup fails (caller treats both as "no audio").
+    private unsafe int SetupAudio(AVFormatContext* fmtCtx, AVCodecContext** outCtx, SwrContext** outSwr, AVFrame** outFrame)
+    {
+        var idx = -1;
+        for (var i = 0; i < (int)fmtCtx->nb_streams; i++)
+        {
+            if (fmtCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
+            {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) return -1;
+
+        var codecpar = fmtCtx->streams[idx]->codecpar;
+        var codec = ffmpeg.avcodec_find_decoder(codecpar->codec_id);
+        if (codec == null)
+        {
+            _logger.LogWarning("No audio decoder for codec id {Id}", codecpar->codec_id);
+            return -1;
+        }
+
+        var ctx = ffmpeg.avcodec_alloc_context3(codec);
+        var ret = ffmpeg.avcodec_parameters_to_context(ctx, codecpar);
+        if (ret < 0)
+        {
+            _logger.LogWarning("audio avcodec_parameters_to_context failed: {Err}", FfmpegError.Describe(ret));
+            ffmpeg.avcodec_free_context(&ctx);
+            return -1;
+        }
+
+        ret = ffmpeg.avcodec_open2(ctx, codec, null);
+        if (ret < 0)
+        {
+            _logger.LogWarning("audio avcodec_open2 failed: {Err}", FfmpegError.Describe(ret));
+            ffmpeg.avcodec_free_context(&ctx);
+            return -1;
+        }
+
+        // Input layout: trust the decoder's if it knows it, else assume mono.
+        AVChannelLayout defaultIn = default;
+        AVChannelLayout* inLayout;
+        if (ctx->ch_layout.nb_channels > 0)
+        {
+            inLayout = &ctx->ch_layout;
+        }
+        else
+        {
+            ffmpeg.av_channel_layout_default(&defaultIn, 1);
+            inLayout = &defaultIn;
+        }
+
+        AVChannelLayout outLayout = default;
+        ffmpeg.av_channel_layout_default(&outLayout, AudioOutChannels);
+
+        SwrContext* swr = null;
+        ret = ffmpeg.swr_alloc_set_opts2(
+            &swr,
+            &outLayout, AVSampleFormat.AV_SAMPLE_FMT_S16, AudioOutSampleRate,
+            inLayout, ctx->sample_fmt, ctx->sample_rate,
+            0, null);
+        if (ret < 0 || swr == null)
+        {
+            _logger.LogWarning("swr_alloc_set_opts2 failed: {Err}", FfmpegError.Describe(ret));
+            ffmpeg.av_channel_layout_uninit(&outLayout);
+            ffmpeg.avcodec_free_context(&ctx);
+            return -1;
+        }
+
+        ret = ffmpeg.swr_init(swr);
+        ffmpeg.av_channel_layout_uninit(&outLayout);
+        if (ret < 0)
+        {
+            _logger.LogWarning("swr_init failed: {Err}", FfmpegError.Describe(ret));
+            ffmpeg.swr_free(&swr);
+            ffmpeg.avcodec_free_context(&ctx);
+            return -1;
+        }
+
+        var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
+        _logger.LogInformation("Audio decode active: {Codec} {Rate}Hz {Ch}ch → 48kHz stereo S16",
+            baseName, ctx->sample_rate, ctx->ch_layout.nb_channels);
+
+        *outCtx = ctx;
+        *outSwr = swr;
+        *outFrame = ffmpeg.av_frame_alloc();
+        return idx;
+    }
+
+    private unsafe void DecodeAudio(AVCodecContext* ctx, SwrContext* swr, AVFrame* frame, AVPacket* packet, CancellationToken ct)
+    {
+        if (ctx == null || swr == null || frame == null) return;
+
+        var ret = ffmpeg.avcodec_send_packet(ctx, packet);
+        if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
+        {
+            _logger.LogDebug("audio send_packet failed: {Err}", FfmpegError.Describe(ret));
+            return;
+        }
+
+        while (!ct.IsCancellationRequested)
+        {
+            ret = ffmpeg.avcodec_receive_frame(ctx, frame);
+            if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
+                break;
+            if (ret < 0)
+            {
+                _logger.LogDebug("audio receive_frame failed: {Err}", FfmpegError.Describe(ret));
+                break;
+            }
+
+            EmitAudioFrame(swr, frame, ctx->sample_rate);
+            ffmpeg.av_frame_unref(frame);
+        }
+    }
+
+    private unsafe void EmitAudioFrame(SwrContext* swr, AVFrame* frame, int inRate)
+    {
+        if (inRate <= 0) return;
+
+        // Worst-case output sample count: queued resampler delay + this frame,
+        // rescaled to the output rate.
+        var delay = ffmpeg.swr_get_delay(swr, inRate);
+        var maxOut = (int)ffmpeg.av_rescale_rnd(delay + frame->nb_samples, AudioOutSampleRate, inRate, AVRounding.AV_ROUND_UP);
+        if (maxOut <= 0) return;
+
+        var pcm = new byte[maxOut * AudioOutChannels * 2]; // S16 = 2 bytes/sample
+        int produced;
+        fixed (byte* dst = pcm)
+        {
+            var outPlane = dst;
+            produced = ffmpeg.swr_convert(swr, &outPlane, maxOut, frame->extended_data, frame->nb_samples);
+        }
+        if (produced <= 0) return;
+
+        var bytes = produced * AudioOutChannels * 2;
+        var payload = pcm;
+        if (bytes != pcm.Length)
+        {
+            payload = new byte[bytes];
+            Buffer.BlockCopy(pcm, 0, payload, 0, bytes);
+        }
+
+        var af = new AudioFrame(payload, AudioOutSampleRate, AudioOutChannels, 0);
+        try
+        {
+            _audioFrames.OnNext(af);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Subscriber threw in audio OnNext");
         }
     }
 

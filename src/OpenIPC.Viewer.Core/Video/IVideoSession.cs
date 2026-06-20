@@ -13,6 +13,12 @@ public interface IVideoSession : IAsyncDisposable
     IObservable<VideoFrame> Frames { get; }
     IObservable<SessionTelemetry> Telemetry { get; }
 
+    // Decoded + resampled PCM audio (Phase 17.1). Only emits when the session
+    // was created with VideoSessionOptions.EnableAudio; otherwise it completes
+    // with no items. The camera may carry no audio track at all — in that case
+    // it is also silent, never faulting.
+    IObservable<AudioFrame> AudioFrames { get; }
+
     Task StartAsync(CancellationToken ct);
     Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct);
 

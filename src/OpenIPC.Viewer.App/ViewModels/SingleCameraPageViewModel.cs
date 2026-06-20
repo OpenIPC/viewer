@@ -32,6 +32,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly UserSettingsService _userSettings;
     private readonly IDialogService _dialogs;
     private readonly ISnapshotService _snapshots;
+    private readonly AudioMonitor _audio;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
@@ -147,6 +148,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         UserSettingsService userSettings,
         IDialogService dialogs,
         ISnapshotService snapshots,
+        AudioMonitor audio,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -159,7 +161,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _userSettings = userSettings;
         _dialogs = dialogs;
         _snapshots = snapshots;
+        _audio = audio;
         _logger = logger;
+
+        // Hydrate the shared monitor from the persisted prefs and reflect any
+        // later change (incl. from another page) back into the speaker UI.
+        _audio.Muted = _userSettings.Current.AudioMuted;
+        _audio.Volume = (float)_userSettings.Current.AudioVolume;
+        _audio.Changed += OnAudioChanged;
 
         IsRecording = _recordings.IsRecording(_camera.Id);
         _recordings.StateChanged += OnRecordingsStateChanged;
@@ -200,6 +209,56 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             OnPropertyChanged(nameof(ShowTelemetryBadges));
             OnPropertyChanged(nameof(IsRawConfigEditorEnabled));
         });
+    }
+
+    // --- Audio listen (Phase 17.3) ----------------------------------------
+    // The speaker controls bind here; the shared AudioMonitor owns the actual
+    // state (one-source policy + gain), so these are thin pass-throughs that
+    // also persist the user's choice. Hidden in the view when AudioAvailable
+    // is false (no native sink / no output device).
+    public bool AudioAvailable => _audio.IsAvailable;
+
+    public bool IsMuted
+    {
+        get => _audio.Muted;
+        set
+        {
+            if (_audio.Muted == value) return;
+            _audio.Muted = value; // raises Changed → OnAudioChanged re-raises + persists
+        }
+    }
+
+    public double Volume
+    {
+        get => _audio.Volume;
+        set
+        {
+            if (Math.Abs(_audio.Volume - value) < 0.0001) return;
+            _audio.Volume = (float)value;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleMute() => IsMuted = !IsMuted;
+
+    private void OnAudioChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsMuted));
+            OnPropertyChanged(nameof(Volume));
+            OnPropertyChanged(nameof(AudioAvailable));
+        });
+        PersistAudioPrefs();
+    }
+
+    private void PersistAudioPrefs()
+    {
+        var cur = _userSettings.Current;
+        if (cur.AudioMuted == _audio.Muted && Math.Abs(cur.AudioVolume - _audio.Volume) < 0.0001)
+            return;
+        var next = cur with { AudioMuted = _audio.Muted, AudioVolume = _audio.Volume };
+        _ = _userSettings.UpdateAsync(next);
     }
 
     private void OnRecordingsStateChanged(object? sender, CameraId cam)
@@ -303,7 +362,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         {
             var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(true);
             var options = VideoSessionOptions.Default(_camera.RtspMainUri, creds)
-                with { Transport = ParseTransport(_userSettings.Current.RtspTransport) };
+                with
+                {
+                    Transport = ParseTransport(_userSettings.Current.RtspTransport),
+                    // Single-camera page decodes audio so the speaker button works
+                    // instantly; output stays silent until the user unmutes.
+                    EnableAudio = true,
+                };
 
             try
             {
@@ -319,6 +384,12 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
                 if (session.State == SessionState.Idle)
                     await session.StartAsync(ct).ConfigureAwait(true);
+
+                // Route this camera's audio to the speakers (one-source policy:
+                // attaching here silences any previously listened camera). Sound
+                // only plays once unmuted; default is muted.
+                if (_audio.IsAvailable)
+                    _audio.Attach(session, _camera.Id);
             }
             catch (Exception ex)
             {
@@ -763,6 +834,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _recordings.StateChanged -= OnRecordingsStateChanged;
         _userSettings.Changed -= OnUserSettingsChanged;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
+        _audio.Changed -= OnAudioChanged;
+        _audio.Detach(_camera.Id);
         StopRecTimer();
         if (Ptz is not null)
         {

@@ -346,7 +346,7 @@
     </Border>
 
     <!-- Bottom bar. Hidden in landscape fullscreen. -->
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,0"
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0"
           IsVisible="{Binding !IsFullscreen}">
 
       <!-- REC indicator (visible while recording) -->
@@ -398,7 +398,39 @@
                 Foreground="{StaticResource TextPrimaryBrush}" />
       </StackPanel>
 
-      <Button Grid.Column="2"
+      <!-- Audio listen (Phase 17.3): speaker toggle + volume. Hidden when no
+           native sink is available. Muted by default. -->
+      <StackPanel Grid.Column="2"
+                  Orientation="Horizontal"
+                  Spacing="8"
+                  VerticalAlignment="Center"
+                  Margin="0,0,8,0"
+                  IsVisible="{Binding AudioAvailable}">
+        <Button Command="{Binding ToggleMuteCommand}"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,8"
+                ToolTip.Tip="{Binding [CameraPage.Tooltip.Mute], Source={x:Static svc:Localizer.Instance}}">
+          <Panel>
+            <Path Classes="lucide" Data="{StaticResource IconVolume}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16"
+                  IsVisible="{Binding !IsMuted}" />
+            <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16"
+                  IsVisible="{Binding IsMuted}" />
+          </Panel>
+        </Button>
+        <Slider Width="90"
+                Minimum="0" Maximum="1"
+                Value="{Binding Volume}"
+                IsEnabled="{Binding !IsMuted}"
+                VerticalAlignment="Center"
+                ToolTip.Tip="{Binding [CameraPage.Tooltip.Volume], Source={x:Static svc:Localizer.Instance}}" />
+      </StackPanel>
+
+      <Button Grid.Column="3"
               Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding !IsRecording}"
               Background="Transparent"
@@ -409,7 +441,7 @@
               Foreground="{StaticResource DangerBrush}"
               Content="● REC"
               Margin="0,0,8,0" />
-      <Button Grid.Column="2"
+      <Button Grid.Column="3"
               Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding IsRecording}"
               Background="{StaticResource DangerBrush}"
@@ -419,7 +451,7 @@
               Content="{Binding [CameraPage.Stop], Source={x:Static svc:Localizer.Instance}}"
               Margin="0,0,8,0" />
 
-      <Button Grid.Column="3"
+      <Button Grid.Column="4"
               Content="{Binding [CameraPage.Snapshot], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding SnapshotCommand}"
               Background="{StaticResource AccentBrush}"

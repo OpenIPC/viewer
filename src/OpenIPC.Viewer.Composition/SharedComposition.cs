@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
 using OpenIPC.Viewer.Core.Events;
@@ -63,6 +64,15 @@ public static class SharedComposition
         // desktop, in-process libavformat on Android/iOS (no exec in the sandbox)
         // — same split as IRecorder.
         services.AddSingleton<LiveStreamCoordinator>();
+
+        // Audio listen (Phase 17). The native sink is registered by the platform
+        // host (WASAPI on Windows, etc.); heads without one fall back to a silent
+        // no-op sink so AudioMonitor still resolves and the UI just hides the
+        // speaker controls (IsAvailable=false). AudioMonitor enforces the
+        // one-source policy + mute/volume.
+        services.TryAddSingleton<OpenIPC.Viewer.Core.Platform.IAudioOutput,
+            OpenIPC.Viewer.Core.Platform.NullAudioOutput>();
+        services.AddSingleton<AudioMonitor>();
 
         // ONVIF
         services.AddSingleton<IOnvifClient, OnvifCoreClient>();

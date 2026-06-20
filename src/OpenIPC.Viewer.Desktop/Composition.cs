@@ -109,6 +109,8 @@ internal static class Composition
                 return new DpapiSecretsStore(sp.GetRequiredService<IFileSystem>().AppDataDir);
             });
             services.AddSingleton<IHwDecoderFactory, D3d11VaDecoderFactory>();
+            // Audio listen (Phase 17.2) — native WASAPI renderer on Windows.
+            services.AddSingleton<IAudioOutput, Audio.WasapiAudioOutput>();
         }
         else if (OperatingSystem.IsLinux())
         {
