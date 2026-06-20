@@ -346,7 +346,7 @@
     </Border>
 
     <!-- Bottom bar. Hidden in landscape fullscreen. -->
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0"
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,12,0,0"
           IsVisible="{Binding !IsFullscreen}">
 
       <!-- REC indicator (visible while recording) -->
@@ -453,7 +453,30 @@
                 Content="{Binding [CameraPage.Audio.Enable], Source={x:Static svc:Localizer.Instance}}" />
       </StackPanel>
 
+      <!-- Push-to-talk (Phase 17.6): mic → camera speaker. Shown when a mic
+           exists; active state highlighted. -->
       <Button Grid.Column="3"
+              Command="{Binding ToggleTalkCommand}"
+              IsVisible="{Binding CanTalk}"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}"
+              BorderThickness="1"
+              Padding="14,8"
+              CornerRadius="6"
+              Margin="0,0,8,0"
+              ToolTip.Tip="{Binding [CameraPage.Tooltip.Talk], Source={x:Static svc:Localizer.Instance}}">
+        <Panel>
+          <!-- Accent mic while transmitting, neutral otherwise. -->
+          <Path Classes="lucide" Data="{StaticResource IconMic}"
+                Stroke="{StaticResource AccentBrush}" Width="16" Height="16"
+                IsVisible="{Binding IsTalking}" />
+          <Path Classes="lucide" Data="{StaticResource IconMic}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16"
+                IsVisible="{Binding !IsTalking}" />
+        </Panel>
+      </Button>
+
+      <Button Grid.Column="4"
               Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding !IsRecording}"
               Background="Transparent"
@@ -464,7 +487,7 @@
               Foreground="{StaticResource DangerBrush}"
               Content="● REC"
               Margin="0,0,8,0" />
-      <Button Grid.Column="3"
+      <Button Grid.Column="4"
               Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding IsRecording}"
               Background="{StaticResource DangerBrush}"
@@ -474,7 +497,7 @@
               Content="{Binding [CameraPage.Stop], Source={x:Static svc:Localizer.Instance}}"
               Margin="0,0,8,0" />
 
-      <Button Grid.Column="4"
+      <Button Grid.Column="5"
               Content="{Binding [CameraPage.Snapshot], Source={x:Static svc:Localizer.Instance}}"
               Command="{Binding SnapshotCommand}"
               Background="{StaticResource AccentBrush}"

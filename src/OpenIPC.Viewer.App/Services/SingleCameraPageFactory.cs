@@ -22,6 +22,8 @@ public sealed class SingleCameraPageFactory
     private readonly IDialogService _dialogs;
     private readonly ISnapshotService _snapshots;
     private readonly AudioMonitor _audio;
+    private readonly OpenIPC.Viewer.Core.Platform.IAudioInput _audioInput;
+    private readonly IAudioBackchannelClient _backchannel;
     private readonly ILoggerFactory _loggerFactory;
 
     public SingleCameraPageFactory(
@@ -35,6 +37,8 @@ public sealed class SingleCameraPageFactory
         IDialogService dialogs,
         ISnapshotService snapshots,
         AudioMonitor audio,
+        OpenIPC.Viewer.Core.Platform.IAudioInput audioInput,
+        IAudioBackchannelClient backchannel,
         ILoggerFactory loggerFactory)
     {
         _coordinator = coordinator;
@@ -47,9 +51,13 @@ public sealed class SingleCameraPageFactory
         _dialogs = dialogs;
         _snapshots = snapshots;
         _audio = audio;
+        _audioInput = audioInput;
+        _backchannel = backchannel;
         _loggerFactory = loggerFactory;
     }
 
     public SingleCameraPageViewModel Create(Camera camera) =>
-        new(camera, _coordinator, _directory, _onvif, _majestic, _majesticSsh, _recordings, _userSettings, _dialogs, _snapshots, _audio, _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
+        new(camera, _coordinator, _directory, _onvif, _majestic, _majesticSsh, _recordings, _userSettings, _dialogs, _snapshots, _audio,
+            new PushToTalkController(_audioInput, _backchannel),
+            _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
 }

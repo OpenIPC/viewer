@@ -33,6 +33,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly IDialogService _dialogs;
     private readonly ISnapshotService _snapshots;
     private readonly AudioMonitor _audio;
+    private readonly PushToTalkController _talk;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
@@ -153,6 +154,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         IDialogService dialogs,
         ISnapshotService snapshots,
         AudioMonitor audio,
+        PushToTalkController talk,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -166,6 +168,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _dialogs = dialogs;
         _snapshots = snapshots;
         _audio = audio;
+        _talk = talk;
         _logger = logger;
 
         // Hydrate the shared monitor from the persisted prefs and reflect any
@@ -173,6 +176,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _audio.Muted = _userSettings.Current.AudioMuted;
         _audio.Volume = (float)_userSettings.Current.AudioVolume;
         _audio.Changed += OnAudioChanged;
+
+        _talk.StateChanged += OnTalkChanged;
+        _talk.Error += OnTalkError;
 
         IsRecording = _recordings.IsRecording(_camera.Id);
         _recordings.StateChanged += OnRecordingsStateChanged;
@@ -311,6 +317,45 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         var next = cur with { AudioMuted = _audio.Muted, AudioVolume = _audio.Volume };
         _ = _userSettings.UpdateAsync(next);
     }
+
+    // --- Push-to-talk (Phase 17.6) ----------------------------------------
+    // Shown when a mic exists. Tapping opens the ONVIF backchannel and streams
+    // the mic to the camera's speaker; tapping again stops. If the camera has no
+    // backchannel the open fails and TalkError surfaces.
+    public bool CanTalk => _talk.IsAvailable;
+
+    [ObservableProperty] private bool _isTalking;
+    [ObservableProperty] private string? _talkError;
+
+    [RelayCommand]
+    private async Task ToggleTalkAsync()
+    {
+        if (!_talk.IsAvailable) return;
+        if (_talk.IsTalking)
+        {
+            await _talk.StopAsync().ConfigureAwait(true);
+            return;
+        }
+        TalkError = null;
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var ep = new BackchannelEndpoint(_camera.RtspMainUri, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await _talk.StartAsync(ep, cts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Start talk failed");
+            TalkError = ex.Message;
+        }
+    }
+
+    private void OnTalkChanged(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(() => IsTalking = _talk.IsTalking);
+
+    private void OnTalkError(object? sender, string message)
+        => Dispatcher.UIThread.Post(() => TalkError = message);
 
     private void OnRecordingsStateChanged(object? sender, CameraId cam)
     {
@@ -898,6 +943,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _audio.Changed -= OnAudioChanged;
         _audio.Detach(_camera.Id);
+        _talk.StateChanged -= OnTalkChanged;
+        _talk.Error -= OnTalkError;
+        await _talk.DisposeAsync().ConfigureAwait(false);
         StopRecTimer();
         if (Ptz is not null)
         {

@@ -75,6 +75,10 @@ public static class SharedComposition
         services.TryAddSingleton<OpenIPC.Viewer.Core.Platform.IAudioInput,
             OpenIPC.Viewer.Core.Platform.NullAudioInput>();
         services.AddSingleton<AudioMonitor>();
+        // Push-to-talk backchannel (Phase 17.5) — pure managed RTSP/RTP, works on
+        // every head (the platform-specific part is the mic, IAudioInput).
+        services.AddSingleton<IAudioBackchannelClient,
+            OpenIPC.Viewer.Devices.Backchannel.RtspBackchannelClient>();
 
         // ONVIF
         services.AddSingleton<IOnvifClient, OnvifCoreClient>();
