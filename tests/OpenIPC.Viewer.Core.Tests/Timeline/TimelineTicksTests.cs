@@ -17,9 +17,9 @@ public sealed class TimelineTicksTests
     [Fact]
     public void ZoomedOut_ChoosesCoarseStep()
     {
-        // A full day over 1000px → target 6912s → snaps up to 3h.
+        // A full day over 1000px → target 6912s → smallest nice step ≥ that is 2h.
         var step = TimelineTicks.ChooseStep(visibleSeconds: 86400, width: 1000, minSpacingPx: 80);
-        Assert.Equal(TimeSpan.FromHours(3), step);
+        Assert.Equal(TimeSpan.FromHours(2), step);
     }
 
     [Fact]
