@@ -4,7 +4,7 @@ using OpenIPC.Viewer.Video.Pipeline;
 
 namespace OpenIPC.Viewer.Video;
 
-public sealed class FfmpegVideoEngine : IVideoEngine
+public sealed class FfmpegVideoEngine : IVideoEngine, IPlaybackEngine
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly IHwDecoderFactory? _hwFactory;
@@ -24,4 +24,7 @@ public sealed class FfmpegVideoEngine : IVideoEngine
 
         return new AutoReconnectingVideoSession(Create, _loggerFactory.CreateLogger<AutoReconnectingVideoSession>());
     }
+
+    public IPlaybackSession OpenFile(PlaybackOptions options) =>
+        new FfmpegPlaybackSession(options, _loggerFactory.CreateLogger<FfmpegPlaybackSession>());
 }

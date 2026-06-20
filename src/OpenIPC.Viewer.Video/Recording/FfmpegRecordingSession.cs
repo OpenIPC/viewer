@@ -64,8 +64,12 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         psi.ArgumentList.Add("-segment_time"); psi.ArgumentList.Add(((int)_options.SegmentDuration.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("-reset_timestamps"); psi.ArgumentList.Add("1");
         psi.ArgumentList.Add("-strftime"); psi.ArgumentList.Add("1");
-        // Fragmented MP4 → kill-survivable segments (phase-06 §"MP4 fragmented vs regular").
-        psi.ArgumentList.Add("-movflags"); psi.ArgumentList.Add("+faststart+frag_keyframe+empty_moov");
+        // Fragmented MP4 → kill-survivable segments (phase-16.1). No +faststart:
+        // it relocates the moov in a second pass over a *finished* file, which a
+        // fragmented (empty_moov) stream doesn't have and which defeats the
+        // play-while-recording / crash-survivable guarantee. default_base_moof
+        // matches the in-process libavformat path and improves player compat.
+        psi.ArgumentList.Add("-movflags"); psi.ArgumentList.Add("+frag_keyframe+empty_moov+default_base_moof");
         psi.ArgumentList.Add(outputPattern);
 
         _proc = Process.Start(psi)

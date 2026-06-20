@@ -57,7 +57,7 @@ and scope live in the planning docs (`dashboard-ideas-roadmap-ru.md`).
 | 13 | SSH device suite | SSH terminal, SCP file manager, open-in-browser, config push | ✅ Done |
 | 14 | Snapshots & viewer | Always-HD snapshot, snapshot browser, built-in viewer + basic editor | ✅ Done |
 | 15 | Local AI analytics | ONNX object detection per camera, auto-record, control center, CPU fallback | ✅ Done |
-| 16 | Archive pro | Fragmented MP4, activity calendar, timeline zoom, clip export | 📋 Planned |
+| 16 | Archive pro | Fragmented MP4, activity calendar, timeline zoom, clip export | ✅ Done |
 | 17 | Community & app-level | Tabbed layouts, config export/import, notifications, white-label, issue reporter, RBAC | 📋 Planned |
 | 18 | Streq remote access | Cloud multistreaming across devices: LAN/overlay/relay routing, enrollment, WebRTC/HLS, cross-device sync | 📋 Planned |
 

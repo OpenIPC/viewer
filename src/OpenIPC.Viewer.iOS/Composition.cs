@@ -51,6 +51,10 @@ internal static class Composition
         // §10.6). Idle-timer-disabled lifecycle hook is a follow-up.
         services.AddSingleton<IRecorder, LibavformatRecorder>();
 
+        // Clip export (Phase 16.5) — in-process libavformat (no subprocess on iOS).
+        services.AddSingleton<OpenIPC.Viewer.Core.Archive.IClipExporter,
+            OpenIPC.Viewer.Video.Recording.LibavformatClipExporter>();
+
         services.AddSharedServices();
 
         var provider = services.BuildServiceProvider(validateScopes: true);

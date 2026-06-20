@@ -50,6 +50,15 @@ internal static class Composition
                 cfg["Recording:FfmpegPath"]);
         });
 
+        // Clip export (Phase 16.5) — ffmpeg subprocess on desktop.
+        services.AddSingleton<OpenIPC.Viewer.Core.Archive.IClipExporter>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            return new FfmpegSubprocessClipExporter(
+                sp.GetRequiredService<ILoggerFactory>(),
+                cfg["Recording:FfmpegPath"]);
+        });
+
         services.AddSharedServices();
 
         var provider = services.BuildServiceProvider(validateScopes: true);

@@ -96,6 +96,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Loading"] = "Loading…",
         ["Common.Retry"] = "Retry",
         ["Common.Close"] = "Close",
+        ["Common.All"] = "All days",
 
         ["Stream.Connecting"] = "Connecting…",
         ["Stream.Reconnecting"] = "Reconnecting…",
@@ -367,6 +368,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Recordings.Empty"] = "No recordings yet. Hit ● REC on a camera page to start.",
         ["Recordings.Live"] = "live",
         ["Recordings.LoadError"] = "Could not load recordings",
+        ["Recordings.MarkIn"] = "Set In",
+        ["Recordings.MarkOut"] = "Set Out",
+        ["Recordings.Precise"] = "Precise",
+        ["Recordings.Export"] = "Export",
+        ["Recordings.ExportTitle"] = "Export clip",
 
         ["Events.Button.SimulateMotion"] = "Simulate motion",
         ["Events.Empty"] = "No events yet. Hit Simulate motion to push one through the pipeline.",
@@ -416,6 +422,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Loading"] = "Загрузка…",
         ["Common.Retry"] = "Повторить",
         ["Common.Close"] = "Закрыть",
+        ["Common.All"] = "Все дни",
 
         ["Stream.Connecting"] = "Подключение…",
         ["Stream.Reconnecting"] = "Переподключение…",
@@ -687,6 +694,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Recordings.Empty"] = "Записей пока нет. Нажмите ● REC на странице камеры, чтобы начать.",
         ["Recordings.Live"] = "идёт",
         ["Recordings.LoadError"] = "Не удалось загрузить записи",
+        ["Recordings.MarkIn"] = "Начало",
+        ["Recordings.MarkOut"] = "Конец",
+        ["Recordings.Precise"] = "Точно",
+        ["Recordings.Export"] = "Экспорт",
+        ["Recordings.ExportTitle"] = "Экспорт клипа",
 
         ["Events.Button.SimulateMotion"] = "Симулировать движение",
         ["Events.Empty"] = "Событий пока нет. Нажмите «Симулировать движение», чтобы прогнать одно через конвейер.",

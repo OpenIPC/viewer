@@ -26,6 +26,9 @@
     <DataTemplate DataType="vm:RecordingsPageViewModel">
       <pages:RecordingsPage />
     </DataTemplate>
+    <DataTemplate DataType="vm:RecordingPlayerPageViewModel">
+      <pages:RecordingPlayerPage />
+    </DataTemplate>
     <DataTemplate DataType="vm:EventsPageViewModel">
       <pages:EventsPage />
     </DataTemplate>

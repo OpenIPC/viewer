@@ -48,6 +48,10 @@ internal static class Composition
         services.AddSingleton<IRecorder>(sp =>
             new AndroidRecorder(context, sp.GetRequiredService<ILoggerFactory>()));
 
+        // Clip export (Phase 16.5) — in-process libavformat (no subprocess on Android).
+        services.AddSingleton<OpenIPC.Viewer.Core.Archive.IClipExporter,
+            OpenIPC.Viewer.Video.Recording.LibavformatClipExporter>();
+
         services.AddSharedServices();
 
         var provider = services.BuildServiceProvider(validateScopes: true);

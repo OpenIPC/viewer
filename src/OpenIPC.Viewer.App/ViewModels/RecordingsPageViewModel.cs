@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Recording;
@@ -23,7 +25,13 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly ILogger<RecordingsPageViewModel> _logger;
 
+    private readonly List<RecordingRowViewModel> _allRows = new();
+    private DateTime? _dayFilter;
+
     public string Title => Localizer.Instance["Nav.Recordings"];
+
+    // Phase 16.3: archive activity calendar. Selecting a day filters the list.
+    public ArchiveCalendarViewModel Calendar { get; }
 
     // Phase 14: the Recordings page doubles as the captured-media browser. A
     // segmented header flips between the recordings list and the snapshot
@@ -67,13 +75,34 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         CameraDirectoryService cameras,
         IDialogService dialogs,
         SnapshotBrowserPageViewModel snapshots,
+        ArchiveCalendarViewModel calendar,
         ILogger<RecordingsPageViewModel> logger)
     {
         _repo = repo;
         _cameras = cameras;
         _dialogs = dialogs;
         Snapshots = snapshots;
+        Calendar = calendar;
         _logger = logger;
+        Calendar.DaySelected += OnDaySelected;
+    }
+
+    private void OnDaySelected(DateTime? day)
+    {
+        _dayFilter = day;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        Items.Clear();
+        foreach (var row in _allRows)
+        {
+            if (_dayFilter is { } d && row.StartedAtLocal.Date != d.Date)
+                continue;
+            Items.Add(row);
+        }
+        OnPropertyChanged(nameof(IsEmpty));
     }
 
     [RelayCommand]
@@ -98,14 +127,16 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
             var nameById = new Dictionary<CameraId, string>();
             foreach (var c in cams) nameById[c.Id] = c.Name;
 
-            Items.Clear();
+            _allRows.Clear();
             foreach (var r in recordings)
             {
                 var name = nameById.TryGetValue(r.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
-                Items.Add(new RecordingRowViewModel(r, name));
+                _allRows.Add(new RecordingRowViewModel(r, name));
             }
+            ApplyFilter();
             IsLoaded = true;
-            OnPropertyChanged(nameof(IsEmpty));
+
+            await Calendar.LoadAsync(ct).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -120,6 +151,13 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private Task ReloadAsync() => LoadAsync(CancellationToken.None);
+
+    [RelayCommand]
+    private void Play(RecordingRowViewModel? row)
+    {
+        if (row is null) return;
+        WeakReferenceMessenger.Default.Send(new OpenRecordingMessage(row.Recording, row.CameraName));
+    }
 
     [RelayCommand]
     private async Task DeleteAsync(RecordingRowViewModel? row)
@@ -138,6 +176,7 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
             catch (IOException ex) { _logger.LogWarning(ex, "File still locked (recording in progress?)"); }
 
             await _repo.RemoveAsync(row.Recording.Id, CancellationToken.None).ConfigureAwait(true);
+            _allRows.Remove(row);
             Items.Remove(row);
             OnPropertyChanged(nameof(IsEmpty));
         }

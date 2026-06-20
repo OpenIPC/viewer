@@ -54,6 +54,14 @@ public static class SharedComposition
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();
+        // FfmpegVideoEngine also implements IPlaybackEngine (Phase 16 file
+        // playback) — expose the same singleton under that contract.
+        services.AddSingleton<IPlaybackEngine>(sp =>
+            (IPlaybackEngine)sp.GetRequiredService<IVideoEngine>());
+        services.AddSingleton<IMediaProbe, OpenIPC.Viewer.Video.Pipeline.FfmpegMediaProbe>();
+        // IClipExporter (Phase 16.5) is registered per head: ffmpeg subprocess on
+        // desktop, in-process libavformat on Android/iOS (no exec in the sandbox)
+        // — same split as IRecorder.
         services.AddSingleton<LiveStreamCoordinator>();
 
         // ONVIF
@@ -103,6 +111,7 @@ public static class SharedComposition
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<SingleCameraPageFactory>();
+        services.AddSingleton<RecordingPlayerPageFactory>();
         services.AddSingleton<CameraEditorFactory>();
         services.AddSingleton<DiscoveryDialogFactory>();
         services.AddSingleton<ManageGroupsDialogFactory>();
@@ -129,6 +138,7 @@ public static class SharedComposition
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<GridPageViewModel>();
         services.AddSingleton<CameraLibraryPageViewModel>();
+        services.AddSingleton<ArchiveCalendarViewModel>();
         services.AddSingleton<RecordingsPageViewModel>();
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
