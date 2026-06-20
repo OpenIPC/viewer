@@ -56,7 +56,11 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add("-hide_banner");
-        psi.ArgumentList.Add("-loglevel"); psi.ArgumentList.Add("warning");
+        // verbose (not warning): the segment muxer logs "Opening '<path>' for
+        // writing" at AV_LOG_VERBOSE. We parse that line to learn each segment
+        // path and fire Started/SegmentRotated — at warning it's suppressed, so
+        // no DB row is written and the recording never shows in the list.
+        psi.ArgumentList.Add("-loglevel"); psi.ArgumentList.Add("verbose");
         psi.ArgumentList.Add("-rtsp_transport"); psi.ArgumentList.Add("tcp");
         psi.ArgumentList.Add("-i"); psi.ArgumentList.Add(BuildRtspUri(_options.RtspUri, _options.Credentials).ToString());
         psi.ArgumentList.Add("-c"); psi.ArgumentList.Add("copy");

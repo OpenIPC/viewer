@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
-  Downloads FFmpeg shared-build DLLs (LGPL) for Windows x64 and places them in
-  runtimes/win-x64/native/. The DLLs are git-ignored — every dev runs this once.
+  Downloads the FFmpeg shared build (LGPL) for Windows x64 and places its DLLs
+  + ffmpeg.exe in runtimes/win-x64/native/. ffmpeg.exe is what the recorder and
+  clip-exporter shell out to. Everything is git-ignored — every dev runs this once.
 
 .NOTES
   Source: BtbN/FFmpeg-Builds GitHub releases (https://github.com/BtbN/FFmpeg-Builds).
@@ -70,4 +71,15 @@ foreach ($pattern in $requiredDlls) {
         }
 }
 
-Write-Host "[fetch-ffmpeg] done. $nativeDir contains $((Get-ChildItem $nativeDir -Filter '*.dll').Count) DLL(s)."
+# ffmpeg.exe — the recorder and clip-exporter shell out to it (segment rotation,
+# precise re-encode). The shared-build exe is tiny; it loads the DLLs above.
+# Without it, recording/export fail with "cannot find ffmpeg" on packaged builds.
+$ffmpegExe = Join-Path $srcBin.FullName "ffmpeg.exe"
+if (Test-Path $ffmpegExe) {
+    Copy-Item -Path $ffmpegExe -Destination $nativeDir -Force
+    Write-Host "  ffmpeg.exe"
+} else {
+    Write-Warning "[fetch-ffmpeg] ffmpeg.exe not found in $($srcBin.FullName) — recording/export will fall back to PATH."
+}
+
+Write-Host "[fetch-ffmpeg] done. $nativeDir contains $((Get-ChildItem $nativeDir -Filter '*.dll').Count) DLL(s) + ffmpeg.exe."
