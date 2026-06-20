@@ -105,6 +105,9 @@ public sealed class AudioMonitor : IDisposable
 
     private void DetachLocked()
     {
+        // Nothing attached → don't touch the device (avoids a spurious Stop on
+        // the first Attach, which calls this to clear any previous source).
+        if (_subscription is null && _attachedTo is null) return;
         _subscription?.Dispose();
         _subscription = null;
         _attachedTo = null;

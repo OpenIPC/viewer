@@ -70,10 +70,10 @@ public class AudioMonitorTests
         var first = new FakeSession();
         var second = new FakeSession();
 
-        m.Attach(first, Cam());
+        m.Attach(first, first.Id);
         Assert.Equal(0, output.StopCount);
 
-        m.Attach(second, Cam());
+        m.Attach(second, second.Id);
         Assert.Equal(1, output.StopCount); // first was torn down
         Assert.Equal(second.Id, m.AttachedCamera);
 
