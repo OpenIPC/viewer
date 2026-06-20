@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Input.GestureRecognizers;
 using Avalonia.Media;
 using OpenIPC.Viewer.Core.Timeline;
 
@@ -74,6 +75,16 @@ public sealed class TimelineControl : Control
     private enum HandleDrag { None, Start, End }
 
     private TimelineViewport? _viewport;
+    private double _lastPinchScale = 1.0;
+
+    public TimelineControl()
+    {
+        // Pinch-to-zoom for touch (Phase 16.4) — the wheel has no touch
+        // equivalent, so Android/iOS would otherwise be unable to zoom.
+        GestureRecognizers.Add(new PinchGestureRecognizer());
+        Pinch += OnPinch;
+        PinchEnded += OnPinchEnded;
+    }
     private Point? _pressPoint;
     private bool _dragging;
     private HandleDrag _handleDrag;
@@ -239,6 +250,29 @@ public sealed class TimelineControl : Control
         var factor = Math.Pow(1.2, e.Delta.Y != 0 ? e.Delta.Y : e.Delta.X);
         Viewport.ZoomAt(anchorX, w, factor);
         InvalidateVisual();
+        e.Handled = true;
+    }
+
+    // Pinch zoom (touch). Scale is cumulative from gesture start (~1.0), so we
+    // apply the per-event delta and anchor on the pinch midpoint — same
+    // cursor-anchored zoom as the wheel.
+    private void OnPinch(object? sender, PinchEventArgs e)
+    {
+        var w = Bounds.Width;
+        if (w <= 0) return;
+        var factor = _lastPinchScale > 0 ? e.Scale / _lastPinchScale : 1.0;
+        _lastPinchScale = e.Scale;
+        if (factor > 0 && Math.Abs(factor - 1.0) > 0.0001)
+        {
+            Viewport.ZoomAt(e.ScaleOrigin.X * w, w, factor);
+            InvalidateVisual();
+        }
+        e.Handled = true;
+    }
+
+    private void OnPinchEnded(object? sender, PinchEndedEventArgs e)
+    {
+        _lastPinchScale = 1.0;
         e.Handled = true;
     }
 

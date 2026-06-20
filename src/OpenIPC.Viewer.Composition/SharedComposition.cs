@@ -59,8 +59,9 @@ public static class SharedComposition
         services.AddSingleton<IPlaybackEngine>(sp =>
             (IPlaybackEngine)sp.GetRequiredService<IVideoEngine>());
         services.AddSingleton<IMediaProbe, OpenIPC.Viewer.Video.Pipeline.FfmpegMediaProbe>();
-        services.AddSingleton<OpenIPC.Viewer.Core.Archive.IClipExporter,
-            OpenIPC.Viewer.Video.Recording.FfmpegSubprocessClipExporter>();
+        // IClipExporter (Phase 16.5) is registered per head: ffmpeg subprocess on
+        // desktop, in-process libavformat on Android/iOS (no exec in the sandbox)
+        // — same split as IRecorder.
         services.AddSingleton<LiveStreamCoordinator>();
 
         // ONVIF
