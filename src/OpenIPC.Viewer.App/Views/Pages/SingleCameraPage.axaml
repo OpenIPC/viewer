@@ -430,6 +430,29 @@
                 ToolTip.Tip="{Binding [CameraPage.Tooltip.Volume], Source={x:Static svc:Localizer.Instance}}" />
       </StackPanel>
 
+      <!-- Majestic audio-off hint (Phase 17.4): shown instead of the speaker when
+           the camera supports audio but has it disabled in config. -->
+      <StackPanel Grid.Column="2"
+                  Orientation="Horizontal"
+                  Spacing="8"
+                  VerticalAlignment="Center"
+                  Margin="0,0,8,0"
+                  IsVisible="{Binding ShowEnableAudioHint}">
+        <TextBlock Text="{Binding [CameraPage.Audio.DisabledHint], Source={x:Static svc:Localizer.Instance}}"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   VerticalAlignment="Center" />
+        <Button Command="{Binding EnableCameraAudioCommand}"
+                IsEnabled="{Binding !EnablingAudio}"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,4"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                Content="{Binding [CameraPage.Audio.Enable], Source={x:Static svc:Localizer.Instance}}" />
+      </StackPanel>
+
       <Button Grid.Column="3"
               Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding !IsRecording}"

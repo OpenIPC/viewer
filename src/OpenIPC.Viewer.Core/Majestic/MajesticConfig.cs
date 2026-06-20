@@ -15,4 +15,7 @@ public sealed record MajesticConfig(
     string? Profile,
     NightMode NightMode,
     bool? RtmpEnabled = null,
-    string? RtmpUrl = null);
+    string? RtmpUrl = null,
+    // Audio capture on the camera (Phase 17.4). null = the build doesn't expose
+    // an audio section; false = present but off → we hint the user to enable it.
+    bool? AudioEnabled = null);

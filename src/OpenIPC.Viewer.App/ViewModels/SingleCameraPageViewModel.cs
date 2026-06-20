@@ -84,8 +84,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // is null until first GetConfigAsync completes.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMajestic))]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
     private bool _majesticReady;
-    [ObservableProperty] private MajesticConfig? _majesticConfig;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
+    private MajesticConfig? _majesticConfig;
     [ObservableProperty] private MajesticInfo? _majesticInfo;
     [ObservableProperty] private NightMode _currentNightMode = NightMode.Unknown;
     [ObservableProperty] private string? _majesticError;
@@ -224,10 +227,45 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // speaker controls stay hidden instead of teasing silent playback.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAudioControlVisible))]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
     private bool _hasAudio;
 
     // The speaker UI shows only when both a sink exists AND the camera has audio.
     public bool IsAudioControlVisible => AudioAvailable && HasAudio;
+
+    // Majestic camera with audio capture switched off in its config (Phase 17.4):
+    // no audio track arrives, so instead of a missing speaker we nudge the user
+    // to turn the mic on. Only when we have a sink to play it through.
+    public bool ShowEnableAudioHint =>
+        AudioAvailable && !HasAudio && IsMajestic && MajesticConfig?.AudioEnabled == false;
+
+    [ObservableProperty] private bool _enablingAudio;
+
+    [RelayCommand]
+    private async Task EnableCameraAudioAsync()
+    {
+        if (!IsMajestic || EnablingAudio) return;
+        EnablingAudio = true;
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            await _majestic.UpdateConfigAsync(endpoint, new MajesticConfigPatch(AudioEnabled: true), cts.Token).ConfigureAwait(true);
+            // Camera restarts its streamer with audio on; reload picks up the new
+            // track and HasAudio flips, hiding the hint and showing the speaker.
+            await ReloadStreamAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Enable camera audio failed");
+            MajesticError = ex.Message;
+        }
+        finally
+        {
+            EnablingAudio = false;
+        }
+    }
 
     public bool IsMuted
     {
@@ -260,6 +298,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             OnPropertyChanged(nameof(Volume));
             OnPropertyChanged(nameof(AudioAvailable));
             OnPropertyChanged(nameof(IsAudioControlVisible));
+            OnPropertyChanged(nameof(ShowEnableAudioHint));
         });
         PersistAudioPrefs();
     }
