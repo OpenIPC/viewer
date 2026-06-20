@@ -23,6 +23,12 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
     private readonly IEventRepository _events;
     private readonly ILogger<ArchiveCalendarViewModel> _logger;
 
+    // Per-month aggregate cache (Phase 16.3). Flipping months within a session
+    // reuses it; LoadAsync (page re-entry) clears it so new recordings show.
+    private readonly Dictionary<(int Year, int Month), MonthActivity> _cache = new();
+
+    private sealed record MonthActivity(IReadOnlyDictionary<DateTime, DayActivity> Activity, int MaxTotal);
+
     // Fired with the selected local date, or null for "all days".
     public event Action<DateTime?>? DaySelected;
 
@@ -54,27 +60,40 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
     public string MonthLabel =>
         new DateTime(Year, Month, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture);
 
-    public async Task LoadAsync(CancellationToken ct)
+    // Page-entry refresh: drop cached months so freshly-recorded days appear.
+    public Task LoadAsync(CancellationToken ct)
+    {
+        _cache.Clear();
+        return ShowMonthAsync(ct);
+    }
+
+    private async Task ShowMonthAsync(CancellationToken ct)
     {
         try
         {
-            var tz = TimeZoneInfo.Local;
-            var recordings = await _recordings.ListAsync(cameraId: null, ct).ConfigureAwait(true);
-            // Events since the start of the month (local) minus a day, in UTC.
-            var monthStartUtc = TimeZoneInfo.ConvertTimeToUtc(
-                DateTime.SpecifyKind(new DateTime(Year, Month, 1).AddDays(-1), DateTimeKind.Unspecified), tz);
-            var events = await _events
-                .ListAsync(cameraId: null, kind: null, since: monthStartUtc, limit: 20000, ct)
-                .ConfigureAwait(true);
+            if (!_cache.TryGetValue((Year, Month), out var month))
+            {
+                var tz = TimeZoneInfo.Local;
+                var recordings = await _recordings.ListAsync(cameraId: null, ct).ConfigureAwait(true);
+                // Events since the start of the month (local) minus a day, in UTC.
+                var monthStartUtc = TimeZoneInfo.ConvertTimeToUtc(
+                    DateTime.SpecifyKind(new DateTime(Year, Month, 1).AddDays(-1), DateTimeKind.Unspecified), tz);
+                var events = await _events
+                    .ListAsync(cameraId: null, kind: null, since: monthStartUtc, limit: 20000, ct)
+                    .ConfigureAwait(true);
 
-            var activity = CalendarActivity.ForMonth(
-                Year, Month,
-                recordings.Select(r => r.StartedAt),
-                events.Select(e => e.OccurredAt),
-                tz);
+                var activity = CalendarActivity.ForMonth(
+                    Year, Month,
+                    recordings.Select(r => r.StartedAt),
+                    events.Select(e => e.OccurredAt),
+                    tz);
 
-            var maxTotal = activity.Count == 0 ? 0 : activity.Values.Max(d => d.Total);
-            BuildGrid(activity, maxTotal);
+                var maxTotal = activity.Count == 0 ? 0 : activity.Values.Max(d => d.Total);
+                month = new MonthActivity(activity, maxTotal);
+                _cache[(Year, Month)] = month;
+            }
+
+            BuildGrid(month.Activity, month.MaxTotal);
         }
         catch (Exception ex)
         {
@@ -112,14 +131,14 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
     private Task PrevMonthAsync()
     {
         Shift(-1);
-        return LoadAsync(CancellationToken.None);
+        return ShowMonthAsync(CancellationToken.None); // cached
     }
 
     [RelayCommand]
     private Task NextMonthAsync()
     {
         Shift(1);
-        return LoadAsync(CancellationToken.None);
+        return ShowMonthAsync(CancellationToken.None); // cached
     }
 
     private void Shift(int months)

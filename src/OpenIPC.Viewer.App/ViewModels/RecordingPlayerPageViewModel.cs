@@ -34,6 +34,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     private readonly IEventRepository _events;
     private readonly IClipExporter _exporter;
     private readonly IDialogService _dialogs;
+    private readonly OpenIPC.Viewer.Core.Platform.IShareService _share;
     private readonly ILogger<RecordingPlayerPageViewModel> _logger;
 
     private IPlaybackSession? _playback;
@@ -50,6 +51,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         IEventRepository events,
         IClipExporter exporter,
         IDialogService dialogs,
+        OpenIPC.Viewer.Core.Platform.IShareService share,
         ILogger<RecordingPlayerPageViewModel> logger)
     {
         _recording = recording;
@@ -59,6 +61,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         _events = events;
         _exporter = exporter;
         _dialogs = dialogs;
+        _share = share;
         _logger = logger;
 
         // Timeline starts as the single recording's span; refined once the exact
@@ -280,6 +283,11 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             var progress = new Progress<double>(p => ExportFraction = p);
             await _exporter.ExportAsync(request, progress, CancellationToken.None).ConfigureAwait(true);
             ExportStatus = Path.GetFileName(dest);
+
+            // On mobile the picked file is invisible to the user, so hand the
+            // clip to the native share sheet (Phase 16.5 "в галерею/share").
+            if (_share.SupportsSystemShare)
+                await _share.ShareFileAsync(dest!, "video/mp4", CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)
         {

@@ -14,6 +14,7 @@ public sealed class RecordingPlayerPageFactory
     private readonly IEventRepository _events;
     private readonly IClipExporter _exporter;
     private readonly IDialogService _dialogs;
+    private readonly OpenIPC.Viewer.Core.Platform.IShareService _share;
     private readonly ILoggerFactory _loggerFactory;
 
     public RecordingPlayerPageFactory(
@@ -22,6 +23,7 @@ public sealed class RecordingPlayerPageFactory
         IEventRepository events,
         IClipExporter exporter,
         IDialogService dialogs,
+        OpenIPC.Viewer.Core.Platform.IShareService share,
         ILoggerFactory loggerFactory)
     {
         _engine = engine;
@@ -29,10 +31,11 @@ public sealed class RecordingPlayerPageFactory
         _events = events;
         _exporter = exporter;
         _dialogs = dialogs;
+        _share = share;
         _loggerFactory = loggerFactory;
     }
 
     public RecordingPlayerPageViewModel Create(Recording recording, string cameraName) =>
-        new(recording, cameraName, _engine, _probe, _events, _exporter, _dialogs,
+        new(recording, cameraName, _engine, _probe, _events, _exporter, _dialogs, _share,
             _loggerFactory.CreateLogger<RecordingPlayerPageViewModel>());
 }
