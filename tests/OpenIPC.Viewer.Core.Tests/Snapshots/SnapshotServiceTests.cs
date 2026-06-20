@@ -122,6 +122,7 @@ public sealed class SnapshotServiceTests
         }
         public void PauseDecode() { }
         public void Resume() { }
+        public void SetAudioEnabled(bool enabled) { }
         public ValueTask DisposeAsync() => default;
     }
 

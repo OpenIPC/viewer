@@ -121,6 +121,24 @@
                               Stroke="White" Width="16" Height="16" />
                       </Button>
 
+                      <!-- Listen toggle (Phase 17): makes this tile the single
+                           audio source. Shown when a native sink exists. -->
+                      <Button HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="44,8,8,8"
+                              Command="{Binding ToggleListenCommand}"
+                              IsVisible="{Binding AudioAvailable}"
+                              Background="#80000000" CornerRadius="14"
+                              Width="28" Height="28" Padding="0"
+                              ToolTip.Tip="{Binding [CameraPage.Tooltip.Listen], Source={x:Static svc:Localizer.Instance}}">
+                        <Panel>
+                          <Path Classes="lucide" Data="{StaticResource IconVolume}"
+                                Stroke="{StaticResource AccentBrush}" Width="16" Height="16"
+                                IsVisible="{Binding IsListening}" />
+                          <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
+                                Stroke="White" Width="16" Height="16"
+                                IsVisible="{Binding !IsListening}" />
+                        </Panel>
+                      </Button>
+
                       <!-- Brief "captured" flash. -->
                       <Border IsVisible="{Binding SnapshotFlash}" Background="#50FFFFFF"
                               IsHitTestVisible="False" />

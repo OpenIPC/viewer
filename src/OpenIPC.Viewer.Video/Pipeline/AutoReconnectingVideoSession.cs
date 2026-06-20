@@ -49,6 +49,9 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     private Task? _loop;
     // Sticky across reconnects: a session created mid-pause starts paused too.
     private volatile bool _pauseRequested;
+    // Sticky audio toggle (Phase 17). null = untouched (inner uses its option
+    // default); once set, re-applied to every reconnected inner session.
+    private bool? _audioRequested;
 
     public AutoReconnectingVideoSession(Func<IVideoSession> innerFactory, ILogger logger)
     {
@@ -77,6 +80,12 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     {
         var inner = _activeInner ?? throw new InvalidOperationException("No active session");
         return inner.SnapshotAsync(format, ct);
+    }
+
+    public void SetAudioEnabled(bool enabled)
+    {
+        _audioRequested = enabled;
+        _activeInner?.SetAudioEnabled(enabled);
     }
 
     public void PauseDecode()
@@ -157,6 +166,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
             {
                 await inner.StartAsync(ct).ConfigureAwait(false);
                 if (_pauseRequested) inner.PauseDecode();
+                if (_audioRequested is { } audio) inner.SetAudioEnabled(audio);
 
                 using (StartWatchdog(failed, ct))
                 {

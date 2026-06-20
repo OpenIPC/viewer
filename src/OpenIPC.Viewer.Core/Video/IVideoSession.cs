@@ -22,6 +22,12 @@ public interface IVideoSession : IAsyncDisposable
     Task StartAsync(CancellationToken ct);
     Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct);
 
+    // Toggle audio decode on a live session without tearing it down (Phase 17).
+    // Lets a grid tile start/stop listening with no video blip — the audio
+    // packets are already demuxed, this only spins the audio decoder up/down.
+    // Idempotent; sticky across auto-reconnects. No-op if the stream has no audio.
+    void SetAudioEnabled(bool enabled);
+
     // Smart Pause (Phase 12.1): stop decoding without tearing the session down,
     // so a hidden/minimized tile stops burning CPU while keeping its last frame
     // for an instant resume. Both are idempotent no-ops if not started.

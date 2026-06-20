@@ -43,6 +43,11 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private readonly ManualResetEventSlim _decodeGate = new(true);
     private volatile bool _paused;
 
+    // Audio decode toggle (Phase 17). Read by the decode loop, which lazily sets
+    // up / tears down the audio decoder when this flips. Initialized from options
+    // so the single-camera page (EnableAudio=true) starts with audio ready.
+    private volatile bool _audioEnabled;
+
     private int _framesDecoded;
     private DateTime _lastFpsTick;
     private int _framesSinceFpsTick;
@@ -67,7 +72,10 @@ internal sealed class FfmpegVideoSession : IVideoSession
         _options = options;
         _hwFactory = hwFactory;
         _logger = logger;
+        _audioEnabled = options.EnableAudio;
     }
+
+    public void SetAudioEnabled(bool enabled) => _audioEnabled = enabled;
 
     public SessionState State
     {
@@ -175,6 +183,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         SwrContext* swr = null;
         var videoStreamIndex = -1;
         var audioStreamIndex = -1;
+        var audioProbedNoTrack = false;
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         var hwActive = false;
 
@@ -238,16 +247,6 @@ internal sealed class FfmpegVideoSession : IVideoSession
             frame = ffmpeg.av_frame_alloc();
             if (hwActive) swFrame = ffmpeg.av_frame_alloc();
 
-            // Audio (Phase 17.1) — opt-in, best-effort. Any failure here disables
-            // audio and lets video play on; a camera with no audio track is the
-            // common case and must not break the stream.
-            if (_options.EnableAudio)
-            {
-                audioStreamIndex = SetupAudio(fmtCtx, &audioCtx, &swr, &audioFrame);
-                if (audioStreamIndex < 0)
-                    _logger.LogInformation("No audio track decoded for {Host}", _options.RtspUri.Host);
-            }
-
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
 
@@ -261,6 +260,27 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 {
                     try { _decodeGate.Wait(ct); }
                     catch (OperationCanceledException) { break; }
+                }
+
+                // Lazily spin the audio decoder up/down to track SetAudioEnabled.
+                // Done on the decode thread only, so audioCtx/swr are never raced.
+                // A camera with no audio track is probed once and left alone.
+                if (_audioEnabled && audioStreamIndex < 0 && !audioProbedNoTrack)
+                {
+                    audioStreamIndex = SetupAudio(fmtCtx, &audioCtx, &swr, &audioFrame);
+                    if (audioStreamIndex < 0)
+                    {
+                        audioProbedNoTrack = true;
+                        _logger.LogInformation("No audio track for {Host}", _options.RtspUri.Host);
+                    }
+                }
+                else if (!_audioEnabled && audioStreamIndex >= 0)
+                {
+                    if (swr != null) { var p = swr; ffmpeg.swr_free(&p); swr = null; }
+                    if (audioFrame != null) { var p = audioFrame; ffmpeg.av_frame_free(&p); audioFrame = null; }
+                    if (audioCtx != null) { var p = audioCtx; ffmpeg.avcodec_free_context(&p); audioCtx = null; }
+                    audioStreamIndex = -1;
+                    audioProbedNoTrack = false; // a later re-enable should retry setup
                 }
 
                 ret = ffmpeg.av_read_frame(fmtCtx, packet);

@@ -152,6 +152,7 @@ public class AudioMonitorTests
         public Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct) => Task.FromResult(Array.Empty<byte>());
         public void PauseDecode() { }
         public void Resume() { }
+        public void SetAudioEnabled(bool enabled) { }
         public ValueTask DisposeAsync() => default;
     }
 
