@@ -72,6 +72,8 @@ public static class SharedComposition
         // one-source policy + mute/volume.
         services.TryAddSingleton<OpenIPC.Viewer.Core.Platform.IAudioOutput,
             OpenIPC.Viewer.Core.Platform.NullAudioOutput>();
+        services.TryAddSingleton<OpenIPC.Viewer.Core.Platform.IAudioInput,
+            OpenIPC.Viewer.Core.Platform.NullAudioInput>();
         services.AddSingleton<AudioMonitor>();
 
         // ONVIF

@@ -111,6 +111,8 @@ internal static class Composition
             services.AddSingleton<IHwDecoderFactory, D3d11VaDecoderFactory>();
             // Audio listen (Phase 17.2) — native WASAPI renderer on Windows.
             services.AddSingleton<IAudioOutput, Audio.WasapiAudioOutput>();
+            // Talk/backchannel (Phase 17.6) — native WASAPI mic capture.
+            services.AddSingleton<IAudioInput, Audio.WasapiAudioInput>();
         }
         else if (OperatingSystem.IsLinux())
         {
