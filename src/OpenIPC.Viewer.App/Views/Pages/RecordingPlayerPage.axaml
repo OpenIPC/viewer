@@ -6,6 +6,32 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingPlayerPage"
              x:DataType="vm:RecordingPlayerPageViewModel">
 
+  <UserControl.Styles>
+    <Style Selector="Button.evfilter">
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.evfilter.active">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.evrow">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Button.evrow:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid RowDefinitions="Auto,*,Auto">
 
     <!-- Header: back + file name + camera -->
@@ -33,8 +59,9 @@
       </StackPanel>
     </Grid>
 
-    <!-- Video surface + overlays -->
-    <Grid Grid.Row="1" ClipToBounds="True" Background="Black">
+    <!-- Video surface + overlays (left) + day event list (right) -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+      <Grid Grid.Column="0" ClipToBounds="True" Background="Black">
       <controls:RtspVideoView Session="{Binding VideoSession}" />
 
       <!-- Error strip -->
@@ -61,6 +88,51 @@
                      HorizontalAlignment="Center"
                      IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
+      </Border>
+      </Grid>
+
+      <!-- Day event list (16.6): motion/detection of this recording's window;
+           click an entry to seek; filter by type. -->
+      <Border Grid.Column="1" Width="260" Margin="12,0,0,0"
+              Background="{StaticResource Bg1Brush}"
+              BorderBrush="{StaticResource BorderWeakBrush}"
+              BorderThickness="1"
+              CornerRadius="8">
+        <Grid RowDefinitions="Auto,*">
+          <!-- Type filter -->
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="10,10,10,8">
+            <Button Classes="evfilter" Classes.active="{Binding IsFilterAll}"
+                    Command="{Binding SetEventFilterCommand}" CommandParameter="all" Content="All" />
+            <Button Classes="evfilter" Classes.active="{Binding IsFilterMotion}"
+                    Command="{Binding SetEventFilterCommand}" CommandParameter="motion" Content="Motion" />
+            <Button Classes="evfilter" Classes.active="{Binding IsFilterDetection}"
+                    Command="{Binding SetEventFilterCommand}" CommandParameter="detection" Content="AI" />
+          </StackPanel>
+
+          <TextBlock Grid.Row="1"
+                     IsVisible="{Binding !HasEvents}"
+                     Text="—"
+                     Foreground="{StaticResource TextTertiaryBrush}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+          <ScrollViewer Grid.Row="1" IsVisible="{Binding HasEvents}">
+            <ItemsControl ItemsSource="{Binding EventList}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="evrow"
+                          Command="{Binding $parent[ItemsControl].((vm:RecordingPlayerPageViewModel)DataContext).SeekToTimeCommand}"
+                          CommandParameter="{Binding Time}">
+                    <TextBlock Text="{Binding Label}"
+                               FontFamily="{StaticResource FontMono}"
+                               FontSize="11"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
       </Border>
     </Grid>
 

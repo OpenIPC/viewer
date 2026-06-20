@@ -48,18 +48,25 @@
       <pages:SnapshotBrowserView DataContext="{Binding Snapshots}" />
     </ContentControl>
 
-    <!-- Recordings tab -->
-    <Grid Grid.Row="1" IsVisible="{Binding ShowRecordings}">
+    <!-- Recordings tab: calendar (left) + list (right) -->
+    <Grid Grid.Row="1" IsVisible="{Binding ShowRecordings}" ColumnDefinitions="Auto,*">
+
+      <!-- Activity calendar -->
+      <pages:ArchiveCalendarView Grid.Column="0"
+                                 DataContext="{Binding Calendar}"
+                                 Margin="0,0,16,0"
+                                 VerticalAlignment="Top" />
 
       <!-- Empty state -->
-      <TextBlock IsVisible="{Binding IsEmpty}"
+      <TextBlock Grid.Column="1"
+                 IsVisible="{Binding IsEmpty}"
                  Text="{Binding [Recordings.Empty], Source={x:Static svc:Localizer.Instance}}"
                  Foreground="{StaticResource TextSecondaryBrush}"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center" />
 
       <!-- List -->
-      <ScrollViewer IsVisible="{Binding !IsEmpty}">
+      <ScrollViewer Grid.Column="1" IsVisible="{Binding !IsEmpty}">
         <ItemsControl ItemsSource="{Binding Items}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -139,7 +146,8 @@
       </ScrollViewer>
 
       <!-- Error overlay -->
-      <StackPanel IsVisible="{Binding HasLoadError}"
+      <StackPanel Grid.Column="1"
+                  IsVisible="{Binding HasLoadError}"
                   VerticalAlignment="Center"
                   HorizontalAlignment="Center"
                   Spacing="12">
@@ -159,7 +167,8 @@
       </StackPanel>
 
       <!-- Loading overlay (rendered last → on top). -->
-      <StackPanel IsVisible="{Binding IsLoading}"
+      <StackPanel Grid.Column="1"
+                  IsVisible="{Binding IsLoading}"
                   VerticalAlignment="Center"
                   HorizontalAlignment="Center"
                   Spacing="12">

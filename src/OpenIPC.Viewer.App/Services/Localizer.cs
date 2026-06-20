@@ -96,6 +96,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Loading"] = "Loading…",
         ["Common.Retry"] = "Retry",
         ["Common.Close"] = "Close",
+        ["Common.All"] = "All days",
 
         ["Stream.Connecting"] = "Connecting…",
         ["Stream.Reconnecting"] = "Reconnecting…",
@@ -416,6 +417,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Common.Loading"] = "Загрузка…",
         ["Common.Retry"] = "Повторить",
         ["Common.Close"] = "Закрыть",
+        ["Common.All"] = "Все дни",
 
         ["Stream.Connecting"] = "Подключение…",
         ["Stream.Reconnecting"] = "Переподключение…",

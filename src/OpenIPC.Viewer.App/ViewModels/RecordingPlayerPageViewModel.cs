@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -16,6 +17,8 @@ using OpenIPC.Viewer.Core.Timeline;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.App.ViewModels;
+
+public enum PlayerEventFilter { All, Motion, Detection }
 
 // Phase 16 — playback of a recorded segment. Hosts an IPlaybackSession (file
 // decode, transport, seek) and exposes it as IVideoSession so the existing
@@ -87,6 +90,23 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     [ObservableProperty] private IReadOnlyList<TimelineSegment>? _segments;
     [ObservableProperty] private IReadOnlyList<TimelineMarker>? _markers;
     [ObservableProperty] private DateTime? _playheadTime;
+
+    // Day event list (16.6): the same motion/detection events as the timeline,
+    // in a clickable side list with a type filter.
+    private readonly List<TimelineMarker> _allEventMarkers = new();
+    public ObservableCollection<TimelineMarker> EventList { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterAll))]
+    [NotifyPropertyChangedFor(nameof(IsFilterMotion))]
+    [NotifyPropertyChangedFor(nameof(IsFilterDetection))]
+    [NotifyPropertyChangedFor(nameof(HasEvents))]
+    private PlayerEventFilter _eventFilter = PlayerEventFilter.All;
+
+    public bool IsFilterAll => EventFilter == PlayerEventFilter.All;
+    public bool IsFilterMotion => EventFilter == PlayerEventFilter.Motion;
+    public bool IsFilterDetection => EventFilter == PlayerEventFilter.Detection;
+    public bool HasEvents => EventList.Count > 0;
 
     public bool IsConnecting => VideoSession is not null && State == SessionState.Connecting;
     public bool IsFailed => State == SessionState.Failed;
@@ -229,11 +249,41 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
                 markers.Add(new TimelineMarker(ev.OccurredAt, kind, label));
             }
             Markers = markers;
+            _allEventMarkers.Clear();
+            _allEventMarkers.AddRange(markers);
+            ApplyEventFilter();
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to load timeline markers for {Path}", _recording.FilePath);
         }
+    }
+
+    [RelayCommand]
+    private void SetEventFilter(string? filter) =>
+        EventFilter = filter switch
+        {
+            "motion" => PlayerEventFilter.Motion,
+            "detection" => PlayerEventFilter.Detection,
+            _ => PlayerEventFilter.All,
+        };
+
+    partial void OnEventFilterChanged(PlayerEventFilter value) => ApplyEventFilter();
+
+    private void ApplyEventFilter()
+    {
+        EventList.Clear();
+        foreach (var m in _allEventMarkers)
+        {
+            var include = EventFilter switch
+            {
+                PlayerEventFilter.Motion => m.Kind == TimelineMarkerKind.Motion,
+                PlayerEventFilter.Detection => m.Kind == TimelineMarkerKind.Detection,
+                _ => true,
+            };
+            if (include) EventList.Add(m);
+        }
+        OnPropertyChanged(nameof(HasEvents));
     }
 
     public async ValueTask DisposeAsync()

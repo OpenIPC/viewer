@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.ArchiveCalendarView"
+             x:DataType="vm:ArchiveCalendarViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.day">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="1" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.day.outmonth">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Button.day.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.today">
+      <Setter Property="BorderBrush" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="8" Width="240">
+
+    <!-- Month nav -->
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Button Grid.Column="0" Classes="nav" Command="{Binding PrevMonthCommand}">
+        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+              Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+      </Button>
+      <TextBlock Grid.Column="1"
+                 Text="{Binding MonthLabel}"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+      <Button Grid.Column="2" Classes="nav" Command="{Binding NextMonthCommand}">
+        <Path Classes="lucide" Data="{StaticResource IconChevronRight}"
+              Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+      </Button>
+    </Grid>
+
+    <!-- Weekday header -->
+    <UniformGrid Columns="7">
+      <TextBlock Text="Mon" Classes="wd" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Tue" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Wed" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Thu" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Fri" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Sat" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="Sun" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+    </UniformGrid>
+
+    <!-- Day grid -->
+    <ItemsControl ItemsSource="{Binding Days}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="7" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="vm:CalendarDayCell">
+          <Button Classes="day"
+                  Classes.outmonth="{Binding !InMonth}"
+                  Classes.selected="{Binding IsSelected}"
+                  Command="{Binding $parent[ItemsControl].((vm:ArchiveCalendarViewModel)DataContext).SelectDayCommand}"
+                  CommandParameter="{Binding}">
+            <Panel>
+              <Border CornerRadius="4"
+                      Background="{StaticResource AccentBrush}"
+                      Opacity="{Binding Shade}" />
+              <Border Classes.today="{Binding IsToday}" CornerRadius="4" />
+              <TextBlock Text="{Binding DayNumber}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontSize="12"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+            </Panel>
+          </Button>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Button Classes="nav"
+            HorizontalAlignment="Center"
+            Command="{Binding ShowAllCommand}"
+            Content="{Binding [Common.All], Source={x:Static svc:Localizer.Instance}}" />
+
+  </StackPanel>
+
+</UserControl>

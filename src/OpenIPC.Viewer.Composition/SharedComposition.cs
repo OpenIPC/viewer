@@ -135,6 +135,7 @@ public static class SharedComposition
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<GridPageViewModel>();
         services.AddSingleton<CameraLibraryPageViewModel>();
+        services.AddSingleton<ArchiveCalendarViewModel>();
         services.AddSingleton<RecordingsPageViewModel>();
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
