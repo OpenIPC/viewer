@@ -59,6 +59,8 @@ public static class SharedComposition
         services.AddSingleton<IPlaybackEngine>(sp =>
             (IPlaybackEngine)sp.GetRequiredService<IVideoEngine>());
         services.AddSingleton<IMediaProbe, OpenIPC.Viewer.Video.Pipeline.FfmpegMediaProbe>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Archive.IClipExporter,
+            OpenIPC.Viewer.Video.Recording.FfmpegSubprocessClipExporter>();
         services.AddSingleton<LiveStreamCoordinator>();
 
         // ONVIF

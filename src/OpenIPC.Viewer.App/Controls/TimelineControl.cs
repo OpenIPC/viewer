@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
 using OpenIPC.Viewer.Core.Timeline;
@@ -37,6 +38,17 @@ public sealed class TimelineControl : Control
     public static readonly StyledProperty<ICommand?> SeekCommandProperty =
         AvaloniaProperty.Register<TimelineControl, ICommand?>(nameof(SeekCommand));
 
+    // In/out selection (16.5), absolute times. Two-way so dragging the handles
+    // pushes back to the VM.
+    public static readonly StyledProperty<DateTime?> SelectionStartProperty =
+        AvaloniaProperty.Register<TimelineControl, DateTime?>(nameof(SelectionStart), defaultBindingMode: BindingMode.TwoWay);
+
+    public static readonly StyledProperty<DateTime?> SelectionEndProperty =
+        AvaloniaProperty.Register<TimelineControl, DateTime?>(nameof(SelectionEnd), defaultBindingMode: BindingMode.TwoWay);
+
+    public static readonly StyledProperty<IBrush?> SelectionBrushProperty =
+        AvaloniaProperty.Register<TimelineControl, IBrush?>(nameof(SelectionBrush), new SolidColorBrush(Color.FromArgb(0x40, 0x21, 0x96, 0xF3)));
+
     public static readonly StyledProperty<IBrush?> TrackBrushProperty =
         AvaloniaProperty.Register<TimelineControl, IBrush?>(nameof(TrackBrush), new SolidColorBrush(Color.FromRgb(0x1B, 0x20, 0x27)));
 
@@ -57,17 +69,22 @@ public sealed class TimelineControl : Control
     private const double TrackHeight = 26;
     private const double MarkerHitPx = 6;
     private const double PanThresholdPx = 4;
+    private const double HandleHitPx = 8;
+
+    private enum HandleDrag { None, Start, End }
 
     private TimelineViewport? _viewport;
     private Point? _pressPoint;
     private bool _dragging;
+    private HandleDrag _handleDrag;
 
     static TimelineControl()
     {
         AffectsRender<TimelineControl>(
             TotalStartProperty, TotalEndProperty, SegmentsProperty,
             MarkersProperty, PositionProperty, TrackBrushProperty,
-            SegmentBrushProperty, PlayheadBrushProperty, LabelBrushProperty);
+            SegmentBrushProperty, PlayheadBrushProperty, LabelBrushProperty,
+            SelectionStartProperty, SelectionEndProperty, SelectionBrushProperty);
     }
 
     public DateTime TotalStart { get => GetValue(TotalStartProperty); set => SetValue(TotalStartProperty, value); }
@@ -76,6 +93,9 @@ public sealed class TimelineControl : Control
     public IReadOnlyList<TimelineMarker>? Markers { get => GetValue(MarkersProperty); set => SetValue(MarkersProperty, value); }
     public DateTime? Position { get => GetValue(PositionProperty); set => SetValue(PositionProperty, value); }
     public ICommand? SeekCommand { get => GetValue(SeekCommandProperty); set => SetValue(SeekCommandProperty, value); }
+    public DateTime? SelectionStart { get => GetValue(SelectionStartProperty); set => SetValue(SelectionStartProperty, value); }
+    public DateTime? SelectionEnd { get => GetValue(SelectionEndProperty); set => SetValue(SelectionEndProperty, value); }
+    public IBrush? SelectionBrush { get => GetValue(SelectionBrushProperty); set => SetValue(SelectionBrushProperty, value); }
     public IBrush? TrackBrush { get => GetValue(TrackBrushProperty); set => SetValue(TrackBrushProperty, value); }
     public IBrush? SegmentBrush { get => GetValue(SegmentBrushProperty); set => SetValue(SegmentBrushProperty, value); }
     public IBrush? PlayheadBrush { get => GetValue(PlayheadBrushProperty); set => SetValue(PlayheadBrushProperty, value); }
@@ -117,9 +137,25 @@ public sealed class TimelineControl : Control
             }
         }
 
+        DrawSelection(context, vp, w);
         DrawMarkers(context, vp, w);
         DrawTicks(context, vp, w, h);
         DrawPlayhead(context, vp, w);
+    }
+
+    private void DrawSelection(DrawingContext context, TimelineViewport vp, double w)
+    {
+        if (SelectionStart is not { } a || SelectionEnd is not { } b) return;
+        var s = a <= b ? a : b;
+        var e = a <= b ? b : a;
+        var xs = Math.Clamp(vp.TimeToX(s, w), 0, w);
+        var xe = Math.Clamp(vp.TimeToX(e, w), 0, w);
+        if (xe < xs) (xs, xe) = (xe, xs);
+
+        context.DrawRectangle(SelectionBrush, null, new Rect(xs, TrackTop, Math.Max(0, xe - xs), TrackHeight));
+        var handle = new Pen(PlayheadBrush, 3);
+        context.DrawLine(handle, new Point(xs, TrackTop - 2), new Point(xs, TrackTop + TrackHeight + 2));
+        context.DrawLine(handle, new Point(xe, TrackTop - 2), new Point(xe, TrackTop + TrackHeight + 2));
     }
 
     private void DrawMarkers(DrawingContext context, TimelineViewport vp, double w)
@@ -209,7 +245,19 @@ public sealed class TimelineControl : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        _pressPoint = e.GetPosition(this);
+        var p = e.GetPosition(this);
+        var w = Bounds.Width;
+
+        // Grab an in/out handle if the press lands near one.
+        _handleDrag = HitTestHandle(p.X, w);
+        if (_handleDrag != HandleDrag.None)
+        {
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
+        _pressPoint = p;
         _dragging = false;
         e.Pointer.Capture(this);
     }
@@ -219,6 +267,17 @@ public sealed class TimelineControl : Control
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
         var w = Bounds.Width;
+
+        if (_handleDrag != HandleDrag.None && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            var t = Viewport.XToTime(Math.Clamp(p.X, 0, w), w);
+            if (_handleDrag == HandleDrag.Start)
+                SetCurrentValue(SelectionStartProperty, t);
+            else
+                SetCurrentValue(SelectionEndProperty, t);
+            InvalidateVisual();
+            return;
+        }
 
         if (_pressPoint is { } start && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -246,6 +305,13 @@ public sealed class TimelineControl : Control
         var w = Bounds.Width;
         e.Pointer.Capture(null);
 
+        if (_handleDrag != HandleDrag.None)
+        {
+            _handleDrag = HandleDrag.None;
+            _pressPoint = null;
+            return;
+        }
+
         if (!_dragging && _pressPoint is not null)
         {
             // Click: seek to the marker under the cursor, else to the raw time.
@@ -257,6 +323,19 @@ public sealed class TimelineControl : Control
 
         _pressPoint = null;
         _dragging = false;
+    }
+
+    private HandleDrag HitTestHandle(double x, double w)
+    {
+        if (SelectionStart is not { } a || SelectionEnd is not { } b) return HandleDrag.None;
+        var vp = Viewport;
+        // Each handle maps to its own property; if dragging inverts the order the
+        // VM normalizes min/max at export time.
+        var ds = Math.Abs(x - vp.TimeToX(a, w));
+        var de = Math.Abs(x - vp.TimeToX(b, w));
+        if (ds <= HandleHitPx && ds <= de) return HandleDrag.Start;
+        if (de <= HandleHitPx) return HandleDrag.End;
+        return HandleDrag.None;
     }
 
     private TimelineMarker? HitTestMarker(double x, double w)

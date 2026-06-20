@@ -11,6 +11,8 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
+using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.Core.Archive;
 using OpenIPC.Viewer.Core.Events;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Timeline;
@@ -30,6 +32,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     private readonly IPlaybackEngine _engine;
     private readonly IMediaProbe _probe;
     private readonly IEventRepository _events;
+    private readonly IClipExporter _exporter;
+    private readonly IDialogService _dialogs;
     private readonly ILogger<RecordingPlayerPageViewModel> _logger;
 
     private IPlaybackSession? _playback;
@@ -44,6 +48,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         IPlaybackEngine engine,
         IMediaProbe probe,
         IEventRepository events,
+        IClipExporter exporter,
+        IDialogService dialogs,
         ILogger<RecordingPlayerPageViewModel> logger)
     {
         _recording = recording;
@@ -51,6 +57,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         _engine = engine;
         _probe = probe;
         _events = events;
+        _exporter = exporter;
+        _dialogs = dialogs;
         _logger = logger;
 
         // Timeline starts as the single recording's span; refined once the exact
@@ -107,6 +115,36 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     public bool IsFilterMotion => EventFilter == PlayerEventFilter.Motion;
     public bool IsFilterDetection => EventFilter == PlayerEventFilter.Detection;
     public bool HasEvents => EventList.Count > 0;
+
+    // Clip export (16.5): in/out marks (absolute UTC) on the timeline + state.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(SelectionLabel))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    private DateTime? _selectionStart;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(SelectionLabel))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    private DateTime? _selectionEnd;
+
+    [ObservableProperty] private bool _preciseExport;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    private bool _isExporting;
+
+    [ObservableProperty] private double _exportFraction;
+    [ObservableProperty] private string? _exportStatus;
+
+    public bool HasSelection =>
+        SelectionStart is { } s && SelectionEnd is { } e && Math.Abs((e - s).TotalSeconds) >= 0.5;
+
+    public string SelectionLabel =>
+        HasSelection
+            ? $"{Format(Min(SelectionStart!.Value, SelectionEnd!.Value) - TimelineStart)} – {Format(Max(SelectionStart!.Value, SelectionEnd!.Value) - TimelineStart)}"
+            : "—";
 
     public bool IsConnecting => VideoSession is not null && State == SessionState.Connecting;
     public bool IsFailed => State == SessionState.Failed;
@@ -199,6 +237,65 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     // Invoked by the timeline on click/marker-tap with an absolute UTC time.
     [RelayCommand]
     private Task SeekToTime(DateTime target) => SeekToAsync(target - TimelineStart);
+
+    [RelayCommand]
+    private void SetIn()
+    {
+        if (PlayheadTime is { } t) SelectionStart = t;
+    }
+
+    [RelayCommand]
+    private void SetOut()
+    {
+        if (PlayheadTime is { } t) SelectionEnd = t;
+    }
+
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        SelectionStart = null;
+        SelectionEnd = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportAsync()
+    {
+        var startAbs = Min(SelectionStart!.Value, SelectionEnd!.Value);
+        var endAbs = Max(SelectionStart!.Value, SelectionEnd!.Value);
+        var startOff = startAbs - TimelineStart;
+        if (startOff < TimeSpan.Zero) startOff = TimeSpan.Zero;
+        var endOff = endAbs - TimelineStart;
+
+        var suggested = Path.GetFileNameWithoutExtension(_recording.FilePath) + "_clip.mp4";
+        var dest = await _dialogs.PickSaveFileAsync(suggested, Localizer.Instance["Recordings.ExportTitle"], "mp4")
+            .ConfigureAwait(true);
+        if (string.IsNullOrEmpty(dest)) return;
+
+        IsExporting = true;
+        ExportFraction = 0;
+        ExportStatus = null;
+        try
+        {
+            var request = new ClipExportRequest(_recording.FilePath, dest!, startOff, endOff, PreciseExport);
+            var progress = new Progress<double>(p => ExportFraction = p);
+            await _exporter.ExportAsync(request, progress, CancellationToken.None).ConfigureAwait(true);
+            ExportStatus = Path.GetFileName(dest);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Clip export failed for {Path}", _recording.FilePath);
+            ExportStatus = ex.Message;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
+    private bool CanExport() => HasSelection && !IsExporting;
+
+    private static DateTime Min(DateTime a, DateTime b) => a <= b ? a : b;
+    private static DateTime Max(DateTime a, DateTime b) => a >= b ? a : b;
 
     private async Task SeekToAsync(TimeSpan position)
     {

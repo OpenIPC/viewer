@@ -148,6 +148,8 @@
                                 Markers="{Binding Markers}"
                                 Position="{Binding PlayheadTime}"
                                 SeekCommand="{Binding SeekToTimeCommand}"
+                                SelectionStart="{Binding SelectionStart, Mode=TwoWay}"
+                                SelectionEnd="{Binding SelectionEnd, Mode=TwoWay}"
                                 TrackBrush="{StaticResource Bg2Brush}"
                                 SegmentBrush="{StaticResource Bg3Brush}"
                                 PlayheadBrush="{StaticResource AccentBrush}"
@@ -195,6 +197,51 @@
           <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
                 Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
         </Button>
+      </Grid>
+
+      <!-- Export bar (16.5): mark in/out, choose precise vs fast copy, export -->
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" >
+        <Button Grid.Column="0"
+                Command="{Binding SetInCommand}"
+                Content="{Binding [Recordings.MarkIn], Source={x:Static svc:Localizer.Instance}}"
+                Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                CornerRadius="6" Padding="10,5" FontSize="11" Margin="0,0,6,0"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="1"
+                Command="{Binding SetOutCommand}"
+                Content="{Binding [Recordings.MarkOut], Source={x:Static svc:Localizer.Instance}}"
+                Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                CornerRadius="6" Padding="10,5" FontSize="11" Margin="0,0,6,0"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="2"
+                Command="{Binding ClearSelectionCommand}"
+                IsVisible="{Binding HasSelection}"
+                Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
+                Background="Transparent" BorderThickness="0"
+                CornerRadius="6" Padding="8,5" FontSize="11"
+                Foreground="{StaticResource TextSecondaryBrush}" />
+
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="12,0">
+          <TextBlock Text="{Binding SelectionLabel}"
+                     FontFamily="{StaticResource FontMono}" FontSize="11"
+                     Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+          <ProgressBar Width="120" Minimum="0" Maximum="1" Value="{Binding ExportFraction}"
+                       IsVisible="{Binding IsExporting}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ExportStatus}"
+                     IsVisible="{Binding ExportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <CheckBox Grid.Column="4"
+                  IsChecked="{Binding PreciseExport, Mode=TwoWay}"
+                  Content="{Binding [Recordings.Precise], Source={x:Static svc:Localizer.Instance}}"
+                  FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                  Foreground="{StaticResource TextSecondaryBrush}" />
+        <Button Grid.Column="5"
+                Command="{Binding ExportCommand}"
+                Content="{Binding [Recordings.Export], Source={x:Static svc:Localizer.Instance}}"
+                Background="{StaticResource AccentBrush}" Foreground="White"
+                CornerRadius="6" Padding="14,5" FontSize="11" />
       </Grid>
     </StackPanel>
 
