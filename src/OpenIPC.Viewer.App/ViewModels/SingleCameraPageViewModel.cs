@@ -40,6 +40,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly StreamQuality _quality = StreamQuality.Main;
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
+    private IDisposable? _audioPresenceSub;
 
     // Re-entrancy/lifecycle gates. MainView hosts CurrentPage in BOTH the wide
     // and narrow layouts, so two views bind this single VM and each fires
@@ -214,9 +215,19 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // --- Audio listen (Phase 17.3) ----------------------------------------
     // The speaker controls bind here; the shared AudioMonitor owns the actual
     // state (one-source policy + gain), so these are thin pass-throughs that
-    // also persist the user's choice. Hidden in the view when AudioAvailable
-    // is false (no native sink / no output device).
+    // also persist the user's choice.
     public bool AudioAvailable => _audio.IsAvailable;
+
+    // Runtime capability detect (Phase 17.4): flips true once the session
+    // actually decodes an audio frame. More reliable + universal than parsing
+    // ONVIF/Majestic — a camera with no mic simply never emits audio, so the
+    // speaker controls stay hidden instead of teasing silent playback.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAudioControlVisible))]
+    private bool _hasAudio;
+
+    // The speaker UI shows only when both a sink exists AND the camera has audio.
+    public bool IsAudioControlVisible => AudioAvailable && HasAudio;
 
     public bool IsMuted
     {
@@ -248,6 +259,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             OnPropertyChanged(nameof(IsMuted));
             OnPropertyChanged(nameof(Volume));
             OnPropertyChanged(nameof(AudioAvailable));
+            OnPropertyChanged(nameof(IsAudioControlVisible));
         });
         PersistAudioPrefs();
     }
@@ -380,6 +392,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                         ErrorMessage = session.LastError;
                 });
                 _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
+                // Capability detect: first decoded audio frame reveals the camera
+                // has a mic, which un-hides the speaker controls.
+                _audioPresenceSub = session.AudioFrames.Subscribe(_ =>
+                {
+                    if (!HasAudio)
+                        Dispatcher.UIThread.Post(() => HasAudio = true);
+                });
                 Session = session;
 
                 if (session.State == SessionState.Idle)
@@ -511,6 +530,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _audioPresenceSub?.Dispose();
+        // Re-detect on the fresh session — a swapped camera may not have audio.
+        HasAudio = false;
         if (Session is not null)
         {
             Session = null;
@@ -831,6 +853,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _audioPresenceSub?.Dispose();
         _recordings.StateChanged -= OnRecordingsStateChanged;
         _userSettings.Changed -= OnUserSettingsChanged;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
