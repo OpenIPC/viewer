@@ -42,6 +42,16 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <Visible>false</Visible>
     </Content>
+    <!-- ffmpeg.exe: the subprocess recorder + clip-exporter need it (segment
+         rotation, precise re-encode). Without it, recording/export fail on
+         packaged Windows builds. Tiny shared-build exe; uses the DLLs above. -->
+    <Content Include="..\..\runtimes\win-x64\native\ffmpeg.exe"
+             Condition="Exists('..\..\runtimes\win-x64\native\ffmpeg.exe')">
+      <Link>runtimes\win-x64\native\ffmpeg.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <Visible>false</Visible>
+    </Content>
     <Content Include="..\..\runtimes\linux-x64\native\*.so*"
              Condition="Exists('..\..\runtimes\linux-x64\native')">
       <Link>runtimes\linux-x64\native\%(Filename)%(Extension)</Link>
