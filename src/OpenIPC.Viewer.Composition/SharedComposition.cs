@@ -39,6 +39,7 @@ public static class SharedComposition
         services.AddSingleton<IMigrationRunner, MigrationRunner>();
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
+        services.AddSingleton<ILayoutRepository, SqliteLayoutRepository>();
         services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
         services.AddSingleton<IEventRepository, SqliteEventRepository>();
         services.AddSingleton<ISnapshotRepository, SqliteSnapshotRepository>();
