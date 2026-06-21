@@ -14,9 +14,21 @@ public sealed record BackchannelEndpoint(Uri RtspUri, CameraCredentials? Credent
 public interface IAudioBackchannelClient
 {
     // Performs the RTSP DESCRIBE/SETUP/PLAY handshake with the backchannel
-    // Require header and returns a live session ready to accept RTP. Throws if
-    // the camera advertises no backchannel audio track.
-    Task<IAudioBackchannelSession> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct);
+    // Require header and returns a live session ready to accept RTP. Returns
+    // null when the camera advertises no backchannel audio track (the common
+    // "this camera has no speaker" case — not an error). Throws only on a real
+    // connection / auth / protocol failure.
+    Task<IAudioBackchannelSession?> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct);
+}
+
+// Outcome of PushToTalkController.StartAsync — lets the UI tell "camera has no
+// two-way audio" (Unsupported) apart from a genuine failure (Failed, which also
+// raises the Error event with the reason).
+public enum TalkStartResult
+{
+    Started,
+    Unsupported,
+    Failed,
 }
 
 public interface IAudioBackchannelSession : IAsyncDisposable
