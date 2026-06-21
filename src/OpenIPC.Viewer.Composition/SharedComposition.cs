@@ -126,6 +126,17 @@ public static class SharedComposition
         services.AddSingleton<IMotionEventSource, AnalyticsMotionEventSource>();
         services.AddSingleton<EventIngestionService>();
 
+        // Notifications (Phase 19.3). Native sink per head (TryAdd Null fallback);
+        // the coordinator applies cooldown / quiet-hours / type toggles over the
+        // event stream. Eager-Start()ed by each platform host after build.
+        services.TryAddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService,
+            OpenIPC.Viewer.Core.Notifications.NullNotificationService>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>(sp =>
+            new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
+                sp.GetRequiredService<EventIngestionService>().Events,
+                sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.INotificationService>(),
+                sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>()));
+
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<SingleCameraPageFactory>();

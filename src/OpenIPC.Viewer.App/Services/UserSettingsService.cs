@@ -29,6 +29,13 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     public string MajesticConfigPath =>
         string.IsNullOrWhiteSpace(Current.MajesticConfigPath) ? "/etc/majestic.yaml" : Current.MajesticConfigPath;
     public int ActiveLayoutId => Current.ActiveLayoutId;
+    public bool NotificationsEnabled => Current.NotificationsEnabled;
+    public bool NotifyOnMotion => Current.NotifyOnMotion;
+    public bool NotifyOnDetection => Current.NotifyOnDetection;
+    public int NotificationCooldownSeconds => Current.NotificationCooldownSeconds;
+    public bool QuietHoursEnabled => Current.QuietHoursEnabled;
+    public int QuietHoursStartHour => Current.QuietHoursStartHour;
+    public int QuietHoursEndHour => Current.QuietHoursEndHour;
     public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
         string.Equals(Current.AiAcceleration, "force-cpu", StringComparison.OrdinalIgnoreCase)
             ? OpenIPC.Viewer.Core.Analytics.AiAcceleration.ForceCpu

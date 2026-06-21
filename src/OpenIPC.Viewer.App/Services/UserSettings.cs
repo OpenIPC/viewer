@@ -42,7 +42,15 @@ public sealed record UserSettings(
     double AudioVolume = 1.0,
     // Tabbed layouts (Phase 19.1). Id of the layout shown in the Live grid; 0 =
     // not yet chosen → fall back to the first layout.
-    int ActiveLayoutId = 0)
+    int ActiveLayoutId = 0,
+    // Notifications (Phase 19.3).
+    bool NotificationsEnabled = true,
+    bool NotifyOnMotion = true,
+    bool NotifyOnDetection = true,
+    int NotificationCooldownSeconds = 30,
+    bool QuietHoursEnabled = false,
+    int QuietHoursStartHour = 22,
+    int QuietHoursEndHour = 7)
 {
     public static UserSettings Default => new();
 }

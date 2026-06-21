@@ -66,6 +66,7 @@ internal static class Composition
         // Eager resolve: the bridge subscribes in its ctor, so without this it
         // would never wire up (singletons are lazy).
         _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
+        provider.GetRequiredService<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>().Start();
         return provider;
     }
 

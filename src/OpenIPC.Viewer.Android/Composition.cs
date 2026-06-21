@@ -61,6 +61,7 @@ internal static class Composition
         var provider = services.BuildServiceProvider(validateScopes: true);
         HookUserSettingsToLogLevel(provider, levelSwitch);
         _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
+        provider.GetRequiredService<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>().Start();
         return provider;
     }
 
