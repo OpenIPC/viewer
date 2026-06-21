@@ -21,6 +21,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     IRecipient<WindowMinimizedMessage>,
     IRecipient<WindowRestoredMessage>,
     IRecipient<CloseTileMessage>,
+    IRecipient<ConfigImportedMessage>,
     IAsyncDisposable
 {
     private readonly CameraDirectoryService _directory;
@@ -91,6 +92,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         WeakReferenceMessenger.Default.Register<WindowMinimizedMessage>(this);
         WeakReferenceMessenger.Default.Register<WindowRestoredMessage>(this);
         WeakReferenceMessenger.Default.Register<CloseTileMessage>(this);
+        WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
 
         // Re-render when the user changes the max-sessions cap so currently-
         // dropped cameras come back (or excess ones go away) without a relaunch.
@@ -432,6 +434,14 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 if (_minimized) await ReleaseAllAsync().ConfigureAwait(true);
             });
         });
+    }
+
+    // Config import (Phase 19.2): reload cameras + layouts so the grid reflects
+    // the imported set without a restart.
+    public async void Receive(ConfigImportedMessage message)
+    {
+        try { await LoadAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Grid reload after import failed"); }
     }
 
     public async void Receive(WindowRestoredMessage message)

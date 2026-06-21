@@ -15,7 +15,7 @@ using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
-public sealed partial class CameraLibraryPageViewModel : ViewModelBase
+public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipient<ConfigImportedMessage>
 {
     private readonly CameraDirectoryService _directory;
     private readonly IDialogService _dialogs;
@@ -81,11 +81,19 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _discovery = discovery;
         _reachability = reachability;
         _logger = logger;
+        WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
         Cameras.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasCameras));
             OnPropertyChanged(nameof(IsEmpty));
         };
+    }
+
+    // Config import (Phase 19.2): reload so imported cameras appear immediately.
+    public async void Receive(ConfigImportedMessage message)
+    {
+        try { await LoadAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger?.LogWarning(ex, "Library reload after import failed"); }
     }
 
     public async Task LoadAsync(CancellationToken ct)

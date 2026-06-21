@@ -199,6 +199,18 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Settings.About.Repository"] = "GitHub repository →",
 
+        ["Settings.Backup.Section"] = "Backup & restore",
+        ["Settings.Backup.Description"] = "Export cameras and layouts to a JSON file, or import them on another machine. Passwords are never exported.",
+        ["Settings.Backup.Export"] = "Export…",
+        ["Settings.Backup.Import"] = "Import…",
+        ["Settings.Backup.ExportTitle"] = "Export configuration",
+        ["Settings.Backup.ImportTitle"] = "Import configuration",
+        ["Settings.Backup.ImportConfirm"] = "Import",
+        ["Settings.Backup.ConfirmFormat"] = "Add {0} cameras ({1} overwritten) and {2} layouts?",
+        ["Settings.Backup.Exported"] = "Configuration exported.",
+        ["Settings.Backup.Imported"] = "Configuration imported.",
+        ["Settings.Backup.FailedFormat"] = "Failed: {0}",
+
         ["Snapshot.Saved"] = "Saved →",
         ["Snapshot.Open"] = "Open",
         ["Snapshot.Copy"] = "Copy",
@@ -540,6 +552,18 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Advanced.OpenAppData"] = "Открыть папку данных",
 
         ["Settings.About.Repository"] = "Репозиторий на GitHub →",
+
+        ["Settings.Backup.Section"] = "Бэкап и восстановление",
+        ["Settings.Backup.Description"] = "Выгрузить камеры и раскладки в JSON-файл или импортировать на другой машине. Пароли не экспортируются.",
+        ["Settings.Backup.Export"] = "Экспорт…",
+        ["Settings.Backup.Import"] = "Импорт…",
+        ["Settings.Backup.ExportTitle"] = "Экспорт конфигурации",
+        ["Settings.Backup.ImportTitle"] = "Импорт конфигурации",
+        ["Settings.Backup.ImportConfirm"] = "Импортировать",
+        ["Settings.Backup.ConfirmFormat"] = "Добавить {0} камер ({1} перезаписано) и {2} раскладок?",
+        ["Settings.Backup.Exported"] = "Конфигурация экспортирована.",
+        ["Settings.Backup.Imported"] = "Конфигурация импортирована.",
+        ["Settings.Backup.FailedFormat"] = "Ошибка: {0}",
 
         ["Snapshot.Saved"] = "Сохранено →",
         ["Snapshot.Open"] = "Открыть",

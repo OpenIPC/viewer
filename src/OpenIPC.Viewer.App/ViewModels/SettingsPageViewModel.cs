@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
@@ -19,6 +21,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly IFileSystem _fs;
     private readonly IDialogService _dialogs;
     private readonly ISshHostKeyStore _hostKeys;
+    private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -120,12 +123,14 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         IFileSystem fs,
         IDialogService dialogs,
         INetworkInterfaceProvider nics,
-        ISshHostKeyStore hostKeys)
+        ISshHostKeyStore hostKeys,
+        OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup)
     {
         _settings = settings;
         _fs = fs;
         _dialogs = dialogs;
         _hostKeys = hostKeys;
+        _backup = backup;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -243,6 +248,55 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenRepository() => OpenInShell(RepositoryUrl);
+
+    // --- Config export / import (Phase 19.2) ------------------------------
+    [ObservableProperty] private string? _backupStatus;
+
+    [RelayCommand]
+    private async Task ExportConfigAsync()
+    {
+        try
+        {
+            var json = await _backup.ExportAsync(CancellationToken.None).ConfigureAwait(true);
+            var path = await _dialogs.PickSaveFileAsync("openipc-config.json",
+                Localizer.Instance["Settings.Backup.ExportTitle"], "json").ConfigureAwait(true);
+            if (string.IsNullOrEmpty(path)) return;
+            await System.IO.File.WriteAllTextAsync(path, json).ConfigureAwait(true);
+            BackupStatus = Localizer.Instance["Settings.Backup.Exported"];
+        }
+        catch (Exception ex)
+        {
+            BackupStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.FailedFormat"], ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportConfigAsync()
+    {
+        try
+        {
+            var path = await _dialogs.PickAnyFileAsync(Localizer.Instance["Settings.Backup.ImportTitle"]).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(path)) return;
+            var json = await System.IO.File.ReadAllTextAsync(path).ConfigureAwait(true);
+
+            var preview = await _backup.PreviewAsync(json, CancellationToken.None).ConfigureAwait(true);
+            var confirmed = await _dialogs.ConfirmAsync(
+                Localizer.Instance["Settings.Backup.ImportTitle"],
+                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.ConfirmFormat"],
+                    preview.CamerasAdded, preview.CamerasUpdated, preview.LayoutsAdded),
+                Localizer.Instance["Settings.Backup.ImportConfirm"],
+                Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            if (!confirmed) return;
+
+            await _backup.ImportAsync(json, CancellationToken.None).ConfigureAwait(true);
+            BackupStatus = Localizer.Instance["Settings.Backup.Imported"];
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new Messages.ConfigImportedMessage());
+        }
+        catch (Exception ex)
+        {
+            BackupStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.FailedFormat"], ex.Message);
+        }
+    }
 
     private static void OpenInShell(string target)
     {
