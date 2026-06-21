@@ -168,8 +168,9 @@ public sealed class SnapshotService : ISnapshotService
             if (session.State == SessionState.Idle)
                 await session.StartAsync(ct).ConfigureAwait(false);
 
-            // Poll until the first keyframe decodes (SnapshotAsync throws until
-            // then). Avoids an Rx dependency in Core just to await one frame.
+            // Poll until the first keyframe decodes (SnapshotAsync returns an
+            // empty array until then). Avoids an Rx dependency in Core just to
+            // await one frame.
             var deadline = DateTime.UtcNow + FreshOpenFrameTimeout;
             while (DateTime.UtcNow < deadline)
             {
