@@ -169,6 +169,8 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
             OnvifEnabled = true,
             OnvifProfileToken = probe.ProfileToken,
             HasPtz = probe.HasPtz,
+            HasAudioIn = probe.HasAudioIn,
+            HasAudioOut = probe.HasAudioOut,
             ChipModel = chipModel ?? existing.ChipModel,
             FirmwareVersion = probe.FirmwareVersion ?? existing.FirmwareVersion,
             UpdatedAt = DateTime.UtcNow,

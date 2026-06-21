@@ -32,4 +32,6 @@ internal sealed class FakeUserSettings : IUserSettingsAccessor
     public bool SshStrictHostKey => true;
     public int SshDefaultPort => 22;
     public string MajesticConfigPath => "/etc/majestic.yaml";
+    public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
+        OpenIPC.Viewer.Core.Analytics.AiAcceleration.Auto;
 }

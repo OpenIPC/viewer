@@ -45,6 +45,10 @@ internal static class Composition
         });
         services.AddSingleton<IHwDecoderFactory, VideoToolboxDecoderFactory>();
         services.AddSingleton<IShareService, IosShareService>();
+        // Audio listen + talk (Phase 17) — AVAudioEngine playback + mic capture.
+        // Capture needs NSMicrophoneUsageDescription + a granted record permission.
+        services.AddSingleton<IAudioOutput, Platform.IosAudioOutput>();
+        services.AddSingleton<IAudioInput, Platform.IosAudioInput>();
 
         // Recording — in-process libavformat. iOS won't let surveillance apps
         // run 24/7 in background, so recording is foreground-only (Phase 10

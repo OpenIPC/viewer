@@ -32,6 +32,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly UserSettingsService _userSettings;
     private readonly IDialogService _dialogs;
     private readonly ISnapshotService _snapshots;
+    private readonly AudioMonitor _audio;
+    private readonly PushToTalkController _talk;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
@@ -39,6 +41,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly StreamQuality _quality = StreamQuality.Main;
     private IDisposable? _stateSub;
     private IDisposable? _telemetrySub;
+    private IDisposable? _audioPresenceSub;
 
     // Re-entrancy/lifecycle gates. MainView hosts CurrentPage in BOTH the wide
     // and narrow layouts, so two views bind this single VM and each fires
@@ -82,8 +85,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // is null until first GetConfigAsync completes.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMajestic))]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
     private bool _majesticReady;
-    [ObservableProperty] private MajesticConfig? _majesticConfig;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
+    private MajesticConfig? _majesticConfig;
     [ObservableProperty] private MajesticInfo? _majesticInfo;
     [ObservableProperty] private NightMode _currentNightMode = NightMode.Unknown;
     [ObservableProperty] private string? _majesticError;
@@ -147,6 +153,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         UserSettingsService userSettings,
         IDialogService dialogs,
         ISnapshotService snapshots,
+        AudioMonitor audio,
+        PushToTalkController talk,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -159,7 +167,18 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _userSettings = userSettings;
         _dialogs = dialogs;
         _snapshots = snapshots;
+        _audio = audio;
+        _talk = talk;
         _logger = logger;
+
+        // Hydrate the shared monitor from the persisted prefs and reflect any
+        // later change (incl. from another page) back into the speaker UI.
+        _audio.Muted = _userSettings.Current.AudioMuted;
+        _audio.Volume = (float)_userSettings.Current.AudioVolume;
+        _audio.Changed += OnAudioChanged;
+
+        _talk.StateChanged += OnTalkChanged;
+        _talk.Error += OnTalkError;
 
         IsRecording = _recordings.IsRecording(_camera.Id);
         _recordings.StateChanged += OnRecordingsStateChanged;
@@ -201,6 +220,151 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             OnPropertyChanged(nameof(IsRawConfigEditorEnabled));
         });
     }
+
+    // --- Audio listen (Phase 17.3) ----------------------------------------
+    // The speaker controls bind here; the shared AudioMonitor owns the actual
+    // state (one-source policy + gain), so these are thin pass-throughs that
+    // also persist the user's choice.
+    public bool AudioAvailable => _audio.IsAvailable;
+
+    // Runtime capability detect (Phase 17.4): flips true once the session
+    // actually decodes an audio frame. More reliable + universal than parsing
+    // ONVIF/Majestic — a camera with no mic simply never emits audio, so the
+    // speaker controls stay hidden instead of teasing silent playback.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAudioControlVisible))]
+    [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
+    private bool _hasAudio;
+
+    // The speaker UI shows only when both a sink exists AND the camera has audio.
+    public bool IsAudioControlVisible => AudioAvailable && HasAudio;
+
+    // Majestic camera with audio capture switched off in its config (Phase 17.4):
+    // no audio track arrives, so instead of a missing speaker we nudge the user
+    // to turn the mic on. Only when we have a sink to play it through.
+    public bool ShowEnableAudioHint =>
+        AudioAvailable && !HasAudio && IsMajestic && MajesticConfig?.AudioEnabled == false;
+
+    [ObservableProperty] private bool _enablingAudio;
+
+    [RelayCommand]
+    private async Task EnableCameraAudioAsync()
+    {
+        if (!IsMajestic || EnablingAudio) return;
+        EnablingAudio = true;
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            await _majestic.UpdateConfigAsync(endpoint, new MajesticConfigPatch(AudioEnabled: true), cts.Token).ConfigureAwait(true);
+            // Camera restarts its streamer with audio on; reload picks up the new
+            // track and HasAudio flips, hiding the hint and showing the speaker.
+            await ReloadStreamAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Enable camera audio failed");
+            MajesticError = ex.Message;
+        }
+        finally
+        {
+            EnablingAudio = false;
+        }
+    }
+
+    public bool IsMuted
+    {
+        get => _audio.Muted;
+        set
+        {
+            if (_audio.Muted == value) return;
+            _audio.Muted = value; // raises Changed → OnAudioChanged re-raises + persists
+        }
+    }
+
+    public double Volume
+    {
+        get => _audio.Volume;
+        set
+        {
+            if (Math.Abs(_audio.Volume - value) < 0.0001) return;
+            _audio.Volume = (float)value;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleMute() => IsMuted = !IsMuted;
+
+    private void OnAudioChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsMuted));
+            OnPropertyChanged(nameof(Volume));
+            OnPropertyChanged(nameof(AudioAvailable));
+            OnPropertyChanged(nameof(IsAudioControlVisible));
+            OnPropertyChanged(nameof(ShowEnableAudioHint));
+        });
+        PersistAudioPrefs();
+    }
+
+    private void PersistAudioPrefs()
+    {
+        var cur = _userSettings.Current;
+        if (cur.AudioMuted == _audio.Muted && Math.Abs(cur.AudioVolume - _audio.Volume) < 0.0001)
+            return;
+        var next = cur with { AudioMuted = _audio.Muted, AudioVolume = _audio.Volume };
+        _ = _userSettings.UpdateAsync(next);
+    }
+
+    // --- Push-to-talk (Phase 17.6) ----------------------------------------
+    // Shown when a mic exists AND we don't positively know the camera lacks a
+    // speaker. ONVIF probe sets HasAudioOut; only hide when a probed camera
+    // reports no backchannel. Non-ONVIF / unprobed cameras still show the button
+    // (the open fails gracefully into TalkError if unsupported).
+    public bool CanTalk => _talk.IsAvailable && !(_camera.OnvifEnabled && !_camera.HasAudioOut);
+
+    [ObservableProperty] private bool _isTalking;
+    [ObservableProperty] private string? _talkError;
+
+    // Push-to-talk is press-and-hold: BeginTalk on pointer-down, EndTalk on
+    // pointer-up (wired in the view code-behind). _talkHeld guards the case where
+    // the user releases before the backchannel finishes opening.
+    private bool _talkHeld;
+
+    public async Task BeginTalkAsync()
+    {
+        if (!_talk.IsAvailable || _talk.IsTalking) return;
+        _talkHeld = true;
+        TalkError = null;
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var ep = new BackchannelEndpoint(_camera.RtspMainUri, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await _talk.StartAsync(ep, cts.Token).ConfigureAwait(true);
+            // Released mid-connect → don't leave the mic hot.
+            if (!_talkHeld) await _talk.StopAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Start talk failed");
+            TalkError = ex.Message;
+        }
+    }
+
+    public async Task EndTalkAsync()
+    {
+        _talkHeld = false;
+        await _talk.StopAsync().ConfigureAwait(true);
+    }
+
+    private void OnTalkChanged(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(() => IsTalking = _talk.IsTalking);
+
+    private void OnTalkError(object? sender, string message)
+        => Dispatcher.UIThread.Post(() => TalkError = message);
 
     private void OnRecordingsStateChanged(object? sender, CameraId cam)
     {
@@ -303,7 +467,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         {
             var creds = await _directory.GetCredentialsAsync(_camera.Id, ct).ConfigureAwait(true);
             var options = VideoSessionOptions.Default(_camera.RtspMainUri, creds)
-                with { Transport = ParseTransport(_userSettings.Current.RtspTransport) };
+                with
+                {
+                    Transport = ParseTransport(_userSettings.Current.RtspTransport),
+                    // Single-camera page decodes audio so the speaker button works
+                    // instantly; output stays silent until the user unmutes.
+                    EnableAudio = true,
+                };
 
             try
             {
@@ -315,10 +485,23 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                         ErrorMessage = session.LastError;
                 });
                 _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
+                // Capability detect: first decoded audio frame reveals the camera
+                // has a mic, which un-hides the speaker controls.
+                _audioPresenceSub = session.AudioFrames.Subscribe(_ =>
+                {
+                    if (!HasAudio)
+                        Dispatcher.UIThread.Post(() => HasAudio = true);
+                });
                 Session = session;
 
                 if (session.State == SessionState.Idle)
                     await session.StartAsync(ct).ConfigureAwait(true);
+
+                // Route this camera's audio to the speakers (one-source policy:
+                // attaching here silences any previously listened camera). Sound
+                // only plays once unmuted; default is muted.
+                if (_audio.IsAvailable)
+                    _audio.Attach(session, _camera.Id);
             }
             catch (Exception ex)
             {
@@ -440,6 +623,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _audioPresenceSub?.Dispose();
+        // Re-detect on the fresh session — a swapped camera may not have audio.
+        HasAudio = false;
         if (Session is not null)
         {
             Session = null;
@@ -760,9 +946,15 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
+        _audioPresenceSub?.Dispose();
         _recordings.StateChanged -= OnRecordingsStateChanged;
         _userSettings.Changed -= OnUserSettingsChanged;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
+        _audio.Changed -= OnAudioChanged;
+        _audio.Detach(_camera.Id);
+        _talk.StateChanged -= OnTalkChanged;
+        _talk.Error -= OnTalkError;
+        await _talk.DisposeAsync().ConfigureAwait(false);
         StopRecTimer();
         if (Ptz is not null)
         {

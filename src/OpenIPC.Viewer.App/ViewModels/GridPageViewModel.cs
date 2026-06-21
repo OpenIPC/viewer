@@ -29,6 +29,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly ISnapshotService _snapshots;
     private readonly OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine _analytics;
     private readonly AnalyticsBootstrap _analyticsBootstrap;
+    private readonly AudioMonitor _audio;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<GridPageViewModel> _logger;
 
@@ -56,6 +57,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         ISnapshotService snapshots,
         OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine analytics,
         AnalyticsBootstrap analyticsBootstrap,
+        AudioMonitor audio,
         ILoggerFactory loggerFactory)
     {
         _directory = directory;
@@ -64,6 +66,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         _snapshots = snapshots;
         _analytics = analytics;
         _analyticsBootstrap = analyticsBootstrap;
+        _audio = audio;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<GridPageViewModel>();
 
@@ -149,7 +152,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 try { await existing.DisposeAsync().ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
-                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _loggerFactory.CreateLogger<CameraTileViewModel>());
                 rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
@@ -157,7 +160,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 continue;
             }
 
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _loggerFactory.CreateLogger<CameraTileViewModel>());
             tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }

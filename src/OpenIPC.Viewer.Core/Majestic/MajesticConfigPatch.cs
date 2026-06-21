@@ -10,4 +10,5 @@ public sealed record MajesticConfigPatch(
     int? Bitrate = null,
     string? Profile = null,
     bool? RtmpEnabled = null,
-    string? RtmpUrl = null);
+    string? RtmpUrl = null,
+    bool? AudioEnabled = null);

@@ -28,6 +28,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     private readonly ILogger _logger;
 
     private readonly Subject<VideoFrame> _frames = new();
+    private readonly Subject<AudioFrame> _audioFrames = new();
     private readonly Subject<SessionState> _stateChanged = new();
     private readonly Subject<SessionTelemetry> _telemetry = new();
 
@@ -48,6 +49,9 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     private Task? _loop;
     // Sticky across reconnects: a session created mid-pause starts paused too.
     private volatile bool _pauseRequested;
+    // Sticky audio toggle (Phase 17). null = untouched (inner uses its option
+    // default); once set, re-applied to every reconnected inner session.
+    private bool? _audioRequested;
 
     public AutoReconnectingVideoSession(Func<IVideoSession> innerFactory, ILogger logger)
     {
@@ -58,6 +62,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     public SessionState State { get { lock (_stateLock) return _state; } }
     public string? LastError { get { lock (_stateLock) return _lastError; } }
     public IObservable<VideoFrame> Frames => _frames;
+    public IObservable<AudioFrame> AudioFrames => _audioFrames;
     public IObservable<SessionState> StateChanged => _stateChanged;
     public IObservable<SessionTelemetry> Telemetry => _telemetry;
 
@@ -75,6 +80,12 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     {
         var inner = _activeInner ?? throw new InvalidOperationException("No active session");
         return inner.SnapshotAsync(format, ct);
+    }
+
+    public void SetAudioEnabled(bool enabled)
+    {
+        _audioRequested = enabled;
+        _activeInner?.SetAudioEnabled(enabled);
     }
 
     public void PauseDecode()
@@ -100,6 +111,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
         if (_activeInner is not null)
             await _activeInner.DisposeAsync().ConfigureAwait(false);
         _frames.OnCompleted();
+        _audioFrames.OnCompleted();
         _stateChanged.OnCompleted();
         _telemetry.OnCompleted();
         _cts?.Dispose();
@@ -131,6 +143,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
                 if (!sawFrame) { sawFrame = true; attempt = 0; }
                 _frames.OnNext(f);
             });
+            using var audioSub = inner.AudioFrames.Subscribe(_audioFrames.OnNext);
             using var telemetrySub = inner.Telemetry.Subscribe(_telemetry.OnNext);
             using var stateSub = inner.StateChanged.Subscribe(s =>
             {
@@ -153,6 +166,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
             {
                 await inner.StartAsync(ct).ConfigureAwait(false);
                 if (_pauseRequested) inner.PauseDecode();
+                if (_audioRequested is { } audio) inner.SetAudioEnabled(audio);
 
                 using (StartWatchdog(failed, ct))
                 {

@@ -110,6 +110,18 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
             if (patch.RtmpUrl is { } url) rtmp["url"] = url;
         }
 
+        // Audio capture lives under root.audio = { enabled }. Create on first
+        // write so a user can turn the mic on from a build that shipped it off.
+        if (patch.AudioEnabled is { } audioEnabled)
+        {
+            if (root["audio"] is not JsonObject audio)
+            {
+                audio = new JsonObject();
+                root["audio"] = audio;
+            }
+            audio["enabled"] = audioEnabled;
+        }
+
         var body = root.ToJsonString();
         using var postReq = BuildRequest(endpoint, HttpMethod.Post, "api/v1/config.json");
         postReq.Content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -192,6 +204,7 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
         var video = TryGetObject(root, "video0") ?? TryGetObject(root, "video");
         var isp = TryGetObject(root, "isp");
         var rtmp = TryGetObject(root, "rtmp");
+        var audio = TryGetObject(root, "audio");
 
         var nightMode = NightMode.Unknown;
         var ircut = isp is { } i ? TryGetString(i, "ircut") : null;
@@ -211,7 +224,8 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
             Profile: video is { } v5 ? TryGetString(v5, "profile") : null,
             NightMode: nightMode,
             RtmpEnabled: rtmp is { } r1 ? TryGetBool(r1, "enabled") : null,
-            RtmpUrl: rtmp is { } r2 ? TryGetString(r2, "url") : null);
+            RtmpUrl: rtmp is { } r2 ? TryGetString(r2, "url") : null,
+            AudioEnabled: audio is { } a1 ? TryGetBool(a1, "enabled") : null);
     }
 
     private static JsonElement? TryGetObject(JsonElement el, string name) =>

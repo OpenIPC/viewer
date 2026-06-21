@@ -109,6 +109,10 @@ internal static class Composition
                 return new DpapiSecretsStore(sp.GetRequiredService<IFileSystem>().AppDataDir);
             });
             services.AddSingleton<IHwDecoderFactory, D3d11VaDecoderFactory>();
+            // Audio listen (Phase 17.2) — native WASAPI renderer on Windows.
+            services.AddSingleton<IAudioOutput, Audio.WasapiAudioOutput>();
+            // Talk/backchannel (Phase 17.6) — native WASAPI mic capture.
+            services.AddSingleton<IAudioInput, Audio.WasapiAudioInput>();
         }
         else if (OperatingSystem.IsLinux())
         {
@@ -121,6 +125,9 @@ internal static class Composition
                     sp.GetRequiredService<ILoggerFactory>());
             });
             services.AddSingleton<IHwDecoderFactory, VaapiDecoderFactory>();
+            // Audio listen + talk (Phase 17) — ALSA playback + mic capture.
+            services.AddSingleton<IAudioOutput, Audio.AlsaAudioOutput>();
+            services.AddSingleton<IAudioInput, Audio.AlsaAudioInput>();
         }
         else if (OperatingSystem.IsMacOS())
         {
@@ -131,6 +138,9 @@ internal static class Composition
                 return new KeychainSecretsStore(sp.GetRequiredService<ILoggerFactory>());
             });
             services.AddSingleton<IHwDecoderFactory, VideoToolboxDecoderFactory>();
+            // Audio listen + talk (Phase 17) — CoreAudio playback + mic capture.
+            services.AddSingleton<IAudioOutput, Audio.CoreAudioOutput>();
+            services.AddSingleton<IAudioInput, Audio.CoreAudioInput>();
         }
         else
         {

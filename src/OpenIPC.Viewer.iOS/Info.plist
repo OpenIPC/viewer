@@ -42,6 +42,9 @@
          doesn't explain *why* network access is needed. -->
     <key>NSLocalNetworkUsageDescription</key>
     <string>OpenIPC Viewer connects to IP cameras on your local network.</string>
+    <!-- Phase 17.6 — push-to-talk uses the mic to speak through the camera. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>OpenIPC Viewer uses the microphone for two-way talk to your camera.</string>
     <!-- Files-app visibility for recordings + snapshots in Documents/. -->
     <key>UIFileSharingEnabled</key>
     <true/>

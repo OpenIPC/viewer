@@ -27,7 +27,13 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly ISnapshotService _snapshots;
     private readonly IAnalyticsEngine _analytics;
     private readonly AnalyticsBootstrap _analyticsBootstrap;
+    private readonly AudioMonitor _audio;
     private readonly ILogger<CameraTileViewModel> _logger;
+
+    // True while this tile is the live audio source. Tracked locally so we can
+    // turn the audio decoder back off when another tile displaces us (one-source
+    // policy lives in AudioMonitor; this just mirrors it for our own session).
+    private bool _listening;
 
     // Auto SD/HD (Phase 12.2): substream in the grid, mainstream when a single
     // tile fills the view. Mutated by SetQualityAsync (a session swap), set
@@ -131,6 +137,48 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         ? $"{kbps / 1000:F1} Mb/s"
         : $"{kbps:F0} kb/s";
 
+    // --- Audio listen (Phase 17): per-tile speaker toggle --------------------
+    // Shown when a native sink exists and we don't positively know the camera
+    // has no mic. Same lenient ONVIF gate as the talk button: only hide when a
+    // probed camera reports no audio-in (non-ONVIF/unprobed cameras still show).
+    public bool AudioAvailable =>
+        _audio.IsAvailable && !(Camera.OnvifEnabled && !Camera.HasAudioIn);
+    public bool IsListening => _audio.AttachedCamera == Camera.Id;
+
+    [RelayCommand]
+    private void ToggleListen()
+    {
+        if (!_audio.IsAvailable || Session is null) return;
+        if (_audio.AttachedCamera == Camera.Id)
+        {
+            _audio.Detach(Camera.Id);
+            Session.SetAudioEnabled(false);
+            _listening = false;
+        }
+        else
+        {
+            Session.SetAudioEnabled(true);
+            _audio.Attach(Session, Camera.Id); // silences the previously-listening tile
+            _audio.Muted = false;              // listening from a tile implies "play it"
+            _listening = true;
+        }
+        OnPropertyChanged(nameof(IsListening));
+    }
+
+    private void OnAudioChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            // Displaced by another tile: stop burning CPU on our audio decoder.
+            if (_listening && _audio.AttachedCamera != Camera.Id)
+            {
+                _listening = false;
+                Session?.SetAudioEnabled(false);
+            }
+            OnPropertyChanged(nameof(IsListening));
+        });
+    }
+
     public CameraTileViewModel(
         Camera camera,
         LiveStreamCoordinator coordinator,
@@ -139,6 +187,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         ISnapshotService snapshots,
         IAnalyticsEngine analytics,
         AnalyticsBootstrap analyticsBootstrap,
+        AudioMonitor audio,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
@@ -148,9 +197,11 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _snapshots = snapshots;
         _analytics = analytics;
         _analyticsBootstrap = analyticsBootstrap;
+        _audio = audio;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
+        _audio.Changed += OnAudioChanged;
 
         // Always listen for results for this camera; they only arrive while the
         // tile is attached + the engine is ready, so this is cheap otherwise.
@@ -220,6 +271,15 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
 
             if (session.State == SessionState.Idle)
                 await session.StartAsync(ct).ConfigureAwait(true);
+
+            // Rebind audio to the fresh session if we were the listener before a
+            // quality swap / reconnect (the monitor still points at our camera).
+            if (_audio.AttachedCamera == Camera.Id)
+            {
+                session.SetAudioEnabled(true);
+                _audio.Attach(session, Camera.Id);
+                _listening = true;
+            }
 
             AttachAnalytics(session);
         }
@@ -354,6 +414,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     {
         _disposed = true;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
+        _audio.Changed -= OnAudioChanged;
+        _audio.Detach(Camera.Id); // no-op unless this tile is the current source
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
         _resultsSub?.Dispose();

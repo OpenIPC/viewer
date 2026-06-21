@@ -89,5 +89,10 @@
   <StreamGeometry x:Key="IconCamera">M14.5,4 H9.5 L7,7 H4 A2,2 0 0 0 2,9 V18 A2,2 0 0 0 4,20 H20 A2,2 0 0 0 22,18 V9 A2,2 0 0 0 20,7 H17 L14.5,4 Z M15,13 A3,3 0 1 1 9,13 A3,3 0 1 1 15,13 Z</StreamGeometry>
   <!-- IconImage — Lucide "image", for the Snapshots segment / gallery. -->
   <StreamGeometry x:Key="IconImage">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M10,9 A1.5,1.5 0 1 1 7,9 A1.5,1.5 0 1 1 10,9 Z M21,15 L16,10 L5,21</StreamGeometry>
+  <!-- IconVolume / IconVolumeMuted — Lucide "volume-2" / "volume-x", audio listen (Phase 17). -->
+  <StreamGeometry x:Key="IconVolume">M11,5 L6,9 H2 V15 H6 L11,19 Z M15.54,8.46 A5,5 0 0 1 15.54,15.53 M19.07,4.93 A10,10 0 0 1 19.07,19.07</StreamGeometry>
+  <StreamGeometry x:Key="IconVolumeMuted">M11,5 L6,9 H2 V15 H6 L11,19 Z M23,9 L17,15 M17,9 L23,15</StreamGeometry>
+  <!-- IconMic — Lucide "mic", push-to-talk (Phase 17.6). -->
+  <StreamGeometry x:Key="IconMic">M12,2 A3,3 0 0 0 9,5 V11 A3,3 0 0 0 15,11 V5 A3,3 0 0 0 12,2 Z M19,10 V11 A7,7 0 0 1 5,11 V10 M12,18 V22 M8,22 H16</StreamGeometry>
 
 </ResourceDictionary>

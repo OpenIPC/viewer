@@ -42,6 +42,10 @@ internal static class Composition
             new AndroidSecretsStore(context, sp.GetRequiredService<IFileSystem>().AppDataDir));
         services.AddSingleton<IHwDecoderFactory, MediaCodecDecoderFactory>();
         services.AddSingleton<IShareService>(_ => new AndroidShareService(context));
+        // Audio listen + talk (Phase 17) — AudioTrack playback + AudioRecord mic
+        // capture. Capture needs the RECORD_AUDIO runtime permission (manifest).
+        services.AddSingleton<IAudioOutput, Platform.AndroidAudioOutput>();
+        services.AddSingleton<IAudioInput, Platform.AndroidAudioInput>();
 
         // Recording — in-process libavformat (no subprocess on Android) +
         // foreground service for OS keep-alive. Phase 9c.

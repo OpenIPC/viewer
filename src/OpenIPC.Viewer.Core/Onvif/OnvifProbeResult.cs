@@ -8,4 +8,8 @@ public sealed record OnvifProbeResult(
     bool HasPtz,
     string? Manufacturer,
     string? Model,
-    string? FirmwareVersion);
+    string? FirmwareVersion,
+    // Audio capabilities across the camera's profiles (Phase 17): a mic to listen
+    // to, a speaker to talk back through (Profile T backchannel).
+    bool HasAudioIn = false,
+    bool HasAudioOut = false);

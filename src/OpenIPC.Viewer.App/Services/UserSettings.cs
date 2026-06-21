@@ -35,7 +35,11 @@ public sealed record UserSettings(
     string MajesticConfigPath = "/etc/majestic.yaml",
     // Local AI analytics (Phase 15.2). "auto" lets the detector pick the
     // platform execution provider with a CPU fallback; "force-cpu" pins CPU.
-    string AiAcceleration = "auto")
+    string AiAcceleration = "auto",
+    // Audio listen (Phase 17.3). Muted by default — a freshly opened camera
+    // never plays sound until the user taps the speaker. Volume is a 0..1 gain.
+    bool AudioMuted = true,
+    double AudioVolume = 1.0)
 {
     public static UserSettings Default => new();
 }

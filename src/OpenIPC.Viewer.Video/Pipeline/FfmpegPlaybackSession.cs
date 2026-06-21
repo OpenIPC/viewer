@@ -73,6 +73,10 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     public string? LastError { get { lock (_stateLock) return _lastError; } }
 
     public IObservable<VideoFrame> Frames => _frames;
+    // File playback has no live-audio monitoring path (Phase 17 is RTSP only);
+    // expose an empty stream so the IVideoSession contract is satisfied.
+    public IObservable<AudioFrame> AudioFrames { get; } = System.Reactive.Linq.Observable.Empty<AudioFrame>();
+    public void SetAudioEnabled(bool enabled) { /* file playback has no live audio */ }
     public IObservable<SessionState> StateChanged => _stateChanged;
     public IObservable<SessionTelemetry> Telemetry => _telemetry;
     public IObservable<TimeSpan> PositionChanged => _positionChanged;

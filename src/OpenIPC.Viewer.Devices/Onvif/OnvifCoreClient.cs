@@ -71,7 +71,9 @@ public sealed class OnvifCoreClient : IOnvifClient
                 .Select(p => new MediaProfile(
                     Token: p.token,
                     Name: p.Name,
-                    PtzConfigurationToken: p.PTZConfiguration?.token))
+                    PtzConfigurationToken: p.PTZConfiguration?.token,
+                    HasAudioIn: p.AudioEncoderConfiguration is not null,
+                    HasAudioOut: p.Extension?.AudioOutputConfiguration is not null))
                 .ToList();
         }
         finally
