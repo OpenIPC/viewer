@@ -22,6 +22,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly ISshHostKeyStore _hostKeys;
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
+    private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -126,7 +127,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     public IReadOnlyList<NetworkInterfaceOption> NetworkInterfaceOptions { get; }
 
     public string AppDataDirectory => _fs.AppDataDir.FullName;
-    public string Version => Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.1.0";
+    // Prefer the git-tag-derived InformationalVersion (set in Directory.Build.targets)
+    // over the numeric AssemblyVersion, which can't carry the -rc/-beta suffix.
+    // Strip any "+metadata" just in case the SDK still appended a commit hash.
+    public string Version =>
+        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
+        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
+        ?? "0.1.0";
     public string RepositoryUrl => "https://github.com/keyldev/openipc-viewer";
 
     public SettingsPageViewModel(
@@ -135,13 +142,15 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         IDialogService dialogs,
         INetworkInterfaceProvider nics,
         ISshHostKeyStore hostKeys,
-        OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup)
+        OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
+        OpenIPC.Viewer.Core.Notifications.INotificationService notifications)
     {
         _settings = settings;
         _fs = fs;
         _dialogs = dialogs;
         _hostKeys = hostKeys;
         _backup = backup;
+        _notifications = notifications;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -280,6 +289,36 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenRepository() => OpenInShell(RepositoryUrl);
+
+    // Issue-reporter (Phase 19.5, lightweight): open the repo's new-issue page
+    // with version/OS pre-filled. No data leaves the machine until the user
+    // actually submits the form in their browser. "Open logs" helps them attach
+    // our log file manually — we never auto-upload it.
+    [RelayCommand]
+    private void ReportIssue()
+    {
+        var body =
+            $"**{Localizer.Instance["Settings.Report.BodyDescribe"]}**\n\n\n" +
+            "---\n" +
+            $"- Version: {Version}\n" +
+            $"- OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}\n" +
+            $"- Runtime: {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}\n";
+        OpenInShell($"{RepositoryUrl}/issues/new?body={Uri.EscapeDataString(body)}");
+    }
+
+    [RelayCommand]
+    private void OpenLogsDirectory() =>
+        OpenInShell(System.IO.Path.Combine(_fs.AppDataDir.FullName, "logs"));
+
+    // Fire a sample toast straight at the sink (Phase 19.3) so the user can see
+    // the corner notification without waiting for a real camera event. Bypasses
+    // the coordinator's cooldown/quiet-hours on purpose — it's a UI preview.
+    [RelayCommand]
+    private void TestNotification() =>
+        _notifications.Show(new OpenIPC.Viewer.Core.Notifications.NotificationRequest(
+            Localizer.Instance["Settings.Notifications.TestTitle"],
+            Localizer.Instance["Settings.Notifications.TestBody"],
+            OpenIPC.Viewer.Core.Events.EventKind.Motion));
 
     // --- Config export / import (Phase 19.2) ------------------------------
     [ObservableProperty] private string? _backupStatus;

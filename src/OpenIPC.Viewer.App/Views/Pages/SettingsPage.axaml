@@ -436,6 +436,10 @@
                        VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
             <ComboBox ItemsSource="{Binding HourOptions}" SelectedItem="{Binding QuietHoursEndHour}" Width="80" />
           </StackPanel>
+          <Button Classes="outlined"
+                  Content="{Binding [Settings.Notifications.Test], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding TestNotificationCommand}"
+                  HorizontalAlignment="Left" Margin="0,4,0,0" />
         </StackPanel>
 
         <!-- About -->
@@ -451,10 +455,17 @@
             <Run Text="{Binding Version}" />
           </TextBlock>
 
-          <Button Classes="outlined"
-                  Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
-                  Command="{Binding OpenRepositoryCommand}"
-                  HorizontalAlignment="Left" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding OpenRepositoryCommand}" />
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Report.Button], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ReportIssueCommand}" />
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Report.OpenLogs], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding OpenLogsDirectoryCommand}" />
+          </StackPanel>
 
           <!-- Config export / import (Phase 19.2) -->
           <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />

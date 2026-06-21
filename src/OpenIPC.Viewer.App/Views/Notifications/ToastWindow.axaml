@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OpenIPC.Viewer.App.Views.Notifications.ToastWindow"
+        Width="344" Height="86"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        CanResize="False"
+        ShowActivated="False"
+        Focusable="False"
+        FontFamily="{StaticResource FontSans}">
+
+  <Border Name="Card"
+          Margin="8"
+          CornerRadius="12"
+          Background="{StaticResource Bg2Brush}"
+          BorderBrush="{StaticResource BorderMediumBrush}"
+          BorderThickness="1"
+          BoxShadow="0 6 26 0 #66000000"
+          Cursor="Hand">
+    <Grid ColumnDefinitions="Auto,*" Margin="14,12">
+      <Border Grid.Column="0"
+              Width="40" Height="40" CornerRadius="20"
+              Background="{StaticResource AccentBrush}"
+              VerticalAlignment="Top"
+              Margin="0,0,12,0">
+        <Path Name="EventIcon" Classes="lucide"
+              Stroke="White" Width="20" Height="20"
+              HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Border>
+
+      <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+        <TextBlock Name="TitleText"
+                   FontWeight="SemiBold" FontSize="14"
+                   Foreground="{StaticResource TextPrimaryBrush}"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Name="BodyText"
+                   FontSize="12.5"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   TextWrapping="Wrap" MaxLines="2"
+                   TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </Grid>
+  </Border>
+
+</Window>
