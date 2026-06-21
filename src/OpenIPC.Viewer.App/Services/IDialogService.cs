@@ -45,6 +45,10 @@ public interface IDialogService
 
     Task ShowManageGroupsAsync(ManageGroupsViewModel viewModel);
 
+    // Camera picker for a single layout (Phase 19.1 polish). Toggling rows
+    // mutates the layout live; completes when the dialog is dismissed.
+    Task ShowManageLayoutCamerasAsync(ManageLayoutCamerasViewModel viewModel);
+
     // Returns the edited JSON if the user clicked Apply, null if cancelled.
     Task<string?> ShowRawConfigEditorAsync(string initialJson);
 

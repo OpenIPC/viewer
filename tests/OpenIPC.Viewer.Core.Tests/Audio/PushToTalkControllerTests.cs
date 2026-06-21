@@ -19,11 +19,24 @@ public class PushToTalkControllerTests
         var client = new FakeClient(new FakeSession(aLaw: false, sampleRate: 8000));
         await using var ptt = new PushToTalkController(input, client);
 
-        var ok = await ptt.StartAsync(Endpoint, CancellationToken.None);
+        var result = await ptt.StartAsync(Endpoint, CancellationToken.None);
 
-        Assert.True(ok);
+        Assert.Equal(TalkStartResult.Started, result);
         Assert.True(ptt.IsTalking);
         Assert.Equal((8000, 1), input.Started);
+    }
+
+    [Fact]
+    public async Task NoBackchannelTrack_ReturnsUnsupportedAndDoesNotThrow()
+    {
+        var input = new FakeInput();
+        await using var ptt = new PushToTalkController(input, new FakeClient(null));
+
+        var result = await ptt.StartAsync(Endpoint, CancellationToken.None);
+
+        Assert.Equal(TalkStartResult.Unsupported, result);
+        Assert.False(ptt.IsTalking);
+        Assert.Null(input.Started);
     }
 
     [Fact]
@@ -62,10 +75,10 @@ public class PushToTalkControllerTests
     }
 
     [Fact]
-    public async Task UnavailableMic_StartReturnsFalse()
+    public async Task UnavailableMic_StartReturnsFailed()
     {
         var ptt = new PushToTalkController(new FakeInput { Available = false }, new FakeClient(new FakeSession(false, 8000)));
-        Assert.False(await ptt.StartAsync(Endpoint, CancellationToken.None));
+        Assert.Equal(TalkStartResult.Failed, await ptt.StartAsync(Endpoint, CancellationToken.None));
         Assert.False(ptt.IsTalking);
     }
 
@@ -85,10 +98,10 @@ public class PushToTalkControllerTests
 
     private sealed class FakeClient : IAudioBackchannelClient
     {
-        private readonly FakeSession _session;
-        public FakeClient(FakeSession session) => _session = session;
-        public Task<IAudioBackchannelSession> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct)
-            => Task.FromResult<IAudioBackchannelSession>(_session);
+        private readonly FakeSession? _session;
+        public FakeClient(FakeSession? session) => _session = session;
+        public Task<IAudioBackchannelSession?> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct)
+            => Task.FromResult<IAudioBackchannelSession?>(_session);
     }
 
     private sealed class FakeSession : IAudioBackchannelSession

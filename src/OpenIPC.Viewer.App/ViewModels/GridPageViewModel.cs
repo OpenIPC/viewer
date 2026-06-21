@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.App.ViewModels.Dialogs;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
@@ -21,6 +22,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     IRecipient<WindowMinimizedMessage>,
     IRecipient<WindowRestoredMessage>,
     IRecipient<CloseTileMessage>,
+    IRecipient<ConfigImportedMessage>,
     IAsyncDisposable
 {
     private readonly CameraDirectoryService _directory;
@@ -30,17 +32,31 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine _analytics;
     private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly AudioMonitor _audio;
+    private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
+    private readonly IDialogService _dialogs;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<GridPageViewModel> _logger;
 
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private bool _minimized;
+    private bool _suppressSettingsRefresh;
     private CancellationTokenSource? _graceCts;
 
     public string Title => Localizer.Instance["Nav.Live"];
 
     public ObservableCollection<CameraTileViewModel> Tiles { get; } = new();
     public ObservableCollection<CameraTileViewModel?> Slots { get; } = new();
+
+    // Tabbed layouts (Phase 19.1). Tabs bind to Layouts; the grid shows
+    // ActiveLayout's tiles. Switching persists the choice to UserSettings.
+    public ObservableCollection<GridLayout> Layouts { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDeleteLayout))]
+    private GridLayout? _activeLayout;
+
+    // Keep at least one layout — deleting the last would leave no grid.
+    public bool CanDeleteLayout => Layouts.Count > 1;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Columns))]
@@ -58,6 +74,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine analytics,
         AnalyticsBootstrap analyticsBootstrap,
         AudioMonitor audio,
+        OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
+        IDialogService dialogs,
         ILoggerFactory loggerFactory)
     {
         _directory = directory;
@@ -67,17 +85,23 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         _analytics = analytics;
         _analyticsBootstrap = analyticsBootstrap;
         _audio = audio;
+        _layouts = layouts;
+        _dialogs = dialogs;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<GridPageViewModel>();
 
         WeakReferenceMessenger.Default.Register<WindowMinimizedMessage>(this);
         WeakReferenceMessenger.Default.Register<WindowRestoredMessage>(this);
         WeakReferenceMessenger.Default.Register<CloseTileMessage>(this);
+        WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
 
         // Re-render when the user changes the max-sessions cap so currently-
         // dropped cameras come back (or excess ones go away) without a relaunch.
         _userSettings.Changed += async (_, _) =>
         {
+            // Our own active-layout persistence raises Changed too — skip the
+            // refresh then (the switch already refreshed).
+            if (_suppressSettingsRefresh) return;
             try { await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => RefreshTilesAsync(CancellationToken.None)); }
             catch (Exception ex) { _logger.LogWarning(ex, "Grid refresh after settings change failed"); }
         };
@@ -87,7 +111,21 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     {
         if (_minimized) return;
         _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
+        await LoadLayoutsAsync(ct).ConfigureAwait(true);
         await RefreshTilesAsync(ct).ConfigureAwait(true);
+    }
+
+    private async Task LoadLayoutsAsync(CancellationToken ct)
+    {
+        var all = await _layouts.GetAllAsync(ct).ConfigureAwait(true);
+        Layouts.Clear();
+        foreach (var l in all) Layouts.Add(l);
+        OnPropertyChanged(nameof(CanDeleteLayout));
+
+        // Restore the persisted active layout, else fall back to the first.
+        var activeId = _userSettings.Current.ActiveLayoutId;
+        ActiveLayout = Layouts.FirstOrDefault(l => l.Id.Value == activeId) ?? Layouts.FirstOrDefault();
+        if (ActiveLayout is { } a) LayoutSize = a.GridSize;
     }
 
     // Parameter is string because XAML CommandParameter literals are strings; using
@@ -97,7 +135,111 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     {
         if (!int.TryParse(size, out var n) || n < 1 || n > 3) return;
         LayoutSize = n;
+        if (ActiveLayout is { } a)
+        {
+            await _layouts.SetGridSizeAsync(a.Id, n, CancellationToken.None).ConfigureAwait(true);
+            ActiveLayout = a with { GridSize = n };
+            ReplaceLayoutInList(ActiveLayout);
+        }
         await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    // --- Tab operations (Phase 19.1) --------------------------------------
+    [RelayCommand]
+    private async Task SwitchLayoutAsync(GridLayout? layout)
+    {
+        if (layout is null || (ActiveLayout is { } cur && cur.Id == layout.Id)) return;
+        ActiveLayout = layout;
+        LayoutSize = layout.GridSize;
+        await PersistActiveLayoutAsync(layout.Id.Value).ConfigureAwait(true);
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task AddLayoutAsync()
+    {
+        var name = await _dialogs.PromptAsync(
+            Localizer.Instance["Layouts.NewTitle"], "", Localizer.Instance["Common.Create"], Localizer.Instance["Common.Cancel"])
+            .ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var id = await _layouts.AddAsync(name.Trim(), 2, Layouts.Count, CancellationToken.None).ConfigureAwait(true);
+        await LoadLayoutsAsync(CancellationToken.None).ConfigureAwait(true);
+        var created = Layouts.FirstOrDefault(l => l.Id.Value == id.Value);
+        if (created is not null) await SwitchLayoutAsync(created).ConfigureAwait(true);
+    }
+
+    // Friendly camera picker for the active layout (Phase 19.1 polish) — adds/
+    // removes tiles directly, no detour through the Library checkbox. Refresh on
+    // close so the grid reflects whatever the user toggled.
+    [RelayCommand]
+    private async Task ManageCamerasAsync()
+    {
+        if (ActiveLayout is not { } a) return;
+        var vm = new ManageLayoutCamerasViewModel(
+            a.Id, a.Name, _layouts, _directory,
+            _loggerFactory.CreateLogger<ManageLayoutCamerasViewModel>());
+        await _dialogs.ShowManageLayoutCamerasAsync(vm).ConfigureAwait(true);
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task RenameLayoutAsync()
+    {
+        if (ActiveLayout is not { } a) return;
+        var name = await _dialogs.PromptAsync(
+            Localizer.Instance["Layouts.RenameTitle"], a.Name, Localizer.Instance["Common.Rename"], Localizer.Instance["Common.Cancel"])
+            .ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(name) || name.Trim() == a.Name) return;
+        await _layouts.RenameAsync(a.Id, name.Trim(), CancellationToken.None).ConfigureAwait(true);
+        await LoadLayoutsAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task DeleteLayoutAsync()
+    {
+        if (ActiveLayout is not { } a || Layouts.Count <= 1) return;
+        var ok = await _dialogs.ConfirmAsync(
+            Localizer.Instance["Layouts.DeleteTitle"],
+            string.Format(System.Globalization.CultureInfo.CurrentCulture, Localizer.Instance["Layouts.DeleteMessageFormat"], a.Name),
+            Localizer.Instance["Common.Delete"], Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+        if (!ok) return;
+        await _layouts.RemoveAsync(a.Id, CancellationToken.None).ConfigureAwait(true);
+        await LoadLayoutsAsync(CancellationToken.None).ConfigureAwait(true); // active id gone → falls back to first
+        if (ActiveLayout is { } now) await PersistActiveLayoutAsync(now.Id.Value).ConfigureAwait(true);
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    // Drag-reorder of the tabs themselves (Phase 19.1 polish). Both indices are
+    // in the Layouts collection; persists SortOrder = new index.
+    public async Task MoveLayoutAsync(int fromIndex, int toIndex, CancellationToken ct)
+    {
+        if (fromIndex < 0 || fromIndex >= Layouts.Count) return;
+        if (toIndex < 0 || toIndex >= Layouts.Count) return;
+        if (fromIndex == toIndex) return;
+
+        Layouts.Move(fromIndex, toIndex);
+        try
+        {
+            await _layouts.ReorderAsync(Layouts.Select(l => l.Id).ToList(), ct).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Persisting layout order failed");
+        }
+    }
+
+    private async Task PersistActiveLayoutAsync(int id)
+    {
+        _suppressSettingsRefresh = true;
+        try { await _userSettings.UpdateAsync(_userSettings.Current with { ActiveLayoutId = id }).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Persisting active layout failed"); }
+        finally { _suppressSettingsRefresh = false; }
+    }
+
+    private void ReplaceLayoutInList(GridLayout updated)
+    {
+        for (var i = 0; i < Layouts.Count; i++)
+            if (Layouts[i].Id == updated.Id) { Layouts[i] = updated; break; }
     }
 
     private async Task RefreshTilesAsync(CancellationToken ct)
@@ -108,7 +250,21 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         // and 5 empty placeholders (which still render via the Slots padding
         // below).
         var capacity = Math.Min(LayoutSize * LayoutSize, Math.Max(1, _userSettings.MaxConcurrentGridSessions));
-        var visible = _allCameras.Where(c => c.IncludedInGrid).Take(capacity).ToList();
+
+        // Tiles come from the active layout's ordered membership (Phase 19.1),
+        // mapped onto the loaded camera records. Falls back to the legacy
+        // IncludedInGrid flag if there's no layout (shouldn't happen post-migration).
+        List<Camera> visible;
+        if (ActiveLayout is { } layout)
+        {
+            var tileIds = await _layouts.GetTilesAsync(layout.Id, ct).ConfigureAwait(true);
+            var byId = _allCameras.ToDictionary(c => c.Id);
+            visible = tileIds.Where(byId.ContainsKey).Select(id => byId[id]).Take(capacity).ToList();
+        }
+        else
+        {
+            visible = _allCameras.Where(c => c.IncludedInGrid).Take(capacity).ToList();
+        }
         var visibleIds = visible.Select(c => c.Id).ToHashSet();
 
         // Drop tiles that aren't in the new visible set.
@@ -224,26 +380,25 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         for (var i = 0; i < visualCapacity; i++)
             Slots.Add(i < Tiles.Count ? Tiles[i] : null);
 
-        var orders = new Dictionary<CameraId, int>(Tiles.Count);
-        for (var i = 0; i < Tiles.Count; i++)
-            orders[Tiles[i].Camera.Id] = i;
+        if (ActiveLayout is not { } a) return;
 
         try
         {
-            await _directory.UpdateSortOrdersAsync(orders, ct).ConfigureAwait(true);
-
-            // Mirror persisted order in our in-memory snapshot so a settings
-            // hot-reload (which re-runs RefreshTilesAsync against _allCameras)
-            // keeps the user's choice instead of snapping back.
-            _allCameras = _allCameras
-                .Select(c => orders.TryGetValue(c.Id, out var so) ? c with { SortOrder = so } : c)
-                .OrderBy(c => c.SortOrder)
-                .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Tiles is only the visible (capacity-capped) prefix of the layout's
+            // membership; reorder within the full member list so cameras beyond
+            // the cap keep their place.
+            var full = (await _layouts.GetTilesAsync(a.Id, ct).ConfigureAwait(true)).ToList();
+            if (fromIndex < full.Count && toIndex < full.Count)
+            {
+                var moved = full[fromIndex];
+                full.RemoveAt(fromIndex);
+                full.Insert(toIndex, moved);
+                await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Persisting grid order failed");
+            _logger.LogWarning(ex, "Persisting layout tile order failed");
         }
     }
 
@@ -294,6 +449,14 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 if (_minimized) await ReleaseAllAsync().ConfigureAwait(true);
             });
         });
+    }
+
+    // Config import (Phase 19.2): reload cameras + layouts so the grid reflects
+    // the imported set without a restart.
+    public async void Receive(ConfigImportedMessage message)
+    {
+        try { await LoadAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Grid reload after import failed"); }
     }
 
     public async void Receive(WindowRestoredMessage message)

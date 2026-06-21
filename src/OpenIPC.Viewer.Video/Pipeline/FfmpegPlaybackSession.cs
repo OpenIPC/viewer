@@ -145,8 +145,9 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         int w, h, stride;
         lock (_snapshotLock)
         {
+            // Empty (not an exception) signals "no frame yet" — see IVideoSession.
             if (_snapshotBgra is null)
-                throw new InvalidOperationException("No frame available yet");
+                return Task.FromResult(Array.Empty<byte>());
             bgra = (byte[])_snapshotBgra.Clone();
             w = _snapshotWidth;
             h = _snapshotHeight;

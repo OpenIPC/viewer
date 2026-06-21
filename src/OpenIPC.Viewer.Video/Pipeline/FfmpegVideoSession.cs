@@ -117,8 +117,11 @@ internal sealed class FfmpegVideoSession : IVideoSession
         int w, h, stride;
         lock (_snapshotLock)
         {
+            // No frame decoded yet (still connecting). Return empty rather than
+            // throw — callers poll this while a fresh stream warms up, and an
+            // exception per poll floods the debugger and is pure control flow.
             if (_snapshotBgra is null)
-                throw new InvalidOperationException("No frame available yet");
+                return Task.FromResult(Array.Empty<byte>());
             bgra = (byte[])_snapshotBgra.Clone();
             w = _snapshotWidth;
             h = _snapshotHeight;

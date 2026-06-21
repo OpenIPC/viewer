@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.ManageLayoutCamerasContent"
+             x:DataType="vm:ManageLayoutCamerasViewModel"
+             MaxWidth="480" MaxHeight="640"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="24">
+
+    <StackPanel Grid.Row="0" Spacing="2" Margin="0,0,0,14">
+      <TextBlock Text="{Binding TitleText}"
+                 FontSize="{StaticResource FontSizeLg}"
+                 FontWeight="SemiBold" />
+      <TextBlock FontSize="{StaticResource FontSizeSm}"
+                 Foreground="{StaticResource TextSecondaryBrush}">
+        <TextBlock.Text>
+          <MultiBinding StringFormat="{}{0} / {1}">
+            <Binding Path="SelectedCount" />
+            <Binding Path="TotalCount" />
+          </MultiBinding>
+        </TextBlock.Text>
+      </TextBlock>
+    </StackPanel>
+
+    <TextBox Grid.Row="1"
+             Text="{Binding SearchText, Mode=TwoWay}"
+             Margin="0,0,0,12"
+             PlaceholderText="{Binding [LayoutCameras.Search], Source={x:Static svc:Localizer.Instance}}" />
+
+    <TextBlock Grid.Row="2"
+               Text="{Binding [LayoutCameras.Empty], Source={x:Static svc:Localizer.Instance}}"
+               IsVisible="{Binding TotalCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"
+               Foreground="{StaticResource TextSecondaryBrush}"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+
+    <ScrollViewer Grid.Row="2" IsVisible="{Binding TotalCount}">
+      <ItemsControl ItemsSource="{Binding Cameras}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="6" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:LayoutCameraRowViewModel">
+            <Border Background="{StaticResource Bg2Brush}"
+                    CornerRadius="6"
+                    Padding="12,8">
+              <CheckBox IsChecked="{Binding IsInLayout, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="{Binding Name}"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                  <TextBlock Text="{Binding Subtitle}"
+                             FontSize="{StaticResource FontSizeSm}"
+                             FontFamily="{StaticResource FontMono}"
+                             Foreground="{StaticResource TextTertiaryBrush}" />
+                </StackPanel>
+              </CheckBox>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <TextBlock Grid.Row="3"
+               Text="{Binding ErrorMessage}"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{StaticResource DangerBrush}"
+               TextWrapping="Wrap"
+               Margin="0,12,0,0" />
+
+    <Button Grid.Row="4"
+            Name="CloseButton"
+            Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
+            HorizontalAlignment="Right"
+            Margin="0,20,0,0"
+            Padding="16,6"
+            Background="{StaticResource AccentBrush}"
+            Foreground="White"
+            CornerRadius="6" />
+
+  </Grid>
+
+</UserControl>

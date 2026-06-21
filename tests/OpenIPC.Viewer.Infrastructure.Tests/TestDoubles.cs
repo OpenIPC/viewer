@@ -34,4 +34,12 @@ internal sealed class FakeUserSettings : IUserSettingsAccessor
     public string MajesticConfigPath => "/etc/majestic.yaml";
     public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
         OpenIPC.Viewer.Core.Analytics.AiAcceleration.Auto;
+    public int ActiveLayoutId => 0;
+    public bool NotificationsEnabled => true;
+    public bool NotifyOnMotion => true;
+    public bool NotifyOnDetection => true;
+    public int NotificationCooldownSeconds => 30;
+    public bool QuietHoursEnabled => false;
+    public int QuietHoursStartHour => 22;
+    public int QuietHoursEndHour => 7;
 }

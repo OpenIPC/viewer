@@ -59,6 +59,10 @@ internal static class Composition
                 cfg["Recording:FfmpegPath"]);
         });
 
+        // Notifications (Phase 19.3) — Telegram-style corner toasts. Registered
+        // before AddSharedServices so it wins over the TryAdd Null fallback.
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService, DesktopNotificationService>();
+
         services.AddSharedServices();
 
         var provider = services.BuildServiceProvider(validateScopes: true);
@@ -66,6 +70,7 @@ internal static class Composition
         // Eager resolve: the bridge subscribes in its ctor, so without this it
         // would never wire up (singletons are lazy).
         _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
+        provider.GetRequiredService<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>().Start();
         return provider;
     }
 

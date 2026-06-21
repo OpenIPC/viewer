@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
@@ -19,6 +21,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly IFileSystem _fs;
     private readonly IDialogService _dialogs;
     private readonly ISshHostKeyStore _hostKeys;
+    private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
+    private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -43,6 +47,17 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private int _sshTerminalFontSize = 14;
     [ObservableProperty] private string _majesticConfigPath = "/etc/majestic.yaml";
     [ObservableProperty] private bool _hostKeysJustCleared;
+
+    // Notifications (Phase 19.3).
+    [ObservableProperty] private bool _notificationsEnabled = true;
+    [ObservableProperty] private bool _notifyOnMotion = true;
+    [ObservableProperty] private bool _notifyOnDetection = true;
+    [ObservableProperty] private int _notificationCooldownSeconds = 30;
+    [ObservableProperty] private bool _quietHoursEnabled;
+    [ObservableProperty] private int _quietHoursStartHour = 22;
+    [ObservableProperty] private int _quietHoursEndHour = 7;
+    public int[] HourOptions { get; } = System.Linq.Enumerable.Range(0, 24).ToArray();
+    public int[] CooldownOptions { get; } = new[] { 0, 10, 30, 60, 120, 300 };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EffectiveRecordingsDirectory))]
@@ -112,7 +127,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     public IReadOnlyList<NetworkInterfaceOption> NetworkInterfaceOptions { get; }
 
     public string AppDataDirectory => _fs.AppDataDir.FullName;
-    public string Version => Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.1.0";
+    // Prefer the git-tag-derived InformationalVersion (set in Directory.Build.targets)
+    // over the numeric AssemblyVersion, which can't carry the -rc/-beta suffix.
+    // Strip any "+metadata" just in case the SDK still appended a commit hash.
+    public string Version =>
+        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
+        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
+        ?? "0.1.0";
     public string RepositoryUrl => "https://github.com/keyldev/openipc-viewer";
 
     public SettingsPageViewModel(
@@ -120,12 +141,16 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         IFileSystem fs,
         IDialogService dialogs,
         INetworkInterfaceProvider nics,
-        ISshHostKeyStore hostKeys)
+        ISshHostKeyStore hostKeys,
+        OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
+        OpenIPC.Viewer.Core.Notifications.INotificationService notifications)
     {
         _settings = settings;
         _fs = fs;
         _dialogs = dialogs;
         _hostKeys = hostKeys;
+        _backup = backup;
+        _notifications = notifications;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -163,6 +188,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
             MajesticConfigPath = s.MajesticConfigPath;
+            NotificationsEnabled = s.NotificationsEnabled;
+            NotifyOnMotion = s.NotifyOnMotion;
+            NotifyOnDetection = s.NotifyOnDetection;
+            NotificationCooldownSeconds = s.NotificationCooldownSeconds;
+            QuietHoursEnabled = s.QuietHoursEnabled;
+            QuietHoursStartHour = s.QuietHoursStartHour;
+            QuietHoursEndHour = s.QuietHoursEndHour;
         }
         finally { _suppressSave = false; }
     }
@@ -182,6 +214,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
     partial void OnMajesticConfigPathChanged(string value) => Persist();
+    partial void OnNotificationsEnabledChanged(bool value) => Persist();
+    partial void OnNotifyOnMotionChanged(bool value) => Persist();
+    partial void OnNotifyOnDetectionChanged(bool value) => Persist();
+    partial void OnNotificationCooldownSecondsChanged(int value) => Persist();
+    partial void OnQuietHoursEnabledChanged(bool value) => Persist();
+    partial void OnQuietHoursStartHourChanged(int value) => Persist();
+    partial void OnQuietHoursEndHourChanged(int value) => Persist();
 
     private void Persist()
     {
@@ -203,6 +242,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,
             MajesticConfigPath = MajesticConfigPath,
+            NotificationsEnabled = NotificationsEnabled,
+            NotifyOnMotion = NotifyOnMotion,
+            NotifyOnDetection = NotifyOnDetection,
+            NotificationCooldownSeconds = NotificationCooldownSeconds,
+            QuietHoursEnabled = QuietHoursEnabled,
+            QuietHoursStartHour = QuietHoursStartHour,
+            QuietHoursEndHour = QuietHoursEndHour,
         };
         // Fire-and-forget; binding setters are synchronous and any save
         // error is logged inside UpdateAsync.
@@ -243,6 +289,85 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenRepository() => OpenInShell(RepositoryUrl);
+
+    // Issue-reporter (Phase 19.5, lightweight): open the repo's new-issue page
+    // with version/OS pre-filled. No data leaves the machine until the user
+    // actually submits the form in their browser. "Open logs" helps them attach
+    // our log file manually — we never auto-upload it.
+    [RelayCommand]
+    private void ReportIssue()
+    {
+        var body =
+            $"**{Localizer.Instance["Settings.Report.BodyDescribe"]}**\n\n\n" +
+            "---\n" +
+            $"- Version: {Version}\n" +
+            $"- OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}\n" +
+            $"- Runtime: {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}\n";
+        OpenInShell($"{RepositoryUrl}/issues/new?body={Uri.EscapeDataString(body)}");
+    }
+
+    [RelayCommand]
+    private void OpenLogsDirectory() =>
+        OpenInShell(System.IO.Path.Combine(_fs.AppDataDir.FullName, "logs"));
+
+    // Fire a sample toast straight at the sink (Phase 19.3) so the user can see
+    // the corner notification without waiting for a real camera event. Bypasses
+    // the coordinator's cooldown/quiet-hours on purpose — it's a UI preview.
+    [RelayCommand]
+    private void TestNotification() =>
+        _notifications.Show(new OpenIPC.Viewer.Core.Notifications.NotificationRequest(
+            Localizer.Instance["Settings.Notifications.TestTitle"],
+            Localizer.Instance["Settings.Notifications.TestBody"],
+            OpenIPC.Viewer.Core.Events.EventKind.Motion));
+
+    // --- Config export / import (Phase 19.2) ------------------------------
+    [ObservableProperty] private string? _backupStatus;
+
+    [RelayCommand]
+    private async Task ExportConfigAsync()
+    {
+        try
+        {
+            var json = await _backup.ExportAsync(CancellationToken.None).ConfigureAwait(true);
+            var path = await _dialogs.PickSaveFileAsync("openipc-config.json",
+                Localizer.Instance["Settings.Backup.ExportTitle"], "json").ConfigureAwait(true);
+            if (string.IsNullOrEmpty(path)) return;
+            await System.IO.File.WriteAllTextAsync(path, json).ConfigureAwait(true);
+            BackupStatus = Localizer.Instance["Settings.Backup.Exported"];
+        }
+        catch (Exception ex)
+        {
+            BackupStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.FailedFormat"], ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportConfigAsync()
+    {
+        try
+        {
+            var path = await _dialogs.PickAnyFileAsync(Localizer.Instance["Settings.Backup.ImportTitle"]).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(path)) return;
+            var json = await System.IO.File.ReadAllTextAsync(path).ConfigureAwait(true);
+
+            var preview = await _backup.PreviewAsync(json, CancellationToken.None).ConfigureAwait(true);
+            var confirmed = await _dialogs.ConfirmAsync(
+                Localizer.Instance["Settings.Backup.ImportTitle"],
+                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.ConfirmFormat"],
+                    preview.CamerasAdded, preview.CamerasUpdated, preview.LayoutsAdded),
+                Localizer.Instance["Settings.Backup.ImportConfirm"],
+                Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            if (!confirmed) return;
+
+            await _backup.ImportAsync(json, CancellationToken.None).ConfigureAwait(true);
+            BackupStatus = Localizer.Instance["Settings.Backup.Imported"];
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new Messages.ConfigImportedMessage());
+        }
+        catch (Exception ex)
+        {
+            BackupStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.FailedFormat"], ex.Message);
+        }
+    }
 
     private static void OpenInShell(string target)
     {

@@ -8,7 +8,7 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.GridPage"
              x:DataType="vm:GridPageViewModel">
 
-  <Grid RowDefinitions="Auto,*">
+  <Grid RowDefinitions="Auto,Auto,*">
 
     <!-- Toolbar -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
@@ -38,8 +38,75 @@
       </StackPanel>
     </Grid>
 
+    <!-- Layout tabs (Phase 19.1) -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Layouts}" x:CompileBindings="False">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Tapped="OnTabTapped"
+                      PointerPressed="OnTabPointerPressed"
+                      PointerMoved="OnTabPointerMoved"
+                      AttachedToVisualTree="OnTabAttached"
+                      input:DragDrop.AllowDrop="True"
+                      Cursor="Hand"
+                      Padding="12,6" CornerRadius="6"
+                      BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+                <Border.Background>
+                  <MultiBinding Converter="{x:Static conv:LayoutTabBrushConverter.Instance}">
+                    <Binding />
+                    <Binding Path="DataContext.ActiveLayout" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                  </MultiBinding>
+                </Border.Background>
+                <TextBlock Text="{Binding Name}"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center" />
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+        <Button Command="{Binding AddLayoutCommand}"
+                Content="+" FontSize="16" FontWeight="SemiBold"
+                Padding="12,2" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Layouts.Tooltip.Add], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Command="{Binding ManageCamerasCommand}"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Layouts.Tooltip.Cameras], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconVideo}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
+        <Button Command="{Binding RenameLayoutCommand}"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Layouts.Tooltip.Rename], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconEdit}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
+        <Button Command="{Binding DeleteLayoutCommand}"
+                IsEnabled="{Binding CanDeleteLayout}"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Layouts.Tooltip.Delete], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconClose}" Stroke="{StaticResource DangerBrush}" Width="14" Height="14" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
     <!-- Grid -->
-    <ItemsControl Grid.Row="1" ItemsSource="{Binding Slots}" x:CompileBindings="False">
+    <ItemsControl Grid.Row="2" ItemsSource="{Binding Slots}" x:CompileBindings="False">
       <ItemsControl.ItemsPanel>
         <ItemsPanelTemplate>
           <UniformGrid Columns="{Binding Columns}" Rows="{Binding Rows}" />
@@ -72,7 +139,8 @@
                     <Grid Cursor="Hand"
                           Background="Transparent"
                           Tapped="OnTileTapped"
-                          PointerPressed="OnTilePointerPressed">
+                          PointerPressed="OnTilePointerPressed"
+                          PointerMoved="OnTilePointerMoved">
                       <controls:RtspVideoView Session="{Binding Session}" />
 
                       <!-- AI detection boxes (Phase 15.5), above the video. -->

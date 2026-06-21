@@ -35,12 +35,12 @@ public sealed class PushToTalkController : IAsyncDisposable
     public event EventHandler? StateChanged;
     public event EventHandler<string>? Error;
 
-    public async Task<bool> StartAsync(BackchannelEndpoint endpoint, CancellationToken ct)
+    public async Task<TalkStartResult> StartAsync(BackchannelEndpoint endpoint, CancellationToken ct)
     {
-        if (!_input.IsAvailable) return false;
+        if (!_input.IsAvailable) return TalkStartResult.Failed;
         await StopAsync().ConfigureAwait(false);
 
-        IAudioBackchannelSession session;
+        IAudioBackchannelSession? session;
         try
         {
             session = await _client.OpenAsync(endpoint, ct).ConfigureAwait(false);
@@ -48,8 +48,12 @@ public sealed class PushToTalkController : IAsyncDisposable
         catch (Exception ex)
         {
             Error?.Invoke(this, ex.Message);
-            return false;
+            return TalkStartResult.Failed;
         }
+
+        // Camera has no backchannel track — expected, not an error. The caller
+        // shows a friendly "no two-way audio" hint; we don't raise Error.
+        if (session is null) return TalkStartResult.Unsupported;
 
         lock (_gate)
         {
@@ -65,7 +69,7 @@ public sealed class PushToTalkController : IAsyncDisposable
         _input.FrameCaptured += OnFrame;
         _input.Start(session.SampleRate, channels: 1);
         StateChanged?.Invoke(this, EventArgs.Empty);
-        return true;
+        return TalkStartResult.Started;
     }
 
     private void OnFrame(byte[] pcm16)

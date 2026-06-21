@@ -323,7 +323,10 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // speaker. ONVIF probe sets HasAudioOut; only hide when a probed camera
     // reports no backchannel. Non-ONVIF / unprobed cameras still show the button
     // (the open fails gracefully into TalkError if unsupported).
-    public bool CanTalk => _talk.IsAvailable && !(_camera.OnvifEnabled && !_camera.HasAudioOut);
+    // Hidden once a press proves the camera has no backchannel, so the user
+    // doesn't keep pressing a dead button.
+    private bool _talkUnsupported;
+    public bool CanTalk => _talk.IsAvailable && !(_camera.OnvifEnabled && !_camera.HasAudioOut) && !_talkUnsupported;
 
     [ObservableProperty] private bool _isTalking;
     [ObservableProperty] private string? _talkError;
@@ -343,9 +346,16 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
             var ep = new BackchannelEndpoint(_camera.RtspMainUri, creds);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await _talk.StartAsync(ep, cts.Token).ConfigureAwait(true);
+            var result = await _talk.StartAsync(ep, cts.Token).ConfigureAwait(true);
+            if (result == TalkStartResult.Unsupported)
+            {
+                TalkError = Localizer.Instance["CameraPage.Talk.Unsupported"];
+                _talkUnsupported = true;
+                OnPropertyChanged(nameof(CanTalk));
+            }
             // Released mid-connect → don't leave the mic hot.
-            if (!_talkHeld) await _talk.StopAsync().ConfigureAwait(true);
+            if (result == TalkStartResult.Started && !_talkHeld)
+                await _talk.StopAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {

@@ -10,6 +10,16 @@
     <NoWarn>$(NoWarn);CA1014</NoWarn>
   </PropertyGroup>
 
+  <!-- Versioning. The real version comes from the nearest git release tag (see
+       Directory.Build.targets → SetVersionFromGit). This is only the fallback
+       for builds without git / tags, so a tarball build never shows 1.0.0.0. -->
+  <PropertyGroup>
+    <Version>0.1.9</Version>
+    <!-- We set a clean InformationalVersion ourselves; suppress the SDK's
+         "+<commit-sha>" suffix so About shows just the tag. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(TargetFramework)' != 'netstandard2.1'">
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

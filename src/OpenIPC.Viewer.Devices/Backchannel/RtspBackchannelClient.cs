@@ -28,7 +28,7 @@ public sealed class RtspBackchannelClient : IAudioBackchannelClient
 
     private const string BackchannelRequire = "www.onvif.org/ver20/backchannel";
 
-    public async Task<IAudioBackchannelSession> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct)
+    public async Task<IAudioBackchannelSession?> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct)
     {
         var uri = endpoint.RtspUri;
         var host = uri.Host;
@@ -55,8 +55,14 @@ public sealed class RtspBackchannelClient : IAudioBackchannelClient
             if (describe.Status != 200)
                 throw new InvalidOperationException($"DESCRIBE failed: {describe.Status}");
 
-            var track = SdpParser.FindBackchannelAudio(describe.Body)
-                ?? throw new NotSupportedException("Camera advertises no backchannel audio track");
+            // No backchannel track is the expected "camera has no speaker" case,
+            // not an error — return null so callers don't throw on every press.
+            if (SdpParser.FindBackchannelAudio(describe.Body) is not { } track)
+            {
+                _logger.LogInformation("Camera advertises no backchannel audio track");
+                tcp.Dispose();
+                return null;
+            }
 
             var controlUrl = ResolveControl(baseUrl, track.Control);
 

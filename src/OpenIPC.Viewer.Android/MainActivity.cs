@@ -1,3 +1,4 @@
+using System;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
@@ -23,10 +24,15 @@ public sealed class MainActivity : AvaloniaMainActivity
     {
         base.OnCreate(savedInstanceState);
 
-        // Phase 17.6 — request the mic permission up front so push-to-talk works
-        // without an inline prompt. Denied → AudioRecord reports unavailable and
-        // the talk button just fails gracefully.
+        // Request the mic (Phase 17.6 push-to-talk) and notifications (Phase 19.3)
+        // permissions up front. Denied → those features degrade gracefully.
+        var wanted = new System.Collections.Generic.List<string>();
         if (CheckSelfPermission(global::Android.Manifest.Permission.RecordAudio) != Permission.Granted)
-            RequestPermissions(new[] { global::Android.Manifest.Permission.RecordAudio }, 17_06);
+            wanted.Add(global::Android.Manifest.Permission.RecordAudio);
+        if (OperatingSystem.IsAndroidVersionAtLeast(33) &&
+            CheckSelfPermission(global::Android.Manifest.Permission.PostNotifications) != Permission.Granted)
+            wanted.Add(global::Android.Manifest.Permission.PostNotifications);
+        if (wanted.Count > 0)
+            RequestPermissions(wanted.ToArray(), 1906);
     }
 }

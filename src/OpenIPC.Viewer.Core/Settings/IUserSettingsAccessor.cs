@@ -27,4 +27,19 @@ public interface IUserSettingsAccessor
 
     // Local AI analytics acceleration preference (Phase 15.2).
     AiAcceleration AiAcceleration { get; }
+
+    // Tabbed layouts (Phase 19.1). Id of the active Live-grid layout; 0 = unset,
+    // callers fall back to the first layout.
+    int ActiveLayoutId { get; }
+
+    // Notifications (Phase 19.3). Master switch + per-kind toggles, per-camera
+    // cooldown (seconds), and optional quiet hours (local-time hour window,
+    // wraps past midnight when start > end).
+    bool NotificationsEnabled { get; }
+    bool NotifyOnMotion { get; }
+    bool NotifyOnDetection { get; }
+    int NotificationCooldownSeconds { get; }
+    bool QuietHoursEnabled { get; }
+    int QuietHoursStartHour { get; }
+    int QuietHoursEndHour { get; }
 }

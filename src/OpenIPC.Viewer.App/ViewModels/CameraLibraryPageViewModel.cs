@@ -15,7 +15,7 @@ using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
-public sealed partial class CameraLibraryPageViewModel : ViewModelBase
+public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipient<ConfigImportedMessage>
 {
     private readonly CameraDirectoryService _directory;
     private readonly IDialogService _dialogs;
@@ -48,6 +48,8 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
     private readonly ManageGroupsDialogFactory _manageGroupsFactory;
     private bool _autoScanRanThisSession;
     private System.Collections.Generic.IReadOnlyList<Camera> _allCameras = System.Array.Empty<Camera>();
+    // CameraIds in the active layout (Phase 19.1) — drives the "in grid" checkbox.
+    private System.Collections.Generic.HashSet<CameraId> _gridMembership = new();
 
     public ObservableCollection<CameraGroup?> AvailableGroups { get; } = new();
 
@@ -79,11 +81,19 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         _discovery = discovery;
         _reachability = reachability;
         _logger = logger;
+        WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
         Cameras.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasCameras));
             OnPropertyChanged(nameof(IsEmpty));
         };
+    }
+
+    // Config import (Phase 19.2): reload so imported cameras appear immediately.
+    public async void Receive(ConfigImportedMessage message)
+    {
+        try { await LoadAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger?.LogWarning(ex, "Library reload after import failed"); }
     }
 
     public async Task LoadAsync(CancellationToken ct)
@@ -92,6 +102,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
         try
         {
             _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
+            // "In grid" now means membership in the active layout (Phase 19.1),
+            // so the checkbox reflects the tab the grid is currently showing.
+            var members = await _directory.GetActiveLayoutCameraIdsAsync(ct).ConfigureAwait(true);
+            _gridMembership = new System.Collections.Generic.HashSet<CameraId>(members);
             await ReloadGroupsAsync(ct).ConfigureAwait(true);
             RefilterCameras();
             IsLoaded = true;
@@ -208,7 +222,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase
 
         Cameras.Clear();
         foreach (var camera in filtered)
-            Cameras.Add(new CameraRowViewModel(camera, _directory, _reachability, _logger));
+            Cameras.Add(new CameraRowViewModel(camera, _directory, _reachability, _logger, _gridMembership.Contains(camera.Id)));
 
         // Kick off reachability probes for the freshly-built rows. Fire-and-forget:
         // each row updates its own Status independently, in parallel.
@@ -494,13 +508,15 @@ public sealed partial class CameraRowViewModel : ViewModelBase
     public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, ILogger? logger)
         : this(camera, directory, null, logger) { }
 
-    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, ILogger? logger)
+    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, ILogger? logger, bool? includedInGrid = null)
     {
         Camera = camera;
         _directory = directory;
         _reachability = reachability;
         _logger = logger;
-        _isIncludedInGrid = camera.IncludedInGrid;
+        // Field (not property) so seeding the checkbox doesn't trigger a persist.
+        // Defaults to the active-layout membership (Phase 19.1), else the flag.
+        _isIncludedInGrid = includedInGrid ?? camera.IncludedInGrid;
     }
 
     /// <summary>

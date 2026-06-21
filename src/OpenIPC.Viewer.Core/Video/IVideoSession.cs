@@ -20,6 +20,10 @@ public interface IVideoSession : IAsyncDisposable
     IObservable<AudioFrame> AudioFrames { get; }
 
     Task StartAsync(CancellationToken ct);
+
+    // JPEG/PNG of the last decoded frame. Returns an empty array (not an
+    // exception) when no frame has decoded yet — the stream is still warming
+    // up; callers may poll. Throws only on a genuine encode failure.
     Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct);
 
     // Toggle audio decode on a live session without tearing it down (Phase 17).
