@@ -1,0 +1,40 @@
+<Project>
+
+  <!-- Derive the assembly version from the nearest git release tag so the About
+       screen shows the actual build (e.g. "0.1.9-rc1-23-g13a9f8b") instead of the
+       default 1.0.0.0. Runs once per project before assembly-info generation.
+       Best-effort: if git is missing or the tree has no tags, the static
+       <Version> fallback from Directory.Build.props stands. -->
+  <Target Name="SetVersionFromGit"
+          BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo;CoreCompile"
+          Condition="'$(OpenIpcVersionResolved)' != 'true'">
+
+    <Exec Command="git describe --tags --always --dirty"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitDescribe" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitExit" />
+    </Exec>
+
+    <PropertyGroup Condition="'$(_GitExit)' == '0' and '$(_GitDescribe)' != ''">
+      <!-- Drop the leading "v" so "v0.1.9-rc1" → "0.1.9-rc1...". -->
+      <InformationalVersion>$(_GitDescribe.TrimStart('v'))</InformationalVersion>
+      <!-- Numeric core (X.Y.Z) for AssemblyVersion/FileVersion, which reject
+           pre-release/metadata suffixes. -->
+      <_GitNumeric>$([System.Text.RegularExpressions.Regex]::Match($(_GitDescribe), '[0-9]+\.[0-9]+\.[0-9]+').Value)</_GitNumeric>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_GitNumeric)' != ''">
+      <Version>$(_GitNumeric)</Version>
+      <FileVersion>$(_GitNumeric).0</FileVersion>
+      <AssemblyVersion>$(_GitNumeric).0</AssemblyVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <OpenIpcVersionResolved>true</OpenIpcVersionResolved>
+    </PropertyGroup>
+  </Target>
+
+</Project>
