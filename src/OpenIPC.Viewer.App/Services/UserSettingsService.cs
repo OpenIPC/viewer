@@ -28,6 +28,7 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     public int SshDefaultPort => Current.SshDefaultPort < 1 ? 22 : Current.SshDefaultPort;
     public string MajesticConfigPath =>
         string.IsNullOrWhiteSpace(Current.MajesticConfigPath) ? "/etc/majestic.yaml" : Current.MajesticConfigPath;
+    public int ActiveLayoutId => Current.ActiveLayoutId;
     public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
         string.Equals(Current.AiAcceleration, "force-cpu", StringComparison.OrdinalIgnoreCase)
             ? OpenIPC.Viewer.Core.Analytics.AiAcceleration.ForceCpu

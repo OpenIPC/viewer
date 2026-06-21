@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenIPC.Viewer.Core.Analytics;
@@ -15,17 +16,20 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
     private readonly IGroupRepository _groups;
     private readonly ISecretsStore _secrets;
     private readonly Settings.IUserSettingsAccessor? _settings;
+    private readonly ILayoutRepository? _layouts;
 
     public CameraDirectoryService(
         ICameraRepository cameras,
         IGroupRepository groups,
         ISecretsStore secrets,
-        Settings.IUserSettingsAccessor? settings = null)
+        Settings.IUserSettingsAccessor? settings = null,
+        ILayoutRepository? layouts = null)
     {
         _cameras = cameras;
         _groups = groups;
         _secrets = secrets;
         _settings = settings;
+        _layouts = layouts;
     }
 
     public Task<IReadOnlyList<Camera>> ListAsync(CancellationToken ct) =>
@@ -141,6 +145,30 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
             ?? throw new InvalidOperationException($"Camera {id} not found");
         var updated = existing with { IncludedInGrid = included, UpdatedAt = DateTime.UtcNow };
         await _cameras.UpdateAsync(updated, ct).ConfigureAwait(false);
+
+        // Tabbed layouts (Phase 19.1): the library checkbox adds/removes the
+        // camera from the active layout, so it's the populate path for any tab.
+        if (_layouts is not null)
+        {
+            var layoutId = await ResolveActiveLayoutAsync(ct).ConfigureAwait(false);
+            if (layoutId is { } lid)
+            {
+                if (included) await _layouts.AddTileAsync(lid, id, ct).ConfigureAwait(false);
+                else await _layouts.RemoveTileAsync(lid, id, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    // The active layout (UserSettings.ActiveLayoutId), falling back to the first
+    // one. Null only when there are no layouts / no layout repo wired.
+    private async Task<LayoutId?> ResolveActiveLayoutAsync(CancellationToken ct)
+    {
+        if (_layouts is null) return null;
+        var all = await _layouts.GetAllAsync(ct).ConfigureAwait(false);
+        if (all.Count == 0) return null;
+        var activeId = _settings?.ActiveLayoutId ?? 0;
+        var match = all.FirstOrDefault(l => l.Id.Value == activeId) ?? all[0];
+        return match.Id;
     }
 
     public async Task SetIsMajesticAsync(CameraId id, bool value, CancellationToken ct)

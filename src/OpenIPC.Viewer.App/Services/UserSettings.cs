@@ -39,7 +39,10 @@ public sealed record UserSettings(
     // Audio listen (Phase 17.3). Muted by default — a freshly opened camera
     // never plays sound until the user taps the speaker. Volume is a 0..1 gain.
     bool AudioMuted = true,
-    double AudioVolume = 1.0)
+    double AudioVolume = 1.0,
+    // Tabbed layouts (Phase 19.1). Id of the layout shown in the Live grid; 0 =
+    // not yet chosen → fall back to the first layout.
+    int ActiveLayoutId = 0)
 {
     public static UserSettings Default => new();
 }

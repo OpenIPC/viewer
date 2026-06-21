@@ -34,4 +34,5 @@ internal sealed class FakeUserSettings : IUserSettingsAccessor
     public string MajesticConfigPath => "/etc/majestic.yaml";
     public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
         OpenIPC.Viewer.Core.Analytics.AiAcceleration.Auto;
+    public int ActiveLayoutId => 0;
 }

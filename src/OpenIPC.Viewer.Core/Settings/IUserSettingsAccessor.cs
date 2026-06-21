@@ -27,4 +27,8 @@ public interface IUserSettingsAccessor
 
     // Local AI analytics acceleration preference (Phase 15.2).
     AiAcceleration AiAcceleration { get; }
+
+    // Tabbed layouts (Phase 19.1). Id of the active Live-grid layout; 0 = unset,
+    // callers fall back to the first layout.
+    int ActiveLayoutId { get; }
 }
