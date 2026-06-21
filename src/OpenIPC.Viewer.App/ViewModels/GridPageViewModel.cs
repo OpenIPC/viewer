@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.App.ViewModels.Dialogs;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
@@ -165,6 +166,20 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         await LoadLayoutsAsync(CancellationToken.None).ConfigureAwait(true);
         var created = Layouts.FirstOrDefault(l => l.Id.Value == id.Value);
         if (created is not null) await SwitchLayoutAsync(created).ConfigureAwait(true);
+    }
+
+    // Friendly camera picker for the active layout (Phase 19.1 polish) — adds/
+    // removes tiles directly, no detour through the Library checkbox. Refresh on
+    // close so the grid reflects whatever the user toggled.
+    [RelayCommand]
+    private async Task ManageCamerasAsync()
+    {
+        if (ActiveLayout is not { } a) return;
+        var vm = new ManageLayoutCamerasViewModel(
+            a.Id, a.Name, _layouts, _directory,
+            _loggerFactory.CreateLogger<ManageLayoutCamerasViewModel>());
+        await _dialogs.ShowManageLayoutCamerasAsync(vm).ConfigureAwait(true);
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     [RelayCommand]

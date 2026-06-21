@@ -95,6 +95,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Layouts.Tooltip.Add"] = "New layout",
         ["Layouts.Tooltip.Rename"] = "Rename layout",
         ["Layouts.Tooltip.Delete"] = "Delete layout",
+        ["Layouts.Tooltip.Cameras"] = "Add / remove cameras",
+        ["LayoutCameras.WindowTitle"] = "Layout cameras",
+        ["LayoutCameras.TitleFormat"] = "Cameras in “{0}”",
+        ["LayoutCameras.Empty"] = "No cameras in your library yet",
+        ["LayoutCameras.Search"] = "Search cameras…",
         ["Common.Save"] = "Save",
         ["Common.Apply"] = "Apply",
         ["Common.Unknown"] = "(unknown)",
@@ -198,6 +203,9 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Advanced.OpenAppData"] = "Open app data folder",
 
         ["Settings.About.Repository"] = "GitHub repository →",
+        ["Settings.Report.Button"] = "Report a problem",
+        ["Settings.Report.OpenLogs"] = "Open logs folder",
+        ["Settings.Report.BodyDescribe"] = "Describe the problem",
 
         ["Settings.Backup.Section"] = "Backup & restore",
         ["Settings.Backup.Description"] = "Export cameras and layouts to a JSON file, or import them on another machine. Passwords are never exported.",
@@ -212,6 +220,9 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Backup.FailedFormat"] = "Failed: {0}",
 
         ["Settings.Notifications.Section"] = "Notifications",
+        ["Settings.Notifications.Test"] = "Send test notification",
+        ["Settings.Notifications.TestTitle"] = "Test notification",
+        ["Settings.Notifications.TestBody"] = "If you can see this, desktop notifications work.",
         ["Settings.Notifications.Enable"] = "Enable notifications",
         ["Settings.Notifications.Motion"] = "Motion events",
         ["Settings.Notifications.Detection"] = "Object detections",
@@ -458,6 +469,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Layouts.Tooltip.Add"] = "Новая раскладка",
         ["Layouts.Tooltip.Rename"] = "Переименовать раскладку",
         ["Layouts.Tooltip.Delete"] = "Удалить раскладку",
+        ["Layouts.Tooltip.Cameras"] = "Добавить / убрать камеры",
+        ["LayoutCameras.WindowTitle"] = "Камеры раскладки",
+        ["LayoutCameras.TitleFormat"] = "Камеры в «{0}»",
+        ["LayoutCameras.Empty"] = "В библиотеке пока нет камер",
+        ["LayoutCameras.Search"] = "Поиск камер…",
         ["Common.Save"] = "Сохранить",
         ["Common.Apply"] = "Применить",
         ["Common.Unknown"] = "(неизвестно)",
@@ -561,6 +577,9 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Advanced.OpenAppData"] = "Открыть папку данных",
 
         ["Settings.About.Repository"] = "Репозиторий на GitHub →",
+        ["Settings.Report.Button"] = "Сообщить о проблеме",
+        ["Settings.Report.OpenLogs"] = "Открыть папку логов",
+        ["Settings.Report.BodyDescribe"] = "Опишите проблему",
 
         ["Settings.Backup.Section"] = "Бэкап и восстановление",
         ["Settings.Backup.Description"] = "Выгрузить камеры и раскладки в JSON-файл или импортировать на другой машине. Пароли не экспортируются.",
@@ -575,6 +594,9 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Backup.FailedFormat"] = "Ошибка: {0}",
 
         ["Settings.Notifications.Section"] = "Уведомления",
+        ["Settings.Notifications.Test"] = "Отправить тестовое уведомление",
+        ["Settings.Notifications.TestTitle"] = "Тестовое уведомление",
+        ["Settings.Notifications.TestBody"] = "Если вы это видите — уведомления на рабочем столе работают.",
         ["Settings.Notifications.Enable"] = "Включить уведомления",
         ["Settings.Notifications.Motion"] = "События движения",
         ["Settings.Notifications.Detection"] = "Обнаружение объектов",

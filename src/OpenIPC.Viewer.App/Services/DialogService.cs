@@ -215,6 +215,21 @@ public sealed class DialogService : IDialogService
         await dlg.ShowDialog(owner);
     }
 
+    public async Task ShowManageLayoutCamerasAsync(ManageLayoutCamerasViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new ManageLayoutCamerasContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            return;
+        }
+
+        var owner = ResolveOwner();
+        if (owner is null) return;
+        var dlg = new ManageLayoutCamerasDialog { DataContext = viewModel };
+        await dlg.ShowDialog(owner);
+    }
+
     public Task<string?> ShowRawConfigEditorAsync(string initialJson)
     {
         if (OverlayDialogPresenter.IsMobile)

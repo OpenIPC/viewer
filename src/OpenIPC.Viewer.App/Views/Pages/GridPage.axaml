@@ -51,6 +51,7 @@
             <DataTemplate>
               <Border Tapped="OnTabTapped"
                       PointerPressed="OnTabPointerPressed"
+                      PointerMoved="OnTabPointerMoved"
                       AttachedToVisualTree="OnTabAttached"
                       input:DragDrop.AllowDrop="True"
                       Cursor="Hand"
@@ -79,6 +80,13 @@
                 Foreground="{StaticResource TextPrimaryBrush}"
                 BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                 ToolTip.Tip="{Binding [Layouts.Tooltip.Add], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Command="{Binding ManageCamerasCommand}"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Layouts.Tooltip.Cameras], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconVideo}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
         <Button Command="{Binding RenameLayoutCommand}"
                 Padding="10,6" CornerRadius="6"
                 Background="{StaticResource Bg2Brush}"
@@ -131,7 +139,8 @@
                     <Grid Cursor="Hand"
                           Background="Transparent"
                           Tapped="OnTileTapped"
-                          PointerPressed="OnTilePointerPressed">
+                          PointerPressed="OnTilePointerPressed"
+                          PointerMoved="OnTilePointerMoved">
                       <controls:RtspVideoView Session="{Binding Session}" />
 
                       <!-- AI detection boxes (Phase 15.5), above the video. -->
