@@ -47,6 +47,17 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private string _majesticConfigPath = "/etc/majestic.yaml";
     [ObservableProperty] private bool _hostKeysJustCleared;
 
+    // Notifications (Phase 19.3).
+    [ObservableProperty] private bool _notificationsEnabled = true;
+    [ObservableProperty] private bool _notifyOnMotion = true;
+    [ObservableProperty] private bool _notifyOnDetection = true;
+    [ObservableProperty] private int _notificationCooldownSeconds = 30;
+    [ObservableProperty] private bool _quietHoursEnabled;
+    [ObservableProperty] private int _quietHoursStartHour = 22;
+    [ObservableProperty] private int _quietHoursEndHour = 7;
+    public int[] HourOptions { get; } = System.Linq.Enumerable.Range(0, 24).ToArray();
+    public int[] CooldownOptions { get; } = new[] { 0, 10, 30, 60, 120, 300 };
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EffectiveRecordingsDirectory))]
     [NotifyPropertyChangedFor(nameof(IsRecordingsDirOverridden))]
@@ -168,6 +179,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
             MajesticConfigPath = s.MajesticConfigPath;
+            NotificationsEnabled = s.NotificationsEnabled;
+            NotifyOnMotion = s.NotifyOnMotion;
+            NotifyOnDetection = s.NotifyOnDetection;
+            NotificationCooldownSeconds = s.NotificationCooldownSeconds;
+            QuietHoursEnabled = s.QuietHoursEnabled;
+            QuietHoursStartHour = s.QuietHoursStartHour;
+            QuietHoursEndHour = s.QuietHoursEndHour;
         }
         finally { _suppressSave = false; }
     }
@@ -187,6 +205,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
     partial void OnMajesticConfigPathChanged(string value) => Persist();
+    partial void OnNotificationsEnabledChanged(bool value) => Persist();
+    partial void OnNotifyOnMotionChanged(bool value) => Persist();
+    partial void OnNotifyOnDetectionChanged(bool value) => Persist();
+    partial void OnNotificationCooldownSecondsChanged(int value) => Persist();
+    partial void OnQuietHoursEnabledChanged(bool value) => Persist();
+    partial void OnQuietHoursStartHourChanged(int value) => Persist();
+    partial void OnQuietHoursEndHourChanged(int value) => Persist();
 
     private void Persist()
     {
@@ -208,6 +233,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,
             MajesticConfigPath = MajesticConfigPath,
+            NotificationsEnabled = NotificationsEnabled,
+            NotifyOnMotion = NotifyOnMotion,
+            NotifyOnDetection = NotifyOnDetection,
+            NotificationCooldownSeconds = NotificationCooldownSeconds,
+            QuietHoursEnabled = QuietHoursEnabled,
+            QuietHoursStartHour = QuietHoursStartHour,
+            QuietHoursEndHour = QuietHoursEndHour,
         };
         // Fire-and-forget; binding setters are synchronous and any save
         // error is logged inside UpdateAsync.

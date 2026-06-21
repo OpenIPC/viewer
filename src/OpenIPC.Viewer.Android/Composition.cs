@@ -46,6 +46,9 @@ internal static class Composition
         // capture. Capture needs the RECORD_AUDIO runtime permission (manifest).
         services.AddSingleton<IAudioOutput, Platform.AndroidAudioOutput>();
         services.AddSingleton<IAudioInput, Platform.AndroidAudioInput>();
+        // Notifications (Phase 19.3) — NotificationManager channel.
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService>(
+            _ => new Platform.AndroidNotificationService(context));
 
         // Recording — in-process libavformat (no subprocess on Android) +
         // foreground service for OS keep-alive. Phase 9c.

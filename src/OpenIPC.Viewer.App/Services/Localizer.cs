@@ -211,6 +211,15 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Backup.Imported"] = "Configuration imported.",
         ["Settings.Backup.FailedFormat"] = "Failed: {0}",
 
+        ["Settings.Notifications.Section"] = "Notifications",
+        ["Settings.Notifications.Enable"] = "Enable notifications",
+        ["Settings.Notifications.Motion"] = "Motion events",
+        ["Settings.Notifications.Detection"] = "Object detections",
+        ["Settings.Notifications.Cooldown"] = "Cooldown per camera (sec)",
+        ["Settings.Notifications.QuietHours"] = "Quiet hours",
+        ["Settings.Notifications.From"] = "From",
+        ["Settings.Notifications.To"] = "to",
+
         ["Snapshot.Saved"] = "Saved →",
         ["Snapshot.Open"] = "Open",
         ["Snapshot.Copy"] = "Copy",
@@ -564,6 +573,15 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Backup.Exported"] = "Конфигурация экспортирована.",
         ["Settings.Backup.Imported"] = "Конфигурация импортирована.",
         ["Settings.Backup.FailedFormat"] = "Ошибка: {0}",
+
+        ["Settings.Notifications.Section"] = "Уведомления",
+        ["Settings.Notifications.Enable"] = "Включить уведомления",
+        ["Settings.Notifications.Motion"] = "События движения",
+        ["Settings.Notifications.Detection"] = "Обнаружение объектов",
+        ["Settings.Notifications.Cooldown"] = "Пауза на камеру (сек)",
+        ["Settings.Notifications.QuietHours"] = "Тихие часы",
+        ["Settings.Notifications.From"] = "С",
+        ["Settings.Notifications.To"] = "до",
 
         ["Snapshot.Saved"] = "Сохранено →",
         ["Snapshot.Open"] = "Открыть",

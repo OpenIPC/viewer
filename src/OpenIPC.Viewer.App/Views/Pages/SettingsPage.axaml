@@ -402,6 +402,40 @@
                        Foreground="{StaticResource TextTertiaryBrush}"
                        TextWrapping="Wrap" />
           </StackPanel>
+
+          <!-- Notifications (Phase 19.3) -->
+          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
+          <TextBlock Classes="section-title"
+                     Text="{Binding [Settings.Notifications.Section], Source={x:Static svc:Localizer.Instance}}" />
+          <CheckBox IsChecked="{Binding NotificationsEnabled}"
+                    Content="{Binding [Settings.Notifications.Enable], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <CheckBox IsChecked="{Binding NotifyOnMotion}"
+                    IsEnabled="{Binding NotificationsEnabled}"
+                    Content="{Binding [Settings.Notifications.Motion], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <CheckBox IsChecked="{Binding NotifyOnDetection}"
+                    IsEnabled="{Binding NotificationsEnabled}"
+                    Content="{Binding [Settings.Notifications.Detection], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding NotificationsEnabled}">
+            <TextBlock Text="{Binding [Settings.Notifications.Cooldown], Source={x:Static svc:Localizer.Instance}}"
+                       VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+            <ComboBox ItemsSource="{Binding CooldownOptions}" SelectedItem="{Binding NotificationCooldownSeconds}" Width="90" />
+          </StackPanel>
+          <CheckBox IsChecked="{Binding QuietHoursEnabled}"
+                    IsEnabled="{Binding NotificationsEnabled}"
+                    Content="{Binding [Settings.Notifications.QuietHours], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <StackPanel Orientation="Horizontal" Spacing="8"
+                      IsEnabled="{Binding QuietHoursEnabled}">
+            <TextBlock Text="{Binding [Settings.Notifications.From], Source={x:Static svc:Localizer.Instance}}"
+                       VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+            <ComboBox ItemsSource="{Binding HourOptions}" SelectedItem="{Binding QuietHoursStartHour}" Width="80" />
+            <TextBlock Text="{Binding [Settings.Notifications.To], Source={x:Static svc:Localizer.Instance}}"
+                       VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+            <ComboBox ItemsSource="{Binding HourOptions}" SelectedItem="{Binding QuietHoursEndHour}" Width="80" />
+          </StackPanel>
         </StackPanel>
 
         <!-- About -->
