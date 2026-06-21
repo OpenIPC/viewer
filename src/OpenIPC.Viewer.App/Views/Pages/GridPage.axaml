@@ -49,19 +49,23 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Command="{Binding DataContext.SwitchLayoutCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                      CommandParameter="{Binding}"
-                      Content="{Binding Name}"
+              <Border Tapped="OnTabTapped"
+                      PointerPressed="OnTabPointerPressed"
+                      AttachedToVisualTree="OnTabAttached"
+                      input:DragDrop.AllowDrop="True"
+                      Cursor="Hand"
                       Padding="12,6" CornerRadius="6"
-                      Foreground="{StaticResource TextPrimaryBrush}"
                       BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
-                <Button.Background>
+                <Border.Background>
                   <MultiBinding Converter="{x:Static conv:LayoutTabBrushConverter.Instance}">
                     <Binding />
                     <Binding Path="DataContext.ActiveLayout" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
                   </MultiBinding>
-                </Button.Background>
-              </Button>
+                </Border.Background>
+                <TextBlock Text="{Binding Name}"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center" />
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

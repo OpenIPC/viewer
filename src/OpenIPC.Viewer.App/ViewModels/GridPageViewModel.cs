@@ -192,6 +192,25 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
+    // Drag-reorder of the tabs themselves (Phase 19.1 polish). Both indices are
+    // in the Layouts collection; persists SortOrder = new index.
+    public async Task MoveLayoutAsync(int fromIndex, int toIndex, CancellationToken ct)
+    {
+        if (fromIndex < 0 || fromIndex >= Layouts.Count) return;
+        if (toIndex < 0 || toIndex >= Layouts.Count) return;
+        if (fromIndex == toIndex) return;
+
+        Layouts.Move(fromIndex, toIndex);
+        try
+        {
+            await _layouts.ReorderAsync(Layouts.Select(l => l.Id).ToList(), ct).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Persisting layout order failed");
+        }
+    }
+
     private async Task PersistActiveLayoutAsync(int id)
     {
         _suppressSettingsRefresh = true;

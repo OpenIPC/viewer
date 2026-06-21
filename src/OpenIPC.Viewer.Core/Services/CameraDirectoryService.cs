@@ -159,6 +159,16 @@ public sealed class CameraDirectoryService : ICameraCredentialsProvider
         }
     }
 
+    // CameraIds in the active layout — the library uses this to seed the "in
+    // grid" checkbox so it matches the tab the grid is showing (Phase 19.1).
+    public async Task<IReadOnlyList<CameraId>> GetActiveLayoutCameraIdsAsync(CancellationToken ct)
+    {
+        if (_layouts is null) return Array.Empty<CameraId>();
+        var layout = await ResolveActiveLayoutAsync(ct).ConfigureAwait(false);
+        if (layout is not { } lid) return Array.Empty<CameraId>();
+        return await _layouts.GetTilesAsync(lid, ct).ConfigureAwait(false);
+    }
+
     // The active layout (UserSettings.ActiveLayoutId), falling back to the first
     // one. Null only when there are no layouts / no layout repo wired.
     private async Task<LayoutId?> ResolveActiveLayoutAsync(CancellationToken ct)
