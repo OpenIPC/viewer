@@ -3,10 +3,17 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingPlayerPage"
              x:DataType="vm:RecordingPlayerPageViewModel">
 
   <UserControl.Styles>
+    <!-- Narrow viewport: drop the day-event sidebar so the video keeps the full
+         width instead of being squeezed beside a fixed 260px panel. Events
+         remain reachable via the timeline markers below. -->
+    <Style Selector="Grid.compact &gt; Border.eventsidebar">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
     <Style Selector="Button.evfilter">
       <Setter Property="Padding" Value="8,3" />
       <Setter Property="CornerRadius" Value="4" />
@@ -60,7 +67,7 @@
     </Grid>
 
     <!-- Video surface + overlays (left) + day event list (right) -->
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" b:Adaptive.CompactBelow="620">
       <Grid Grid.Column="0" ClipToBounds="True" Background="Black">
       <controls:RtspVideoView Session="{Binding VideoSession}" />
 
@@ -93,7 +100,7 @@
 
       <!-- Day event list (16.6): motion/detection of this recording's window;
            click an entry to seek; filter by type. -->
-      <Border Grid.Column="1" Width="260" Margin="12,0,0,0"
+      <Border Grid.Column="1" Classes="eventsidebar" Width="260" Margin="12,0,0,0"
               Background="{StaticResource Bg1Brush}"
               BorderBrush="{StaticResource BorderWeakBrush}"
               BorderThickness="1"
@@ -199,29 +206,27 @@
         </Button>
       </Grid>
 
-      <!-- Export bar (16.5): mark in/out, choose precise vs fast copy, export -->
-      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" >
-        <Button Grid.Column="0"
-                Command="{Binding SetInCommand}"
+      <!-- Export bar (16.5): mark in/out, choose precise vs fast copy, export.
+           WrapPanel so the cluster reflows on a narrow viewport. -->
+      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+        <Button Command="{Binding SetInCommand}"
                 Content="{Binding [Recordings.MarkIn], Source={x:Static svc:Localizer.Instance}}"
                 Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="10,5" FontSize="11" Margin="0,0,6,0"
+                CornerRadius="6" Padding="10,5" FontSize="11"
                 Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Grid.Column="1"
-                Command="{Binding SetOutCommand}"
+        <Button Command="{Binding SetOutCommand}"
                 Content="{Binding [Recordings.MarkOut], Source={x:Static svc:Localizer.Instance}}"
                 Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="10,5" FontSize="11" Margin="0,0,6,0"
+                CornerRadius="6" Padding="10,5" FontSize="11"
                 Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Grid.Column="2"
-                Command="{Binding ClearSelectionCommand}"
+        <Button Command="{Binding ClearSelectionCommand}"
                 IsVisible="{Binding HasSelection}"
                 Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
                 Background="Transparent" BorderThickness="0"
                 CornerRadius="6" Padding="8,5" FontSize="11"
                 Foreground="{StaticResource TextSecondaryBrush}" />
 
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="12,0">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <TextBlock Text="{Binding SelectionLabel}"
                      FontFamily="{StaticResource FontMono}" FontSize="11"
                      Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
@@ -232,17 +237,15 @@
                      FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
         </StackPanel>
 
-        <CheckBox Grid.Column="4"
-                  IsChecked="{Binding PreciseExport, Mode=TwoWay}"
+        <CheckBox IsChecked="{Binding PreciseExport, Mode=TwoWay}"
                   Content="{Binding [Recordings.Precise], Source={x:Static svc:Localizer.Instance}}"
-                  FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                  FontSize="11" VerticalAlignment="Center"
                   Foreground="{StaticResource TextSecondaryBrush}" />
-        <Button Grid.Column="5"
-                Command="{Binding ExportCommand}"
+        <Button Command="{Binding ExportCommand}"
                 Content="{Binding [Recordings.Export], Source={x:Static svc:Localizer.Instance}}"
                 Background="{StaticResource AccentBrush}" Foreground="White"
                 CornerRadius="6" Padding="14,5" FontSize="11" />
-      </Grid>
+      </WrapPanel>
     </StackPanel>
 
   </Grid>

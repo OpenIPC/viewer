@@ -455,7 +455,7 @@
             <Run Text="{Binding Version}" />
           </TextBlock>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
+          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
             <Button Classes="outlined"
                     Content="{Binding [Settings.About.Repository], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding OpenRepositoryCommand}" />
@@ -465,7 +465,7 @@
             <Button Classes="outlined"
                     Content="{Binding [Settings.Report.OpenLogs], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding OpenLogsDirectoryCommand}" />
-          </StackPanel>
+          </WrapPanel>
 
           <!-- Config export / import (Phase 19.2) -->
           <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
@@ -474,14 +474,14 @@
           <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
                      TextWrapping="Wrap"
                      Text="{Binding [Settings.Backup.Description], Source={x:Static svc:Localizer.Instance}}" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
+          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
             <Button Classes="outlined"
                     Content="{Binding [Settings.Backup.Export], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding ExportConfigCommand}" />
             <Button Classes="outlined"
                     Content="{Binding [Settings.Backup.Import], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding ImportConfigCommand}" />
-          </StackPanel>
+          </WrapPanel>
           <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
                      FontSize="{StaticResource FontSizeSm}"
                      Text="{Binding BackupStatus}"

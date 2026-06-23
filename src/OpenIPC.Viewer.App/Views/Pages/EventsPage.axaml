@@ -7,28 +7,27 @@
 
   <Grid RowDefinitions="Auto,*">
 
-    <!-- Header -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,16">
-      <TextBlock Grid.Column="0"
-                 Text="{Binding Title}"
+    <!-- Header: title on top, filter + action wrap below so they never collide
+         with the title on a phone-width viewport. -->
+    <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,16">
+      <TextBlock Text="{Binding Title}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
-                 Foreground="{StaticResource TextPrimaryBrush}"
-                 VerticalAlignment="Center" />
-      <ComboBox Grid.Column="1"
-                ItemsSource="{Binding CameraOptions}"
-                SelectedItem="{Binding SelectedCamera, Mode=TwoWay}"
-                MinWidth="160" Margin="0,0,8,0" />
-      <Button Grid.Column="2"
-              Content="{Binding [Events.Button.SimulateMotion], Source={x:Static svc:Localizer.Instance}}"
-              Command="{Binding SimulateMotionCommand}"
-              Padding="12,6"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Foreground="{StaticResource TextPrimaryBrush}" />
-    </Grid>
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+        <ComboBox ItemsSource="{Binding CameraOptions}"
+                  SelectedItem="{Binding SelectedCamera, Mode=TwoWay}"
+                  MinWidth="160" />
+        <Button Content="{Binding [Events.Button.SimulateMotion], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding SimulateMotionCommand}"
+                Padding="12,6"
+                Background="Transparent"
+                BorderBrush="{StaticResource BorderMediumBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+      </WrapPanel>
+    </StackPanel>
 
     <!-- Empty -->
     <TextBlock Grid.Row="1"
@@ -53,49 +52,43 @@
                     BorderThickness="1"
                     CornerRadius="6"
                     Padding="12,8">
-              <Grid ColumnDefinitions="120,*,Auto,Auto,Auto">
+              <!-- Kind + camera on top; source / duration / timestamp wrap below
+                   so the row never clips its trailing columns on a phone. -->
+              <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                  <Border Background="{StaticResource WarningBrush}"
+                          CornerRadius="3"
+                          Padding="6,2"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding KindLabel}"
+                               FontFamily="{StaticResource FontMono}"
+                               FontSize="10"
+                               Foreground="White" />
+                  </Border>
+                  <TextBlock Text="{Binding CameraName}"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             VerticalAlignment="Center" />
+                </StackPanel>
 
-                <Border Grid.Column="0"
-                        Background="{StaticResource WarningBrush}"
-                        CornerRadius="3"
-                        Padding="6,2"
-                        HorizontalAlignment="Left">
-                  <TextBlock Text="{Binding KindLabel}"
+                <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
+                  <TextBlock Text="{Binding Source}"
                              FontFamily="{StaticResource FontMono}"
-                             FontSize="10"
-                             Foreground="White" />
-                </Border>
-
-                <TextBlock Grid.Column="1"
-                           Text="{Binding CameraName}"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0" />
-
-                <TextBlock Grid.Column="2"
-                           Text="{Binding Source}"
-                           FontFamily="{StaticResource FontMono}"
-                           FontSize="11"
-                           Foreground="{StaticResource TextTertiaryBrush}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,16,0" />
-
-                <TextBlock Grid.Column="3"
-                           Text="{Binding Duration}"
-                           FontFamily="{StaticResource FontMono}"
-                           FontSize="11"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,16,0"
-                           MinWidth="40" />
-
-                <TextBlock Grid.Column="4"
-                           Text="{Binding OccurredAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
-                           FontFamily="{StaticResource FontMono}"
-                           FontSize="11"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           VerticalAlignment="Center" />
-              </Grid>
+                             FontSize="11"
+                             Foreground="{StaticResource TextTertiaryBrush}"
+                             VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Duration}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="11"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             VerticalAlignment="Center"
+                             MinWidth="40" />
+                  <TextBlock Text="{Binding OccurredAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="11"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             VerticalAlignment="Center" />
+                </WrapPanel>
+              </StackPanel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

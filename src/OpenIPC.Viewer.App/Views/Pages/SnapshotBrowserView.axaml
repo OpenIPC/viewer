@@ -39,33 +39,31 @@
 
   <Grid RowDefinitions="Auto,Auto,Auto,*">
 
-    <!-- Filters -->
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
-      <ComboBox Grid.Column="0"
-                MinWidth="160"
+    <!-- Filters. WrapPanel so the camera picker, date presets and sort toggle
+         flow onto a second line instead of overflowing a phone-width viewport. -->
+    <WrapPanel Grid.Row="0" Orientation="Horizontal" ItemSpacing="8" LineSpacing="8"
+               Margin="0,0,0,10">
+      <ComboBox MinWidth="160"
                 ItemsSource="{Binding CameraOptions}"
                 SelectedItem="{Binding SelectedCamera}" />
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0"
-                  VerticalAlignment="Center">
-        <Button Classes="seg" Classes.active="{Binding IsPresetAll}"
-                Command="{Binding SetPresetCommand}" CommandParameter="all"
-                Content="{Binding [Snapshots.PresetAll], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Classes="seg" Classes.active="{Binding IsPresetToday}"
-                Command="{Binding SetPresetCommand}" CommandParameter="today"
-                Content="{Binding [Snapshots.PresetToday], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Classes="seg" Classes.active="{Binding IsPreset7}"
-                Command="{Binding SetPresetCommand}" CommandParameter="7"
-                Content="{Binding [Snapshots.Preset7], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Classes="seg" Classes.active="{Binding IsPreset30}"
-                Command="{Binding SetPresetCommand}" CommandParameter="30"
-                Content="{Binding [Snapshots.Preset30], Source={x:Static svc:Localizer.Instance}}" />
-      </StackPanel>
+      <Button Classes="seg" Classes.active="{Binding IsPresetAll}"
+              Command="{Binding SetPresetCommand}" CommandParameter="all"
+              Content="{Binding [Snapshots.PresetAll], Source={x:Static svc:Localizer.Instance}}" />
+      <Button Classes="seg" Classes.active="{Binding IsPresetToday}"
+              Command="{Binding SetPresetCommand}" CommandParameter="today"
+              Content="{Binding [Snapshots.PresetToday], Source={x:Static svc:Localizer.Instance}}" />
+      <Button Classes="seg" Classes.active="{Binding IsPreset7}"
+              Command="{Binding SetPresetCommand}" CommandParameter="7"
+              Content="{Binding [Snapshots.Preset7], Source={x:Static svc:Localizer.Instance}}" />
+      <Button Classes="seg" Classes.active="{Binding IsPreset30}"
+              Command="{Binding SetPresetCommand}" CommandParameter="30"
+              Content="{Binding [Snapshots.Preset30], Source={x:Static svc:Localizer.Instance}}" />
 
-      <Button Grid.Column="2" Classes="seg"
+      <Button Classes="seg"
               Command="{Binding ToggleSortCommand}"
               Content="{Binding SortLabel}" />
-    </Grid>
+    </WrapPanel>
 
     <!-- Selection toolbar -->
     <Border Grid.Row="1" IsVisible="{Binding HasSelection}"
