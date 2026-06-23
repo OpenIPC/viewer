@@ -3,6 +3,7 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:pages="using:OpenIPC.Viewer.App.Views.Pages"
+             xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingsPage"
              x:DataType="vm:RecordingsPageViewModel">
 
@@ -21,19 +22,24 @@
       <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
+    <!-- Narrow viewport: the activity calendar drops from the left column to a
+         band above the list so the list keeps the full width instead of being
+         crushed into ~80px next to a fixed 240px calendar. -->
+    <Style Selector="DockPanel.compact &gt; pages|ArchiveCalendarView">
+      <Setter Property="(DockPanel.Dock)" Value="Top" />
+    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*">
 
-    <!-- Header: title + segmented Recordings / Snapshots switch -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
-      <TextBlock Grid.Column="0"
-                 Text="{Binding Title}"
+    <!-- Header: title on top, the Recordings/Snapshots switch wraps below so a
+         phone-width viewport never shoves the toggle off-screen. -->
+    <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,20">
+      <TextBlock Text="{Binding Title}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
-                 Foreground="{StaticResource TextPrimaryBrush}"
-                 VerticalAlignment="Center" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+      <StackPanel Orientation="Horizontal" Spacing="6">
         <Button Classes="seg" Classes.active="{Binding IsRecordingsTabActive}"
                 Command="{Binding SelectRecordingsCommand}"
                 Content="{Binding [Nav.Recordings], Source={x:Static svc:Localizer.Instance}}" />
@@ -41,144 +47,144 @@
                 Command="{Binding SelectSnapshotsCommand}"
                 Content="{Binding [Snapshots.Title], Source={x:Static svc:Localizer.Instance}}" />
       </StackPanel>
-    </Grid>
+    </StackPanel>
 
     <!-- Snapshots tab -->
     <ContentControl Grid.Row="1" IsVisible="{Binding ShowSnapshots}">
       <pages:SnapshotBrowserView DataContext="{Binding Snapshots}" />
     </ContentControl>
 
-    <!-- Recordings tab: calendar (left) + list (right) -->
-    <Grid Grid.Row="1" IsVisible="{Binding ShowRecordings}" ColumnDefinitions="Auto,*">
+    <!-- Recordings tab: calendar + list. DockPanel docks the calendar Left on a
+         wide viewport and Top when narrow (see the .compact style above), so the
+         list always keeps usable width. -->
+    <DockPanel Grid.Row="1" IsVisible="{Binding ShowRecordings}"
+               b:Adaptive.CompactBelow="620" LastChildFill="True">
 
-      <!-- Activity calendar -->
-      <pages:ArchiveCalendarView Grid.Column="0"
-                                 DataContext="{Binding Calendar}"
-                                 Margin="0,0,16,0"
+      <!-- Activity calendar. Default Dock is Left; trailing margin works for
+           both orientations. -->
+      <pages:ArchiveCalendarView DataContext="{Binding Calendar}"
+                                 Margin="0,0,16,16"
                                  VerticalAlignment="Top" />
 
-      <!-- Empty state -->
-      <TextBlock Grid.Column="1"
-                 IsVisible="{Binding IsEmpty}"
-                 Text="{Binding [Recordings.Empty], Source={x:Static svc:Localizer.Instance}}"
-                 Foreground="{StaticResource TextSecondaryBrush}"
-                 HorizontalAlignment="Center"
-                 VerticalAlignment="Center" />
+      <!-- Remaining area: list + empty/error/loading overlays stacked. -->
+      <Panel>
 
-      <!-- List -->
-      <ScrollViewer Grid.Column="1" IsVisible="{Binding !IsEmpty}">
-        <ItemsControl ItemsSource="{Binding Items}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Spacing="8" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:RecordingRowViewModel">
-              <Border Background="{StaticResource Bg2Brush}"
-                      BorderBrush="{StaticResource BorderWeakBrush}"
-                      BorderThickness="1"
-                      CornerRadius="8"
-                      Padding="14,10">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
-                  <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding FileName}"
-                               FontFamily="{StaticResource FontMono}"
-                               FontSize="{StaticResource FontSizeBase}"
-                               Foreground="{StaticResource TextPrimaryBrush}" />
-                    <TextBlock Text="{Binding CameraName}"
-                               FontSize="{StaticResource FontSizeSm}"
-                               Foreground="{StaticResource TextSecondaryBrush}" />
-                  </StackPanel>
-
-                  <TextBlock Grid.Column="1"
-                             Text="{Binding StartedAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="{StaticResource FontSizeSm}"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             VerticalAlignment="Center"
-                             Margin="16,0,16,0" />
-
-                  <TextBlock Grid.Column="2"
-                             Text="{Binding Duration}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="{StaticResource FontSizeSm}"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             VerticalAlignment="Center"
-                             Margin="0,0,16,0" />
-
-                  <TextBlock Grid.Column="3"
-                             Text="{Binding SizeLabel}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="{StaticResource FontSizeSm}"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             VerticalAlignment="Center"
-                             Margin="0,0,16,0"
-                             MinWidth="70" />
-
-                  <Button Grid.Column="4"
-                          Padding="10,5"
-                          Background="{StaticResource AccentBrush}"
-                          CornerRadius="4"
-                          Margin="0,0,8,0"
-                          VerticalAlignment="Center"
-                          Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).PlayCommand}"
-                          CommandParameter="{Binding}">
-                    <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="13" Height="13" />
-                  </Button>
-
-                  <Button Grid.Column="5"
-                          Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
-                          Padding="10,4"
-                          FontSize="11"
-                          Background="Transparent"
-                          BorderBrush="{StaticResource BorderMediumBrush}"
-                          BorderThickness="1"
-                          CornerRadius="4"
-                          Foreground="{StaticResource DangerBrush}"
-                          Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).DeleteCommand}"
-                          CommandParameter="{Binding}" />
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-
-      <!-- Error overlay -->
-      <StackPanel Grid.Column="1"
-                  IsVisible="{Binding HasLoadError}"
-                  VerticalAlignment="Center"
-                  HorizontalAlignment="Center"
-                  Spacing="12">
-        <TextBlock Text="{Binding LoadError}"
-                   FontSize="{StaticResource FontSizeLg}"
-                   Foreground="{StaticResource DangerBrush}"
-                   HorizontalAlignment="Center" />
-        <Button Content="{Binding [Common.Retry], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding ReloadCommand}"
-                Padding="14,8"
-                Background="Transparent"
-                BorderBrush="{StaticResource BorderMediumBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Foreground="{StaticResource TextPrimaryBrush}"
-                HorizontalAlignment="Center" />
-      </StackPanel>
-
-      <!-- Loading overlay (rendered last → on top). -->
-      <StackPanel Grid.Column="1"
-                  IsVisible="{Binding IsLoading}"
-                  VerticalAlignment="Center"
-                  HorizontalAlignment="Center"
-                  Spacing="12">
-        <ProgressBar IsIndeterminate="True" Width="160" />
-        <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+        <!-- Empty state -->
+        <TextBlock IsVisible="{Binding IsEmpty}"
+                   Text="{Binding [Recordings.Empty], Source={x:Static svc:Localizer.Instance}}"
                    Foreground="{StaticResource TextSecondaryBrush}"
-                   HorizontalAlignment="Center" />
-      </StackPanel>
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
 
-    </Grid>
+        <!-- List -->
+        <ScrollViewer IsVisible="{Binding !IsEmpty}">
+          <ItemsControl ItemsSource="{Binding Items}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:RecordingRowViewModel">
+                <!-- Two-line card: identity on top, metadata + actions wrap
+                     below so the row never overflows on a phone. -->
+                <Border Background="{StaticResource Bg2Brush}"
+                        BorderBrush="{StaticResource BorderWeakBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14,10">
+                  <StackPanel Spacing="8">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding FileName}"
+                                 FontFamily="{StaticResource FontMono}"
+                                 FontSize="{StaticResource FontSizeBase}"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding CameraName}"
+                                 FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                    </StackPanel>
+
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="14" LineSpacing="8">
+                      <TextBlock Text="{Binding StartedAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                                 FontFamily="{StaticResource FontMono}"
+                                 FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Duration}"
+                                 FontFamily="{StaticResource FontMono}"
+                                 FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding SizeLabel}"
+                                 FontFamily="{StaticResource FontMono}"
+                                 FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="70" />
+
+                      <Button Padding="12,5"
+                              Background="{StaticResource AccentBrush}"
+                              CornerRadius="4"
+                              VerticalAlignment="Center"
+                              Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).PlayCommand}"
+                              CommandParameter="{Binding}">
+                        <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="13" Height="13" />
+                      </Button>
+
+                      <Button Content="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
+                              Padding="10,4"
+                              FontSize="11"
+                              VerticalAlignment="Center"
+                              Background="Transparent"
+                              BorderBrush="{StaticResource BorderMediumBrush}"
+                              BorderThickness="1"
+                              CornerRadius="4"
+                              Foreground="{StaticResource DangerBrush}"
+                              Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).DeleteCommand}"
+                              CommandParameter="{Binding}" />
+                    </WrapPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Error overlay -->
+        <StackPanel IsVisible="{Binding HasLoadError}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Spacing="12">
+          <TextBlock Text="{Binding LoadError}"
+                     FontSize="{StaticResource FontSizeLg}"
+                     Foreground="{StaticResource DangerBrush}"
+                     HorizontalAlignment="Center" />
+          <Button Content="{Binding [Common.Retry], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ReloadCommand}"
+                  Padding="14,8"
+                  Background="Transparent"
+                  BorderBrush="{StaticResource BorderMediumBrush}"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Foreground="{StaticResource TextPrimaryBrush}"
+                  HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Loading overlay (rendered last → on top). -->
+        <StackPanel IsVisible="{Binding IsLoading}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Spacing="12">
+          <ProgressBar IsIndeterminate="True" Width="160" />
+          <TextBlock Text="{Binding [Common.Loading], Source={x:Static svc:Localizer.Instance}}"
+                     Foreground="{StaticResource TextSecondaryBrush}"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+
+      </Panel>
+
+    </DockPanel>
 
   </Grid>
 
