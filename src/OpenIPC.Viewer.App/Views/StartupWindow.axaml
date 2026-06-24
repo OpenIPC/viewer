@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+        xmlns:svc="using:OpenIPC.Viewer.App.Services"
+        x:Class="OpenIPC.Viewer.App.Views.StartupWindow"
+        x:DataType="vm:StartupViewModel"
+        Title="OpenIPC Viewer"
+        Icon="/Assets/openipc-logo.png"
+        Width="440" Height="240"
+        CanResize="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Bg1Brush}">
+
+  <Border Background="{StaticResource Bg1Brush}"
+          BorderBrush="{StaticResource BorderMediumBrush}"
+          BorderThickness="1">
+    <Grid RowDefinitions="*,Auto,Auto,Auto" Margin="28">
+
+      <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="6">
+        <TextBlock Text="OpenIPC Viewer"
+                   FontSize="22" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
+                   FontSize="12" Opacity="0.6"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+      </StackPanel>
+
+      <!-- Progress (hidden once an error is shown). -->
+      <ProgressBar Grid.Row="1"
+                   Minimum="0" Maximum="1"
+                   Value="{Binding Progress}"
+                   Height="6"
+                   IsVisible="{Binding IsBusy}"
+                   Foreground="{StaticResource AccentBrush}" />
+
+      <TextBlock Grid.Row="2"
+                 Margin="0,10,0,0"
+                 Text="{Binding StatusText}"
+                 FontSize="13"
+                 IsVisible="{Binding IsBusy}"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+
+      <!-- Error state: message + retry / exit. -->
+      <StackPanel Grid.Row="2" Grid.RowSpan="2"
+                  Spacing="12"
+                  IsVisible="{Binding HasError}">
+        <TextBlock Text="{Binding [Startup.Failed], Source={x:Static svc:Localizer.Instance}}"
+                   FontSize="14" FontWeight="SemiBold"
+                   Foreground="{StaticResource DangerBrush}" />
+        <TextBlock Text="{Binding ErrorText}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   MaxHeight="60"
+                   Opacity="0.8"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+          <Button Command="{Binding ExitCommand}"
+                  Padding="14,6" CornerRadius="6"
+                  Background="Transparent"
+                  BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  Foreground="{StaticResource TextPrimaryBrush}"
+                  Content="{Binding [Startup.Exit], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Command="{Binding RetryCommand}"
+                  Padding="14,6" CornerRadius="6"
+                  Background="{StaticResource AccentBrush}"
+                  Foreground="White"
+                  Content="{Binding [Startup.Retry], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+      </StackPanel>
+
+    </Grid>
+  </Border>
+</Window>

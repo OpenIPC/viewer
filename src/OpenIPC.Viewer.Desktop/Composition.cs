@@ -65,6 +65,10 @@ internal static class Composition
 
         services.AddSharedServices();
 
+        // Splash/startup VM — desktop-only; runs migrations + ingestion with a
+        // progress UI (Android does that bootstrap in MainApplication instead).
+        services.AddSingleton<OpenIPC.Viewer.App.ViewModels.StartupViewModel>();
+
         var provider = services.BuildServiceProvider(validateScopes: true);
         HookUserSettingsToLogLevel(provider, levelSwitch);
         // Eager resolve: the bridge subscribes in its ctor, so without this it
