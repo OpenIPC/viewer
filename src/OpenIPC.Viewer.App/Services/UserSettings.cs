@@ -50,7 +50,16 @@ public sealed record UserSettings(
     int NotificationCooldownSeconds = 30,
     bool QuietHoursEnabled = false,
     int QuietHoursStartHour = 22,
-    int QuietHoursEndHour = 7)
+    int QuietHoursEndHour = 7,
+    // Main window geometry (desktop only). Null position = never saved yet →
+    // center on first run. Size is the client area in DIPs; defaults match the
+    // MainWindow.axaml fallback. WindowMaximized restores a maximized window
+    // while keeping the normal-state bounds above for un-maximize.
+    int? WindowX = null,
+    int? WindowY = null,
+    double WindowWidth = 1200,
+    double WindowHeight = 780,
+    bool WindowMaximized = false)
 {
     public static UserSettings Default => new();
 }

@@ -133,7 +133,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     [RelayCommand]
     private async Task SetLayoutAsync(string size)
     {
-        if (!int.TryParse(size, out var n) || n < 1 || n > 3) return;
+        if (!int.TryParse(size, out var n) || n < 1 || n > 5) return;
         LayoutSize = n;
         if (ActiveLayout is { } a)
         {
@@ -244,7 +244,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     private async Task RefreshTilesAsync(CancellationToken ct)
     {
-        // Two caps stack: the layout selector (1/2x2/3x3 = up to 9 slots) and
+        // Two caps stack: the layout selector (1×1 … 5×5 = up to 25 slots) and
         // the Settings → Video → MaxConcurrentGridSessions ceiling. The lower
         // of the two wins, so a "max 4" user with a 3x3 grid sees 4 live tiles
         // and 5 empty placeholders (which still render via the Slots padding

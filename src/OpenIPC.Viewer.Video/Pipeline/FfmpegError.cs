@@ -25,8 +25,18 @@ internal sealed class FfmpegException : Exception
     public int Code { get; }
 
     public FfmpegException(string operation, int code)
-        : base($"{operation} failed: {FfmpegError.Describe(code)} ({code})")
+        : base(Compose(operation, code))
     {
         Code = code;
+    }
+
+    // Append FFmpeg's own last error line when we captured one — turns a generic
+    // "Operation not permitted (-1)" into the concrete cause (e.g. a 401 or
+    // "Connection refused") surfaced in the UI error banner.
+    private static string Compose(string operation, int code)
+    {
+        var msg = $"{operation} failed: {FfmpegError.Describe(code)} ({code})";
+        var native = FfmpegRuntime.TakeLastNativeError();
+        return string.IsNullOrEmpty(native) ? msg : $"{msg} — {native}";
     }
 }

@@ -8,8 +8,10 @@ using OpenIPC.Viewer.Core.Analytics;
 namespace OpenIPC.Viewer.App.Controls;
 
 // Draws detection boxes + labels over the video tile (Phase 15.5). Boxes are
-// normalized 0..1 in the source frame, so we just scale them to Bounds — no
-// dependency on the model input size. Rendered directly (a Canvas of one box
+// normalized 0..1 in the source frame. The video below renders with
+// Stretch="Uniform" (letterboxed), so we map into the same fitted rect using
+// SourceAspect rather than the full Bounds — otherwise boxes drift whenever the
+// frame aspect differs from the tile's. Rendered directly (a Canvas of one box
 // per visual would churn the tree); we repaint on each new detection result.
 public sealed class DetectionOverlay : Control
 {
@@ -18,6 +20,10 @@ public sealed class DetectionOverlay : Control
 
     public static readonly StyledProperty<bool> ShowBoxesProperty =
         AvaloniaProperty.Register<DetectionOverlay, bool>(nameof(ShowBoxes), defaultValue: true);
+
+    // Source frame aspect (width/height). 0 → map to full Bounds (legacy).
+    public static readonly StyledProperty<double> SourceAspectProperty =
+        AvaloniaProperty.Register<DetectionOverlay, double>(nameof(SourceAspect));
 
     // Distinct hues per class id so different objects read apart at a glance.
     private static readonly Color[] Palette =
@@ -30,7 +36,7 @@ public sealed class DetectionOverlay : Control
 
     static DetectionOverlay()
     {
-        AffectsRender<DetectionOverlay>(DetectionsProperty, ShowBoxesProperty);
+        AffectsRender<DetectionOverlay>(DetectionsProperty, ShowBoxesProperty, SourceAspectProperty);
     }
 
     public IReadOnlyList<Detection>? Detections
@@ -45,6 +51,12 @@ public sealed class DetectionOverlay : Control
         set => SetValue(ShowBoxesProperty, value);
     }
 
+    public double SourceAspect
+    {
+        get => GetValue(SourceAspectProperty);
+        set => SetValue(SourceAspectProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         base.Render(context);
@@ -55,15 +67,19 @@ public sealed class DetectionOverlay : Control
         var h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
 
+        // Match the video's Stretch="Uniform" fit: shrink the mapping rect to the
+        // letterboxed area so boxes sit on the actual pixels, not the black bars.
+        var (contentX, contentY, contentW, contentH) = FitUniform(w, h, SourceAspect);
+
         foreach (var d in detections)
         {
             var color = Palette[((d.ClassId % Palette.Length) + Palette.Length) % Palette.Length];
             var pen = new Pen(new SolidColorBrush(color), 2);
 
-            var x = d.X * w;
-            var y = d.Y * h;
-            var bw = d.Width * w;
-            var bh = d.Height * h;
+            var x = contentX + d.X * contentW;
+            var y = contentY + d.Y * contentH;
+            var bw = d.Width * contentW;
+            var bh = d.Height * contentH;
             var box = new Rect(x, y, bw, bh);
             context.DrawRectangle(null, pen, box);
 
@@ -77,5 +93,24 @@ public sealed class DetectionOverlay : Control
             context.DrawRectangle(new SolidColorBrush(color), null, new Rect(x, labelY, labelW, labelH));
             context.DrawText(text, new Point(x + 4, labelY + 1));
         }
+    }
+
+    // The rect a Stretch="Uniform" image occupies inside w×h. aspect<=0 (size not
+    // yet known) → fill the whole area, matching the pre-fix behavior.
+    private static (double X, double Y, double W, double H) FitUniform(double w, double h, double aspect)
+    {
+        if (aspect <= 0) return (0, 0, w, h);
+
+        var boundsAspect = w / h;
+        if (boundsAspect > aspect)
+        {
+            // Tile wider than the frame → pillarbox (bars left/right).
+            var contentW = h * aspect;
+            return ((w - contentW) / 2, 0, contentW, h);
+        }
+
+        // Tile taller than the frame → letterbox (bars top/bottom).
+        var contentH = w / aspect;
+        return (0, (h - contentH) / 2, w, contentH);
     }
 }

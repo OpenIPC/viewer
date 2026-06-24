@@ -13,6 +13,16 @@ public sealed class FfmpegVideoEngine : IVideoEngine, IPlaybackEngine
     {
         _loggerFactory = loggerFactory;
         _hwFactory = hwFactory;
+
+        // Route FFmpeg's native log lines into our logger. Singleton, so this
+        // subscribes exactly once for the app's lifetime.
+        var nativeLog = loggerFactory.CreateLogger("FFmpeg.Native");
+        FfmpegRuntime.NativeLog += (level, message) =>
+        {
+            // AV_LOG_ERROR=16, AV_LOG_WARNING=24 — lower is more severe.
+            if (level <= 16) nativeLog.LogWarning("{Message}", message);
+            else nativeLog.LogInformation("{Message}", message);
+        };
     }
 
     public IVideoSession CreateSession(VideoSessionOptions options)

@@ -62,6 +62,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatsLabel))]
     [NotifyPropertyChangedFor(nameof(HasStats))]
+    [NotifyPropertyChangedFor(nameof(SourceAspect))]
     private SessionTelemetry? _telemetry;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ErrorDetail))]
@@ -120,6 +121,12 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     }
 
     public bool HasStats => Telemetry is not null;
+
+    // Source frame aspect ratio (width/height), so the DetectionOverlay can map
+    // normalized boxes into the letterboxed video rect instead of the full tile
+    // bounds. 0 until the first telemetry arrives → overlay falls back to bounds.
+    public double SourceAspect =>
+        Telemetry is { Width: > 0, Height: > 0 } t ? (double)t.Width / t.Height : 0;
 
     // Bottom-right stats badge: codec • resolution • fps • bitrate.
     public string? StatsLabel

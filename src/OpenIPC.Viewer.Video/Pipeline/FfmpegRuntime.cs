@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using FFmpeg.AutoGen.Abstractions;
 using FFmpeg.AutoGen.Bindings.DynamicallyLoaded;
@@ -8,6 +9,26 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 
 internal static class FfmpegRuntime
 {
+    // Raised for every native FFmpeg log line at warning level or worse. The
+    // video engine subscribes once and routes these to ILogger; nobody else
+    // should. Kept as a plain event so the Video project stays DI-free here.
+    public static event Action<int, string>? NativeLog;
+
+    // The real reason behind the most recent error, captured off FFmpeg's own
+    // log (av_strerror only gives the generic "Operation not permitted"). Thread
+    // -static because avformat_open_input logs synchronously on its caller; the
+    // FfmpegException ctor on that same thread consumes it.
+    [ThreadStatic] private static string? _lastNativeError;
+
+    // Held so the GC can't collect the delegate while native code holds it.
+    private static av_log_set_callback_callback? _logCallback;
+
+    internal static string? TakeLastNativeError()
+    {
+        var v = _lastNativeError;
+        _lastNativeError = null;
+        return v;
+    }
     // Serializes the one-time native init. The old design used an Interlocked
     // CompareExchange flag, but that let the *second* caller return "ready"
     // the instant the first caller flipped the flag — before its (slow)
@@ -64,6 +85,7 @@ internal static class FfmpegRuntime
                 // libs early — anything missing surfaces here instead of mid-stream.
                 _ = ffmpeg.av_version_info();
                 ffmpeg.avformat_network_init();
+                InstallLogCallback();
             }
             catch (Exception ex) when (IsNativeLoadFailure(ex))
             {
@@ -89,6 +111,34 @@ internal static class FfmpegRuntime
 
             _ready = true;
         }
+    }
+
+    // Route FFmpeg's internal av_log through a managed callback so the actual
+    // failure reason (auth 401, connection refused, protocol whitelist, ...) is
+    // captured instead of just the strerror of the return code.
+    private static unsafe void InstallLogCallback()
+    {
+        _logCallback = LogCallback;
+        ffmpeg.av_log_set_level(ffmpeg.AV_LOG_WARNING);
+        ffmpeg.av_log_set_callback(_logCallback);
+    }
+
+    private static unsafe void LogCallback(void* avcl, int level, string fmt, byte* vl)
+    {
+        if (level > ffmpeg.AV_LOG_WARNING) return;
+
+        const int bufSize = 1024;
+        var buf = stackalloc byte[bufSize];
+        var printPrefix = 1;
+        ffmpeg.av_log_format_line2(avcl, level, fmt, vl, buf, bufSize, &printPrefix);
+        var msg = Marshal.PtrToStringAnsi((IntPtr)buf)?.Trim();
+        if (string.IsNullOrEmpty(msg)) return;
+
+        if (level <= ffmpeg.AV_LOG_ERROR) _lastNativeError = msg;
+
+        // A logging sink must never throw back into native FFmpeg.
+        try { NativeLog?.Invoke(level, msg); }
+        catch { /* swallow */ }
     }
 
     private static bool IsNativeLoadFailure(Exception ex)
