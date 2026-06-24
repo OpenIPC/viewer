@@ -328,6 +328,16 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private bool _talkUnsupported;
     public bool CanTalk => _talk.IsAvailable && !(_camera.OnvifEnabled && !_camera.HasAudioOut) && !_talkUnsupported;
 
+    // Two-way audio capability, probed once on activation (OPTIONS + DESCRIBE):
+    // null = not yet known, true = camera advertises a backchannel track,
+    // false = it doesn't. Drives a status hint so the user knows whether talk
+    // will work without having to press it.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TwoWayAudioUnsupported))]
+    private bool? _twoWayAudioCapable;
+
+    public bool TwoWayAudioUnsupported => TwoWayAudioCapable == false;
+
     [ObservableProperty] private bool _isTalking;
     [ObservableProperty] private string? _talkError;
 
@@ -368,6 +378,36 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         _talkHeld = false;
         await _talk.StopAsync().ConfigureAwait(true);
+    }
+
+    // Best-effort capability probe, run fire-and-forget after the stream is up.
+    // Never throws into the caller; leaves capability "unknown" on any failure so
+    // the talk button stays available and degrades gracefully on press.
+    private async Task ProbeTwoWayAudioAsync(CameraCredentials? creds, CancellationToken ct)
+    {
+        if (TwoWayAudioCapable is not null) return;            // probe once per page
+        if (!_talk.IsAvailable) return;                        // no mic → nothing to indicate
+        if (_camera.OnvifEnabled && !_camera.HasAudioOut) return; // ONVIF already says no speaker
+        try
+        {
+            var ep = new BackchannelEndpoint(_camera.RtspMainUri, creds);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            var ok = await _talk.ProbeAsync(ep, cts.Token).ConfigureAwait(false);
+            Dispatcher.UIThread.Post(() =>
+            {
+                TwoWayAudioCapable = ok;
+                if (!ok)
+                {
+                    _talkUnsupported = true;
+                    OnPropertyChanged(nameof(CanTalk));
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Two-way audio probe failed for {CameraId}", _camera.Id);
+        }
     }
 
     private void OnTalkChanged(object? sender, EventArgs e)
@@ -524,6 +564,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                 await InitPtzAsync(creds, ct).ConfigureAwait(true);
 
             await InitMajesticAsync(creds, ct).ConfigureAwait(true);
+
+            // Capability probe in the background — must not block activation.
+            _ = ProbeTwoWayAudioAsync(creds, ct);
         }
         finally
         {

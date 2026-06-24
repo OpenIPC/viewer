@@ -35,6 +35,12 @@ public sealed class PushToTalkController : IAsyncDisposable
     public event EventHandler? StateChanged;
     public event EventHandler<string>? Error;
 
+    // Capability probe (OPTIONS + DESCRIBE only) so the UI can show whether the
+    // camera offers two-way audio before the user presses talk. Throws on a real
+    // connection/auth failure — the caller treats that as "unknown".
+    public Task<bool> ProbeAsync(BackchannelEndpoint endpoint, CancellationToken ct) =>
+        _client.ProbeAsync(endpoint, ct);
+
     public async Task<TalkStartResult> StartAsync(BackchannelEndpoint endpoint, CancellationToken ct)
     {
         if (!_input.IsAvailable) return TalkStartResult.Failed;

@@ -102,6 +102,8 @@ public class PushToTalkControllerTests
         public FakeClient(FakeSession? session) => _session = session;
         public Task<IAudioBackchannelSession?> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct)
             => Task.FromResult<IAudioBackchannelSession?>(_session);
+        public Task<bool> ProbeAsync(BackchannelEndpoint endpoint, CancellationToken ct)
+            => Task.FromResult(_session is not null);
     }
 
     private sealed class FakeSession : IAudioBackchannelSession

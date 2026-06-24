@@ -486,6 +486,17 @@
         </Panel>
       </Button>
 
+      <!-- Two-way audio capability hint: shown when the probe found the camera
+           advertises no RTSP backchannel, so the missing talk button is explained. -->
+      <TextBlock VerticalAlignment="Center"
+                 FontSize="11"
+                 Opacity="0.7"
+                 MaxWidth="180"
+                 TextWrapping="Wrap"
+                 Foreground="{StaticResource TextPrimaryBrush}"
+                 IsVisible="{Binding TwoWayAudioUnsupported}"
+                 Text="{Binding [CameraPage.Talk.Unsupported], Source={x:Static svc:Localizer.Instance}}" />
+
       <Button Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding !IsRecording}"
               Background="Transparent"
