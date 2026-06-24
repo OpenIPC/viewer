@@ -97,13 +97,15 @@ internal static class OnvifClientBuilder
         {
             shift = await probe.GetDeviceTimeShift().ConfigureAwait(false);
         }
-        catch (CommunicationException)
+        catch (Exception ex) when (ex is CommunicationException or TimeoutException)
         {
             // Some firmwares answer GetSystemDateAndTime with an empty/truncated
-            // body ("Unexpected end of file"), which used to abort the whole add
-            // flow. The shift only compensates camera clock skew for the
-            // WS-UsernameToken digest — assume zero and proceed; if the camera
-            // truly rejects the digest, the next call surfaces the real error.
+            // body ("Unexpected end of file") or accept the request and never
+            // reply (broken onvif_simple_server → TimeoutException), which used
+            // to abort the whole add flow. The shift only compensates camera
+            // clock skew for the WS-UsernameToken digest — assume zero and
+            // proceed; if the camera truly rejects the digest, the next call
+            // surfaces the real error.
             shift = TimeSpan.Zero;
         }
         finally
@@ -149,7 +151,18 @@ internal static class OnvifClientBuilder
 
     private static Binding CreateBinding()
     {
-        var binding = new CustomBinding();
+        var binding = new CustomBinding
+        {
+            // WCF defaults every timeout to 1 minute. A camera with a broken
+            // onvif_simple_server (accepts the authed request, then never
+            // answers) would otherwise hang the probe/add flow for the full
+            // minute per call. Fail fast so the UI can fall back to RTSP/Majestic
+            // instead of freezing.
+            SendTimeout = TimeSpan.FromSeconds(8),
+            ReceiveTimeout = TimeSpan.FromSeconds(8),
+            OpenTimeout = TimeSpan.FromSeconds(8),
+            CloseTimeout = TimeSpan.FromSeconds(5),
+        };
         binding.Elements.Add(new TextMessageEncodingBindingElement
         {
             MessageVersion = MessageVersion.CreateVersion(EnvelopeVersion.Soap12, AddressingVersion.None),

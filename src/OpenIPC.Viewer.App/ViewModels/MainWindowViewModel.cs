@@ -25,6 +25,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     private SingleCameraPageViewModel? _activeSingleCamera;
     private RecordingPlayerPageViewModel? _activePlayer;
 
+    // The page the single-camera view was opened from (grid vs library), so
+    // Back returns there instead of always dropping to the library list.
+    private ViewModelBase? _singleCameraOrigin;
+
     public GridPageViewModel Live { get; }
     public CameraLibraryPageViewModel Library { get; }
     public RecordingsPageViewModel Recordings { get; }
@@ -151,6 +155,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
             }
 
             await DisposeActiveSingleCameraAsync().ConfigureAwait(true);
+            // Camera-to-camera swipe re-enters this with a single-camera page
+            // already current; keep the original entry page so Back still lands
+            // where the user started (the live grid or the library list).
+            if (CurrentPage is not SingleCameraPageViewModel)
+                _singleCameraOrigin = CurrentPage;
             _activeSingleCamera = _singleCameraFactory.Create(camera);
             CurrentPage = _activeSingleCamera;
         }
@@ -163,7 +172,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     public async void Receive(GoBackToLibraryMessage message)
     {
         await DisposeActiveSingleCameraAsync().ConfigureAwait(true);
-        CurrentPage = Library;
+        CurrentPage = _singleCameraOrigin ?? Library;
+        _singleCameraOrigin = null;
     }
 
     public void Receive(OpenRecordingMessage message)
