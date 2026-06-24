@@ -726,7 +726,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             return;
         }
 
-        var edited = await _dialogs.ShowRawConfigEditorAsync(initial).ConfigureAwait(true);
+        // majestic.yaml is YAML, not JSON — don't gate Apply on JSON validity.
+        var edited = await _dialogs.ShowRawConfigEditorAsync(initial, validateJson: false).ConfigureAwait(true);
         if (edited is null || edited == initial) return;
 
         ApplyInProgress = true;

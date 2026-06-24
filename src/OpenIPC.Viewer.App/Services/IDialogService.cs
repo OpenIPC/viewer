@@ -49,8 +49,10 @@ public interface IDialogService
     // mutates the layout live; completes when the dialog is dismissed.
     Task ShowManageLayoutCamerasAsync(ManageLayoutCamerasViewModel viewModel);
 
-    // Returns the edited JSON if the user clicked Apply, null if cancelled.
-    Task<string?> ShowRawConfigEditorAsync(string initialJson);
+    // Returns the edited text if the user clicked Apply, null if cancelled.
+    // validateJson gates the Apply button on JSON well-formedness; pass false
+    // for the SSH path, which edits majestic.yaml (YAML, not JSON).
+    Task<string?> ShowRawConfigEditorAsync(string initialJson, bool validateJson = true);
 
     // Opens a URI in the system browser via the platform launcher. Returns
     // false if no TopLevel is available or the launch was rejected.
