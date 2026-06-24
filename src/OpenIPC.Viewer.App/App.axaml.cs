@@ -22,14 +22,31 @@ public sealed class App : Application
     {
         if (Services is not null)
         {
-            var vm = Services.GetRequiredService<MainWindowViewModel>();
-
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.MainWindow = new MainWindow { DataContext = vm };
+                // Desktop shows a splash that runs migrations + event ingestion
+                // with visible progress, then swaps in the main window. (Android
+                // runs that bootstrap in MainApplication and uses the single-view
+                // branch below.)
+                var startup = Services.GetRequiredService<StartupViewModel>();
+                var splash = new StartupWindow { DataContext = startup };
+
+                startup.Completed += () =>
+                {
+                    var vm = Services.GetRequiredService<MainWindowViewModel>();
+                    var main = new MainWindow { DataContext = vm };
+                    desktop.MainWindow = main;
+                    main.Show();
+                    splash.Close();
+                };
+
+                desktop.MainWindow = splash;
+                // Start init only once the splash is actually on screen.
+                splash.Opened += (_, _) => _ = startup.RunAsync();
             }
             else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
             {
+                var vm = Services.GetRequiredService<MainWindowViewModel>();
                 singleView.MainView = new MainView { DataContext = vm };
             }
         }

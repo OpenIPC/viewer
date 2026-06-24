@@ -1,9 +1,7 @@
 using System;
-using System.Threading;
 using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenIPC.Viewer.Core.Persistence;
 
 namespace OpenIPC.Viewer.Desktop;
 
@@ -28,16 +26,11 @@ internal static class Program
 
         try
         {
-            services.GetRequiredService<IMigrationRunner>()
-                .MigrateAsync(CancellationToken.None)
-                .GetAwaiter().GetResult();
-
-            // Phase 7: hot ingestion service. Has to be started before the UI
-            // opens so cameras already in the DB get their watchers wired up.
-            services.GetRequiredService<OpenIPC.Viewer.Core.Events.EventIngestionService>()
-                .StartAsync(CancellationToken.None)
-                .GetAwaiter().GetResult();
-
+            // Migrations + event ingestion no longer block here (they used to run
+            // synchronously before Avalonia started, so a slow first-run migration
+            // showed a frozen, window-less process). The startup splash window now
+            // runs them off the UI thread with visible progress — see
+            // App.OnFrameworkInitializationCompleted / StartupViewModel.
             return BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
         }
