@@ -97,6 +97,35 @@ public sealed class RtspBackchannelClient : IAudioBackchannelClient
         }
     }
 
+    public async Task<bool> ProbeAsync(BackchannelEndpoint endpoint, CancellationToken ct)
+    {
+        var uri = endpoint.RtspUri;
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 554;
+        var baseUrl = StripUserInfo(uri);
+
+        var tcp = new TcpClient { NoDelay = true };
+        try
+        {
+            await tcp.ConnectAsync(host, port, ct).ConfigureAwait(false);
+            var session = new Session(tcp, tcp.GetStream(), _logger);
+            var auth = new DigestState(endpoint.Credentials);
+            var cseq = 0;
+
+            await session.RequestAsync("OPTIONS", baseUrl, ++cseq, auth, null, ct).ConfigureAwait(false);
+            var describe = await session.RequestAsync("DESCRIBE", baseUrl, ++cseq, auth,
+                new[] { ("Accept", "application/sdp"), ("Require", BackchannelRequire) }, ct).ConfigureAwait(false);
+            if (describe.Status != 200)
+                throw new InvalidOperationException($"DESCRIBE failed: {describe.Status}");
+
+            return SdpParser.FindBackchannelAudio(describe.Body) is not null;
+        }
+        finally
+        {
+            tcp.Dispose();
+        }
+    }
+
     private static string StripUserInfo(Uri uri)
     {
         var b = new UriBuilder(uri) { UserName = "", Password = "" };

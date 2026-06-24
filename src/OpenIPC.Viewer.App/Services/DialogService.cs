@@ -230,12 +230,13 @@ public sealed class DialogService : IDialogService
         await dlg.ShowDialog(owner);
     }
 
-    public Task<string?> ShowRawConfigEditorAsync(string initialJson)
+    public Task<string?> ShowRawConfigEditorAsync(string initialJson, bool validateJson = true)
     {
         if (OverlayDialogPresenter.IsMobile)
         {
             var content = new RawConfigEditorContent();
             content.SetInitialText(initialJson);
+            content.SetValidateJson(validateJson);
             return OverlayDialogPresenter.ShowAsync(content, content.Completion);
         }
 
@@ -243,6 +244,7 @@ public sealed class DialogService : IDialogService
         if (owner is null) return Task.FromResult<string?>(null);
         var dlg = new RawConfigEditorDialog();
         dlg.SetInitialText(initialJson);
+        dlg.SetValidateJson(validateJson);
         return dlg.ShowDialog<string?>(owner);
     }
 

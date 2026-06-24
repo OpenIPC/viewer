@@ -35,6 +35,16 @@
                 Background="{StaticResource Bg2Brush}"
                 BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                 Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Content="4×4" Command="{Binding SetLayoutCommand}" CommandParameter="4"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Content="5×5" Command="{Binding SetLayoutCommand}" CommandParameter="5"
+                Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                Foreground="{StaticResource TextPrimaryBrush}" />
       </StackPanel>
     </Grid>
 
@@ -146,6 +156,7 @@
                       <!-- AI detection boxes (Phase 15.5), above the video. -->
                       <controls:DetectionOverlay Detections="{Binding Detections}"
                                                  ShowBoxes="{Binding AnalyticsEnabled}"
+                                                 SourceAspect="{Binding SourceAspect}"
                                                  IsHitTestVisible="False" />
 
                       <!-- Top-left: name -->

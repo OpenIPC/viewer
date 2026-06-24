@@ -19,6 +19,13 @@ public interface IAudioBackchannelClient
     // "this camera has no speaker" case — not an error). Throws only on a real
     // connection / auth / protocol failure.
     Task<IAudioBackchannelSession?> OpenAsync(BackchannelEndpoint endpoint, CancellationToken ct);
+
+    // Lightweight capability check: OPTIONS + DESCRIBE only (no SETUP/PLAY).
+    // Returns true if the camera advertises a backchannel audio track, so the UI
+    // can show whether two-way audio works without the user pressing talk.
+    // Throws on a real connection / auth / protocol failure (caller treats that
+    // as "unknown").
+    Task<bool> ProbeAsync(BackchannelEndpoint endpoint, CancellationToken ct);
 }
 
 // Outcome of PushToTalkController.StartAsync — lets the UI tell "camera has no

@@ -38,15 +38,38 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
     {
         try
         {
-            using var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/info.json", ct).ConfigureAwait(false);
+            // Probe config.json, not info.json: some firmwares don't serve
+            // info.json and fall back to the web UI's HTML index (200 OK,
+            // "<!DOCTYPE html>"), which fails the JSON sniff and hides an
+            // otherwise working Majestic. config.json is the canonical endpoint
+            // and always returns the live config object.
+            using var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/config.json", ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return false;
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            // Cheap content-shape sniff: not JSON → not Majestic.
-            return body.TrimStart().StartsWith('{');
+            return LooksLikeMajesticConfig(body);
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Majestic ping failed for {Host}", endpoint.Host);
+            return false;
+        }
+    }
+
+    // A Majestic config root always carries these top-level sections; checking
+    // for one avoids treating an unrelated JSON endpoint as a Majestic camera.
+    private static bool LooksLikeMajesticConfig(string body)
+    {
+        if (!body.TrimStart().StartsWith('{')) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            return doc.RootElement.TryGetProperty("system", out _)
+                || doc.RootElement.TryGetProperty("video0", out _)
+                || doc.RootElement.TryGetProperty("rtsp", out _);
+        }
+        catch (JsonException)
+        {
             return false;
         }
     }
@@ -64,14 +87,32 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
     {
         using var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/info.json", ct).ConfigureAwait(false);
         await EnsureSuccessAsync(resp, ct).ConfigureAwait(false);
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
-        var root = doc.RootElement;
-        return new MajesticInfo(
-            Model: TryGetString(root, "model"),
-            FirmwareVersion: TryGetString(root, "firmware") ?? TryGetString(root, "build"),
-            ChipModel: TryGetString(root, "chip") ?? TryGetString(root, "soc"),
-            Uptime: TryGetString(root, "uptime"));
+        var rawJson = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        // Some firmwares don't serve info.json and return the web UI's HTML
+        // index with 200 OK. Treat a non-JSON body as "no info available"
+        // rather than letting the parse error abort the whole state load —
+        // info is optional metadata (model/firmware), config.json is the part
+        // that matters.
+        if (!rawJson.TrimStart().StartsWith('{'))
+        {
+            _logger.LogDebug("Majestic info.json for {Host} was not JSON; skipping", endpoint.Host);
+            return new MajesticInfo(null, null, null, null);
+        }
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+            return new MajesticInfo(
+                Model: TryGetString(root, "model"),
+                FirmwareVersion: TryGetString(root, "firmware") ?? TryGetString(root, "build"),
+                ChipModel: TryGetString(root, "chip") ?? TryGetString(root, "soc"),
+                Uptime: TryGetString(root, "uptime"));
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogDebug(ex, "Majestic info.json parse failed for {Host}", endpoint.Host);
+            return new MajesticInfo(null, null, null, null);
+        }
     }
 
     public async Task UpdateConfigAsync(MajesticEndpoint endpoint, MajesticConfigPatch patch, CancellationToken ct)

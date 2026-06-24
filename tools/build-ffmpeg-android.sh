@@ -136,8 +136,8 @@ build_one() {
         --enable-network \
         --enable-protocol=file,http,https,tcp,udp,rtp,rtsp,tls \
         --enable-demuxer=rtsp,rtp,sdp,mpegts,mov,h264,hevc \
-        --enable-parser=h264,hevc,aac \
-        --enable-decoder=h264,h264_mediacodec,hevc,hevc_mediacodec,aac \
+        --enable-parser=h264,hevc,aac,opus \
+        --enable-decoder=h264,h264_mediacodec,hevc,hevc_mediacodec,aac,opus,pcm_mulaw,pcm_alaw \
         --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb,extract_extradata \
         --enable-muxer=mp4 \
         --enable-encoder=h264_mediacodec,hevc_mediacodec

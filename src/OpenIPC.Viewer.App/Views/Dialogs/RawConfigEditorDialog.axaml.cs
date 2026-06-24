@@ -17,4 +17,6 @@ public sealed partial class RawConfigEditorDialog : Window
     }
 
     public void SetInitialText(string text) => _content.SetInitialText(text);
+
+    public void SetValidateJson(bool validate) => _content.SetValidateJson(validate);
 }
