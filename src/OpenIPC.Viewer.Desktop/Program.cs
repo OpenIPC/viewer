@@ -46,7 +46,21 @@ internal static class Program
             // ServiceProvider.Dispose throws on services that only implement
             // IAsyncDisposable (LiveStreamCoordinator, GridPageViewModel, etc.).
             // DisposeAsync handles both shapes.
-            services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            //
+            // We're back on the UI thread here, but the dispatcher loop has already
+            // exited. Disposing inline would deadlock: service DisposeAsync paths
+            // use ConfigureAwait(true) (e.g. GridPageViewModel releasing live grid
+            // tiles), and their continuations would post to the now-dead dispatcher
+            // and never run — leaving the process hung in the background. Dispose on
+            // a thread-pool thread instead (no SynchronizationContext to capture, so
+            // those continuations resume freely), and bound the wait so a wedged
+            // native join can't keep us alive either — background threads die with
+            // the process regardless.
+            if (!System.Threading.Tasks.Task.Run(() => services.DisposeAsync().AsTask())
+                    .Wait(TimeSpan.FromSeconds(10)))
+            {
+                logger.LogWarning("Service disposal timed out during shutdown; forcing exit");
+            }
         }
     }
 
