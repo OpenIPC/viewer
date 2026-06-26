@@ -12,6 +12,7 @@ namespace OpenIPC.Viewer.App.Views;
 public sealed partial class MainWindow : Window
 {
     private readonly UserSettingsService? _settings;
+    private readonly IdleStreamMonitor? _idle;
     private WindowState _previousState = WindowState.Normal;
 
     // Last known normal-state geometry, tracked live so a window that closes
@@ -25,6 +26,12 @@ public sealed partial class MainWindow : Window
 
         _settings = App.Services?.GetService<UserSettingsService>();
         RestoreGeometry();
+
+        if (_settings is not null)
+        {
+            _idle = new IdleStreamMonitor(_settings);
+            _idle.Attach(this);
+        }
 
         PropertyChanged += OnWindowPropertyChanged;
         PositionChanged += (_, _) => CaptureNormalBounds();
@@ -131,9 +138,15 @@ public sealed partial class MainWindow : Window
 
         var current = (WindowState)e.NewValue!;
         if (current == WindowState.Minimized && _previousState != WindowState.Minimized)
+        {
+            _idle?.SetMinimized(true);
             WeakReferenceMessenger.Default.Send(new WindowMinimizedMessage());
+        }
         else if (_previousState == WindowState.Minimized && current != WindowState.Minimized)
+        {
+            _idle?.SetMinimized(false);
             WeakReferenceMessenger.Default.Send(new WindowRestoredMessage());
+        }
 
         _previousState = current;
     }

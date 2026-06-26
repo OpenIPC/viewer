@@ -35,6 +35,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private string _rtspTransport = "tcp";
     [ObservableProperty] private bool _autoSdHd = true;
 
+    // Idle stream auto-pause (opt-in). Selected option carries the minutes; 0 = off.
+    [ObservableProperty] private IdleTimeoutOption? _idleTimeout;
+
     // AI analytics (Phase 15.2). On → pin the CPU execution provider.
     [ObservableProperty] private bool _aiForceCpu;
 
@@ -120,6 +123,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     public int[] GridSessionOptions { get; } = new[] { 4, 9, 16, 25 };
     public string[] TransportOptions { get; } = new[] { "tcp", "udp" };
+
+    // Off + a few sensible idle thresholds (minutes). Built with localized labels
+    // in the constructor so "Off"/"N min" follow the active language.
+    public IReadOnlyList<IdleTimeoutOption> IdleTimeoutOptions { get; }
     public string[] LanguageOptions { get; } = new[] { "system", "en", "ru" };
 
     // Auto + each usable LAN adapter (Phase 12.6). Display shown in the combo,
@@ -159,6 +166,14 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         options.AddRange(nics.GetCandidates().Select(c => new NetworkInterfaceOption(c.DisplayName, c.Address)));
         NetworkInterfaceOptions = options;
 
+        IdleTimeoutOptions = new[] { 0, 5, 10, 15, 30, 60 }
+            .Select(m => new IdleTimeoutOption(
+                m == 0
+                    ? Localizer.Instance["Settings.Video.IdleTimeout.Off"]
+                    : string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Video.IdleTimeout.Minutes"], m),
+                m))
+            .ToList();
+
         Load();
     }
 
@@ -178,6 +193,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             MaxConcurrentGridSessions = s.MaxConcurrentGridSessions;
             RtspTransport = s.RtspTransport;
             AutoSdHd = s.AutoSdHd;
+            IdleTimeout = IdleTimeoutOptions.FirstOrDefault(o => o.Minutes == s.IdleStreamTimeoutMinutes)
+                ?? IdleTimeoutOptions[0];
             AiForceCpu = string.Equals(s.AiAcceleration, "force-cpu", StringComparison.OrdinalIgnoreCase);
             SelectedNetworkInterface =
                 NetworkInterfaceOptions.FirstOrDefault(o => o.Value == s.PreferredNetworkInterface)
@@ -206,6 +223,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnMaxConcurrentGridSessionsChanged(int value) => Persist();
     partial void OnRtspTransportChanged(string value) => Persist();
     partial void OnAutoSdHdChanged(bool value) => Persist();
+    partial void OnIdleTimeoutChanged(IdleTimeoutOption? value) => Persist();
     partial void OnAiForceCpuChanged(bool value) => Persist();
     partial void OnSelectedNetworkInterfaceChanged(NetworkInterfaceOption? value) => Persist();
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
@@ -234,6 +252,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             MaxConcurrentGridSessions = MaxConcurrentGridSessions,
             RtspTransport = RtspTransport,
             AutoSdHd = AutoSdHd,
+            IdleStreamTimeoutMinutes = IdleTimeout?.Minutes ?? 0,
             AiAcceleration = AiForceCpu ? "force-cpu" : "auto",
             PreferredNetworkInterface = SelectedNetworkInterface?.Value ?? "",
             RecordingsDirOverride = RecordingsDirOverride,
@@ -387,3 +406,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 // Display is the human label ("Auto" / "Ethernet (192.168.1.5)"); Value is the
 // persisted IPv4 ("" = auto).
 public sealed record NetworkInterfaceOption(string Display, string Value);
+
+// Combo item for Settings → Video idle-pause picker. Display is the localized
+// label ("Off" / "10 min"); Minutes is the persisted threshold (0 = off).
+public sealed record IdleTimeoutOption(string Display, int Minutes);
