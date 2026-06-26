@@ -280,6 +280,22 @@
                       DisplayMemberBinding="{Binding Display}"
                       MinWidth="160" />
           </Grid>
+
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Classes="field-label"
+                         Text="{Binding [Settings.Video.IdleTimeout], Source={x:Static svc:Localizer.Instance}}" />
+              <ComboBox Grid.Column="1"
+                        ItemsSource="{Binding IdleTimeoutOptions}"
+                        SelectedItem="{Binding IdleTimeout, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}"
+                        MinWidth="120" />
+            </Grid>
+            <TextBlock Classes="field-label"
+                       FontSize="{StaticResource FontSizeSm}"
+                       Foreground="{StaticResource TextTertiaryBrush}"
+                       Text="{Binding [Settings.Video.IdleTimeout.Note], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
         </StackPanel>
 
         <!-- Recording -->
@@ -403,6 +419,26 @@
                        TextWrapping="Wrap" />
           </StackPanel>
 
+          <!-- Config export / import (Phase 19.2) -->
+          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
+          <TextBlock Classes="section-title"
+                     Text="{Binding [Settings.Backup.Section], Source={x:Static svc:Localizer.Instance}}" />
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     TextWrapping="Wrap"
+                     Text="{Binding [Settings.Backup.Description], Source={x:Static svc:Localizer.Instance}}" />
+          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Backup.Export], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ExportConfigCommand}" />
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Backup.Import], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ImportConfigCommand}" />
+          </WrapPanel>
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     Text="{Binding BackupStatus}"
+                     IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
           <!-- Notifications (Phase 19.3) -->
           <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
           <TextBlock Classes="section-title"
@@ -466,26 +502,6 @@
                     Content="{Binding [Settings.Report.OpenLogs], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding OpenLogsDirectoryCommand}" />
           </WrapPanel>
-
-          <!-- Config export / import (Phase 19.2) -->
-          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
-          <TextBlock Classes="section-title"
-                     Text="{Binding [Settings.Backup.Section], Source={x:Static svc:Localizer.Instance}}" />
-          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
-                     TextWrapping="Wrap"
-                     Text="{Binding [Settings.Backup.Description], Source={x:Static svc:Localizer.Instance}}" />
-          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-            <Button Classes="outlined"
-                    Content="{Binding [Settings.Backup.Export], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding ExportConfigCommand}" />
-            <Button Classes="outlined"
-                    Content="{Binding [Settings.Backup.Import], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding ImportConfigCommand}" />
-          </WrapPanel>
-          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
-                     FontSize="{StaticResource FontSizeSm}"
-                     Text="{Binding BackupStatus}"
-                     IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
 
       </StackPanel>

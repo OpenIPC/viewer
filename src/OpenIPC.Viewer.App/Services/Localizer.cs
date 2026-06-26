@@ -198,6 +198,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Video.RtspTransport"] = "Default RTSP transport",
         ["Settings.Video.NetworkInterface"] = "Network interface (discovery)",
         ["Settings.Video.NetworkInterface.Auto"] = "Auto",
+        ["Settings.Video.IdleTimeout"] = "Pause streams after inactivity",
+        ["Settings.Video.IdleTimeout.Off"] = "Off",
+        ["Settings.Video.IdleTimeout.Minutes"] = "{0} min",
+        ["Settings.Video.IdleTimeout.Note"] = "When the window is left open and untouched for this long, all live streams stop to spare the camera network. Any input resumes them. Note: this also pauses motion/AI alerts while suspended.",
 
         ["Settings.Recording.Directory"] = "Recordings directory",
         ["Settings.Recording.PickFolder"] = "Pick folder…",
@@ -581,6 +585,10 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Video.RtspTransport"] = "RTSP-транспорт по умолчанию",
         ["Settings.Video.NetworkInterface"] = "Сетевой интерфейс (поиск)",
         ["Settings.Video.NetworkInterface.Auto"] = "Авто",
+        ["Settings.Video.IdleTimeout"] = "Останавливать потоки при простое",
+        ["Settings.Video.IdleTimeout.Off"] = "Выкл.",
+        ["Settings.Video.IdleTimeout.Minutes"] = "{0} мин",
+        ["Settings.Video.IdleTimeout.Note"] = "Если окно оставлено открытым и с ним не взаимодействуют это время, все живые потоки останавливаются, чтобы не грузить сеть камер. Любой ввод возобновляет их. Учтите: на время паузы также приостанавливаются уведомления о движении/ИИ-детекции.",
 
         ["Settings.Recording.Directory"] = "Папка записей",
         ["Settings.Recording.PickFolder"] = "Выбрать…",

@@ -11,6 +11,12 @@ public sealed record UserSettings(
     bool AutoScanLanOnStartup = false,
     int MaxConcurrentGridSessions = 9,
     string RtspTransport = "tcp",
+    // Idle stream auto-pause (opt-in). Minutes of no user input while the window
+    // is open before all live sessions are released to spare the camera network;
+    // 0 = off. Window minimize already pauses+releases regardless of this (see
+    // GridPageViewModel.Receive(WindowMinimizedMessage)) — this covers the
+    // "left open in the foreground and walked away" case.
+    int IdleStreamTimeoutMinutes = 0,
     // Auto SD/HD (Phase 12.2): substream in the multi-camera grid, mainstream
     // when a single tile fills the view (1×1 layout / single-camera page).
     // Off → always substream in the grid.
