@@ -13,43 +13,53 @@
         Background="{StaticResource Bg1Brush}">
 
   <Window.Styles>
-    <!-- The eyelid blink: squash the whole eye vertically for a few frames on a
-         long loop, so it reads as an occasional blink rather than a flicker. -->
-    <Style Selector="Canvas.eye">
+    <!-- Occasional "aperture blink": squash the whole mark vertically for a few
+         frames on a long loop, reading as a blink rather than a flicker. -->
+    <Style Selector="Canvas.mark">
       <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
     </Style>
-    <Style Selector="Canvas.eye">
+    <Style Selector="Canvas.mark">
       <Style.Animations>
         <Animation Duration="0:0:3.8" IterationCount="INFINITE">
           <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
-          <KeyFrame Cue="86%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
-          <KeyFrame Cue="91%"><Setter Property="ScaleTransform.ScaleY" Value="0.06" /></KeyFrame>
-          <KeyFrame Cue="96%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="88%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="93%"><Setter Property="ScaleTransform.ScaleY" Value="0.08" /></KeyFrame>
+          <KeyFrame Cue="98%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
           <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
         </Animation>
       </Style.Animations>
     </Style>
 
-    <!-- The pupil slowly scans left↔right — a camera looking around. -->
-    <Style Selector="Ellipse.pupil">
+    <!-- Center dot "focuses" — pulses in/out like a camera locking focus. -->
+    <Style Selector="Ellipse.dot">
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    </Style>
+    <Style Selector="Ellipse.dot">
       <Style.Animations>
-        <Animation Duration="0:0:5" IterationCount="INFINITE" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
-          <KeyFrame Cue="25%"><Setter Property="TranslateTransform.X" Value="-9" /></KeyFrame>
-          <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
-          <KeyFrame Cue="75%"><Setter Property="TranslateTransform.X" Value="9" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+        <Animation Duration="0:0:1.8" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1" />
+            <Setter Property="ScaleTransform.ScaleY" Value="1" />
+          </KeyFrame>
+          <KeyFrame Cue="50%">
+            <Setter Property="ScaleTransform.ScaleX" Value="0.72" />
+            <Setter Property="ScaleTransform.ScaleY" Value="0.72" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1" />
+            <Setter Property="ScaleTransform.ScaleY" Value="1" />
+          </KeyFrame>
         </Animation>
       </Style.Animations>
     </Style>
 
-    <!-- Iris glow gently pulses while loading. -->
+    <!-- Accent glow ring brightens as the dot contracts (the "focus" snap). -->
     <Style Selector="Ellipse.glow">
       <Style.Animations>
-        <Animation Duration="0:0:2.4" IterationCount="INFINITE" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
-          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.6" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+        <Animation Duration="0:0:1.8" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.55" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
         </Animation>
       </Style.Animations>
     </Style>
@@ -63,31 +73,34 @@
       <StackPanel Grid.Row="0" Orientation="Horizontal"
                   VerticalAlignment="Center" Spacing="18">
 
-        <!-- Animated camera-eye -->
+        <!-- Animated OpenIPC aperture mark -->
         <Viewbox Width="62" Height="62" IsVisible="{Binding IsBusy}">
           <Canvas Width="100" Height="100">
-            <Canvas Classes="eye" Width="100" Height="100">
-              <!-- Almond eye shape -->
-              <Path Data="M4,50 C28,16 72,16 96,50 C72,84 28,84 4,50 Z"
-                    Fill="{StaticResource Bg2Brush}"
-                    Stroke="{StaticResource AccentBrush}" StrokeThickness="3" />
-              <!-- Outer lens glow ring (pulses) -->
-              <Ellipse Classes="glow" Canvas.Left="26" Canvas.Top="26"
-                       Width="48" Height="48"
+            <Canvas Classes="mark" Width="100" Height="100">
+              <!-- Left chevron < -->
+              <Path Data="M34,30 L13,50 L34,70"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Flat" StrokeJoin="Round" />
+              <!-- Right chevron > -->
+              <Path Data="M66,30 L87,50 L66,70"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Flat" StrokeJoin="Round" />
+              <!-- Top cap arc ⌒ -->
+              <Path Data="M38,28 C43,13 57,13 62,28"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Round" />
+              <!-- Bottom cap arc ⌣ -->
+              <Path Data="M38,72 C43,87 57,87 62,72"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Round" />
+              <!-- Accent focus glow behind the dot -->
+              <Ellipse Classes="glow" Canvas.Left="32" Canvas.Top="32"
+                       Width="36" Height="36"
                        Stroke="{StaticResource AccentBrush}" StrokeThickness="6" />
-              <!-- Iris -->
-              <Ellipse Canvas.Left="31" Canvas.Top="31" Width="38" Height="38"
-                       Fill="{StaticResource AccentBrush}" />
-              <!-- Lens ring inside the iris -->
-              <Ellipse Canvas.Left="31" Canvas.Top="31" Width="38" Height="38"
-                       Stroke="White" StrokeThickness="1.5" Opacity="0.35" />
-              <!-- Pupil (scans left↔right) -->
-              <Ellipse Classes="pupil" Canvas.Left="41" Canvas.Top="41"
-                       Width="18" Height="18"
-                       Fill="{StaticResource Bg1Brush}" />
-              <!-- Catch-light -->
-              <Ellipse Canvas.Left="44" Canvas.Top="43" Width="7" Height="7"
-                       Fill="White" Opacity="0.85" />
+              <!-- Center dot (focus pulse) -->
+              <Ellipse Classes="dot" Canvas.Left="37" Canvas.Top="37"
+                       Width="26" Height="26"
+                       Fill="{StaticResource TextPrimaryBrush}" />
             </Canvas>
           </Canvas>
         </Viewbox>
