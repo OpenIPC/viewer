@@ -12,18 +12,94 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Bg1Brush}">
 
+  <Window.Styles>
+    <!-- The eyelid blink: squash the whole eye vertically for a few frames on a
+         long loop, so it reads as an occasional blink rather than a flicker. -->
+    <Style Selector="Canvas.eye">
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    </Style>
+    <Style Selector="Canvas.eye">
+      <Style.Animations>
+        <Animation Duration="0:0:3.8" IterationCount="INFINITE">
+          <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="86%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="91%"><Setter Property="ScaleTransform.ScaleY" Value="0.06" /></KeyFrame>
+          <KeyFrame Cue="96%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The pupil slowly scans left↔right — a camera looking around. -->
+    <Style Selector="Ellipse.pupil">
+      <Style.Animations>
+        <Animation Duration="0:0:5" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="25%"><Setter Property="TranslateTransform.X" Value="-9" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="75%"><Setter Property="TranslateTransform.X" Value="9" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- Iris glow gently pulses while loading. -->
+    <Style Selector="Ellipse.glow">
+      <Style.Animations>
+        <Animation Duration="0:0:2.4" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.6" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+  </Window.Styles>
+
   <Border Background="{StaticResource Bg1Brush}"
           BorderBrush="{StaticResource BorderMediumBrush}"
           BorderThickness="1">
     <Grid RowDefinitions="*,Auto,Auto,Auto" Margin="28">
 
-      <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="6">
-        <TextBlock Text="OpenIPC Viewer"
-                   FontSize="22" FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
-        <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="12" Opacity="0.6"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <StackPanel Grid.Row="0" Orientation="Horizontal"
+                  VerticalAlignment="Center" Spacing="18">
+
+        <!-- Animated camera-eye -->
+        <Viewbox Width="62" Height="62" IsVisible="{Binding IsBusy}">
+          <Canvas Width="100" Height="100">
+            <Canvas Classes="eye" Width="100" Height="100">
+              <!-- Almond eye shape -->
+              <Path Data="M4,50 C28,16 72,16 96,50 C72,84 28,84 4,50 Z"
+                    Fill="{StaticResource Bg2Brush}"
+                    Stroke="{StaticResource AccentBrush}" StrokeThickness="3" />
+              <!-- Outer lens glow ring (pulses) -->
+              <Ellipse Classes="glow" Canvas.Left="26" Canvas.Top="26"
+                       Width="48" Height="48"
+                       Stroke="{StaticResource AccentBrush}" StrokeThickness="6" />
+              <!-- Iris -->
+              <Ellipse Canvas.Left="31" Canvas.Top="31" Width="38" Height="38"
+                       Fill="{StaticResource AccentBrush}" />
+              <!-- Lens ring inside the iris -->
+              <Ellipse Canvas.Left="31" Canvas.Top="31" Width="38" Height="38"
+                       Stroke="White" StrokeThickness="1.5" Opacity="0.35" />
+              <!-- Pupil (scans left↔right) -->
+              <Ellipse Classes="pupil" Canvas.Left="41" Canvas.Top="41"
+                       Width="18" Height="18"
+                       Fill="{StaticResource Bg1Brush}" />
+              <!-- Catch-light -->
+              <Ellipse Canvas.Left="44" Canvas.Top="43" Width="7" Height="7"
+                       Fill="White" Opacity="0.85" />
+            </Canvas>
+          </Canvas>
+        </Viewbox>
+
+        <StackPanel VerticalAlignment="Center" Spacing="6">
+          <TextBlock Text="OpenIPC Viewer"
+                     FontSize="22" FontWeight="SemiBold"
+                     Foreground="{StaticResource TextPrimaryBrush}" />
+          <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
+                     FontSize="12" Opacity="0.6"
+                     Foreground="{StaticResource TextPrimaryBrush}" />
+        </StackPanel>
       </StackPanel>
 
       <!-- Progress (hidden once an error is shown). -->
