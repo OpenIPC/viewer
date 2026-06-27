@@ -45,11 +45,18 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Install ffmpeg + libsecret (Linux)
+      # libsecret for the keyring; the bundled FFmpeg 7 .so come from the fetch
+      # step below, not apt — the distro ffmpeg (6.1 on 24.04 runners) is the
+      # wrong ABI for FFmpeg.AutoGen 7.1.1 and must NOT end up in the archive.
+      - name: Install libsecret (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libavcodec-extra libsecret-1-0 libsecret-tools
+          sudo apt-get install -y libsecret-1-0 libsecret-tools
+
+      - name: Fetch bundled ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: bash ./tools/fetch-ffmpeg-linux.sh
 
       - name: Install ffmpeg (macOS)
         if: runner.os == 'macOS'

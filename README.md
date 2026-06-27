@@ -68,13 +68,19 @@ a later release.
 ### Runtime requirements
 
 - **Windows** — none. FFmpeg DLLs ship inside the archive.
-- **Linux** — system FFmpeg + libsecret:
+- **Linux** — just libsecret for the keyring:
   ```
-  sudo apt install ffmpeg libavcodec-extra libsecret-1-0 libsecret-tools
+  sudo apt install libsecret-1-0 libsecret-tools
   ```
-  VAAPI hardware decode needs `/dev/dri/renderD128` and your user in the
-  `render` (or `video`) group. Credentials use `secret-tool` against the
-  GNOME/KDE keyring, with an AES-GCM file fallback if D-Bus is unavailable.
+  FFmpeg ships **inside the archive** (matching `n7.1` `.so`) — do *not* rely on
+  `apt install ffmpeg`. The app binds the FFmpeg 7.x ABI (`libavcodec.so.61`),
+  but no current Ubuntu LTS packages FFmpeg 7 (24.04 has 6.1 → `libavcodec.so.60`,
+  22.04 has 4.4), so a system FFmpeg would fail to load with *"FFmpeg native
+  libraries failed to load for runtime linux-x64"*. The bundled libs sidestep
+  the distro version entirely. VAAPI hardware decode still needs
+  `/dev/dri/renderD128` and your user in the `render` (or `video`) group.
+  Credentials use `secret-tool` against the GNOME/KDE keyring, with an AES-GCM
+  file fallback if D-Bus is unavailable.
 - **macOS** — Homebrew FFmpeg (`brew install ffmpeg`). VideoToolbox HW decode
   works on any Mac 12+. Credentials live in the Keychain via `security`.
 
@@ -93,9 +99,10 @@ dotnet run --project src/OpenIPC.Viewer.Desktop
 ```
 
 Build runs with `TreatWarningsAsErrors=true`; any warning fails the build.
-On Windows, run `tools/fetch-ffmpeg.ps1` once to download the bundled FFmpeg
-shared-build DLLs (`n7.1` ABI) from `BtbN/FFmpeg-Builds` into
-`runtimes/win-x64/native/`. Linux / macOS use the system FFmpeg (see
+Run the FFmpeg fetch script for your OS once — it downloads the bundled
+shared-build (`n7.1` ABI) from `BtbN/FFmpeg-Builds` into `runtimes/<rid>/native/`:
+`tools/fetch-ffmpeg.ps1` (Windows → `win-x64`) or `tools/fetch-ffmpeg-linux.sh`
+(Linux → `linux-x64`). macOS uses the system Homebrew FFmpeg (see
 [Runtime requirements](#runtime-requirements)).
 
 ### Android
