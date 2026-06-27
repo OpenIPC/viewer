@@ -55,6 +55,21 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        // When the bundled (rooted) ffmpeg is used, its .so siblings live in the
+        // same runtimes/linux-x64/native dir — the BtbN binary's RUNPATH points
+        // at ../lib, which doesn't exist once co-located, so point the loader at
+        // the binary's own dir. A bare "ffmpeg" PATH lookup (system install)
+        // leaves the env untouched and finds its libs the normal way.
+        if (OperatingSystem.IsLinux() && Path.IsPathRooted(_ffmpegPath))
+        {
+            var binDir = Path.GetDirectoryName(_ffmpegPath);
+            if (!string.IsNullOrEmpty(binDir))
+            {
+                var existing = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+                psi.Environment["LD_LIBRARY_PATH"] =
+                    string.IsNullOrEmpty(existing) ? binDir : $"{binDir}:{existing}";
+            }
+        }
         psi.ArgumentList.Add("-hide_banner");
         // verbose (not warning): the segment muxer logs "Opening '<path>' for
         // writing" at AV_LOG_VERBOSE. We parse that line to learn each segment

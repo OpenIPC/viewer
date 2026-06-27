@@ -103,7 +103,9 @@ internal static class FfmpegRuntime
                     $"Android: ensure runtimes/android-{{arm64,x64}}/native/*.so are populated " +
                     $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
                     $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
-                    $"or tools/fetch-ffmpeg.ps1 (Windows) / apt/brew. " +
+                    $"or run tools/fetch-ffmpeg.ps1 (Windows) / tools/fetch-ffmpeg-linux.sh (Linux) / " +
+                    $"brew install ffmpeg (macOS). NOTE: the app needs FFmpeg 7.x (libavcodec.so.61); " +
+                    $"distro packages like Ubuntu 24.04's are FFmpeg 6.1 (libavcodec.so.60) and will not load. " +
                     $"Underlying: {DescribeChain(ex)}", ex);
                 _ready = true;
                 throw _initFailure;

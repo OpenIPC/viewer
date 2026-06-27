@@ -16,6 +16,17 @@ powershell -ExecutionPolicy Bypass -File tools/fetch-ffmpeg.ps1
 
 ## Linux
 
+**`FFmpeg native libraries failed to load for runtime linux-x64`.** The app
+needs the FFmpeg **7.x** ABI (`libavcodec.so.61`), but no current Ubuntu LTS
+ships FFmpeg 7 — 24.04 has 6.1 (`libavcodec.so.60`), 22.04 has 4.4 — so
+`apt install ffmpeg` cannot satisfy it no matter how many `libav*` packages are
+installed. The release archive **bundles** matching `n7.1` `.so`, so the fix is
+to run the *extracted* `./OpenIPC.Viewer.Desktop` with its `runtimes/` folder
+intact next to it (don't move the binary out on its own). Building from source?
+Run `tools/fetch-ffmpeg-linux.sh` once to populate `runtimes/linux-x64/native/`.
+To confirm what your system has: `ffmpeg -version | head -1` — anything below 7
+is the wrong ABI and is ignored in favour of the bundled libs.
+
 **VAAPI: `/dev/dri/renderD128` not found.** No GPU exposed to the user
 session, or no DRI driver loaded. The app falls back to software decode;
 that works but uses much more CPU. To enable VAAPI:

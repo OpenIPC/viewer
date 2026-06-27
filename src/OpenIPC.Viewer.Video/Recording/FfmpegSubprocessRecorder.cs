@@ -14,8 +14,8 @@ namespace OpenIPC.Viewer.Video.Recording;
 //
 // FFmpeg path resolution (first hit wins):
 //   1. Explicit override (constructor / appsettings "Recording:FfmpegPath")
-//   2. Per-RID bundled binary in runtimes/{rid}/native/ (Phase 8 fills these
-//      for linux-x64 / osx-x64 / osx-arm64; today only win-x64 has artifacts)
+//   2. Per-RID bundled binary in runtimes/{rid}/native/ (win-x64 via
+//      fetch-ffmpeg.ps1, linux-x64 via fetch-ffmpeg-linux.sh; osx still TODO)
 //   3. "ffmpeg" — falls through to OS PATH lookup (apt/brew/PATH on *nix)
 public sealed class FfmpegSubprocessRecorder : IRecorder
 {
