@@ -30,25 +30,15 @@
       </Style.Animations>
     </Style>
 
-    <!-- Center dot "focuses" — pulses in/out like a camera locking focus. -->
-    <Style Selector="Ellipse.dot">
-      <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-    </Style>
+    <!-- The "pupil" looks left↔right, like a camera scanning the room. -->
     <Style Selector="Ellipse.dot">
       <Style.Animations>
-        <Animation Duration="0:0:1.8" IterationCount="INFINITE" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%">
-            <Setter Property="ScaleTransform.ScaleX" Value="1" />
-            <Setter Property="ScaleTransform.ScaleY" Value="1" />
-          </KeyFrame>
-          <KeyFrame Cue="50%">
-            <Setter Property="ScaleTransform.ScaleX" Value="0.72" />
-            <Setter Property="ScaleTransform.ScaleY" Value="0.72" />
-          </KeyFrame>
-          <KeyFrame Cue="100%">
-            <Setter Property="ScaleTransform.ScaleX" Value="1" />
-            <Setter Property="ScaleTransform.ScaleY" Value="1" />
-          </KeyFrame>
+        <Animation Duration="0:0:4" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="22%"><Setter Property="TranslateTransform.X" Value="-9" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="72%"><Setter Property="TranslateTransform.X" Value="9" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
         </Animation>
       </Style.Animations>
     </Style>
@@ -78,19 +68,19 @@
           <Canvas Width="100" Height="100">
             <Canvas Classes="mark" Width="100" Height="100">
               <!-- Left chevron < -->
-              <Path Data="M34,30 L13,50 L34,70"
+              <Path Data="M33,29 L5,50 L33,71"
                     Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
                     StrokeLineCap="Flat" StrokeJoin="Round" />
               <!-- Right chevron > -->
-              <Path Data="M66,30 L87,50 L66,70"
+              <Path Data="M67,29 L95,50 L67,71"
                     Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
                     StrokeLineCap="Flat" StrokeJoin="Round" />
               <!-- Top cap arc ⌒ -->
-              <Path Data="M38,28 C43,13 57,13 62,28"
+              <Path Data="M37,27 C43,12 57,12 63,27"
                     Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
                     StrokeLineCap="Round" />
               <!-- Bottom cap arc ⌣ -->
-              <Path Data="M38,72 C43,87 57,87 62,72"
+              <Path Data="M37,73 C43,88 57,88 63,73"
                     Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
                     StrokeLineCap="Round" />
               <!-- Accent focus glow behind the dot -->
