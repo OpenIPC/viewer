@@ -12,18 +12,97 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Bg1Brush}">
 
+  <Window.Styles>
+    <!-- Occasional "aperture blink": squash the whole mark vertically for a few
+         frames on a long loop, reading as a blink rather than a flicker. -->
+    <Style Selector="Canvas.mark">
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    </Style>
+    <Style Selector="Canvas.mark">
+      <Style.Animations>
+        <Animation Duration="0:0:3.8" IterationCount="INFINITE">
+          <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="88%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="93%"><Setter Property="ScaleTransform.ScaleY" Value="0.08" /></KeyFrame>
+          <KeyFrame Cue="98%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The "pupil" looks left↔right, like a camera scanning the room. -->
+    <Style Selector="Ellipse.dot">
+      <Style.Animations>
+        <Animation Duration="0:0:4" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="22%"><Setter Property="TranslateTransform.X" Value="-9" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="72%"><Setter Property="TranslateTransform.X" Value="9" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- Accent glow ring brightens as the dot contracts (the "focus" snap). -->
+    <Style Selector="Ellipse.glow">
+      <Style.Animations>
+        <Animation Duration="0:0:1.8" IterationCount="INFINITE" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.55" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+  </Window.Styles>
+
   <Border Background="{StaticResource Bg1Brush}"
           BorderBrush="{StaticResource BorderMediumBrush}"
           BorderThickness="1">
     <Grid RowDefinitions="*,Auto,Auto,Auto" Margin="28">
 
-      <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="6">
-        <TextBlock Text="OpenIPC Viewer"
-                   FontSize="22" FontWeight="SemiBold"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
-        <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="12" Opacity="0.6"
-                   Foreground="{StaticResource TextPrimaryBrush}" />
+      <StackPanel Grid.Row="0" Orientation="Horizontal"
+                  VerticalAlignment="Center" Spacing="18">
+
+        <!-- Animated OpenIPC aperture mark -->
+        <Viewbox Width="62" Height="62" IsVisible="{Binding IsBusy}">
+          <Canvas Width="100" Height="100">
+            <Canvas Classes="mark" Width="100" Height="100">
+              <!-- Left chevron < -->
+              <Path Data="M33,29 L5,50 L33,71"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Flat" StrokeJoin="Round" />
+              <!-- Right chevron > -->
+              <Path Data="M67,29 L95,50 L67,71"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Flat" StrokeJoin="Round" />
+              <!-- Top cap arc ⌒ -->
+              <Path Data="M37,27 C43,12 57,12 63,27"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Round" />
+              <!-- Bottom cap arc ⌣ -->
+              <Path Data="M37,73 C43,88 57,88 63,73"
+                    Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="9"
+                    StrokeLineCap="Round" />
+              <!-- Accent focus glow behind the dot -->
+              <Ellipse Classes="glow" Canvas.Left="32" Canvas.Top="32"
+                       Width="36" Height="36"
+                       Stroke="{StaticResource AccentBrush}" StrokeThickness="6" />
+              <!-- Center dot (focus pulse) -->
+              <Ellipse Classes="dot" Canvas.Left="37" Canvas.Top="37"
+                       Width="26" Height="26"
+                       Fill="{StaticResource TextPrimaryBrush}" />
+            </Canvas>
+          </Canvas>
+        </Viewbox>
+
+        <StackPanel VerticalAlignment="Center" Spacing="6">
+          <TextBlock Text="OpenIPC Viewer"
+                     FontSize="22" FontWeight="SemiBold"
+                     Foreground="{StaticResource TextPrimaryBrush}" />
+          <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
+                     FontSize="12" Opacity="0.6"
+                     Foreground="{StaticResource TextPrimaryBrush}" />
+        </StackPanel>
       </StackPanel>
 
       <!-- Progress (hidden once an error is shown). -->
