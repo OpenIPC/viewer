@@ -138,30 +138,31 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         var row = Selected;
         if (row is null) return null;
 
-        // Slice B only surfaces ONVIF devices, so OnvifServiceUri is always set.
-        // Non-ONVIF devices (sweep / mDNS, Slice C+) take a different add path.
-        var onvifUri = row.Device.OnvifServiceUri;
-        if (onvifUri is null)
-        {
-            StatusText = Localizer.Instance["Discovery.Status.NoOnvif"];
-            return null;
-        }
+        var creds = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
+            ? null
+            : new CameraCredentials(Username, Password);
 
         AddInProgress = true;
-        StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbingFormat"], row.HostPort);
-
         try
         {
-            var creds = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
-                ? null
-                : new CameraCredentials(Username, Password);
+            // ONVIF device → probe for the real stream URI. Non-ONVIF (sweep/mDNS)
+            // → skip the probe and pre-fill a guessed RTSP URL from the open ports;
+            // the user reviews / tests it in the editor before saving.
+            var onvifUri = row.Device.OnvifServiceUri;
+            if (onvifUri is null)
+            {
+                StatusText = Localizer.Instance["Discovery.Status.ManualAdd"];
+                return new DiscoveryDialogResult(row.Device, GuessRtspUri(row.Device), null, creds);
+            }
+
+            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbingFormat"], row.HostPort);
             var endpoint = new OnvifEndpoint(onvifUri, creds);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var probeResult = await _probe.ProbeAsync(endpoint, cts.Token).ConfigureAwait(true);
 
             StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeOkFormat"], probeResult.Manufacturer ?? "?", probeResult.Model ?? "").TrimEnd();
-            return new DiscoveryDialogResult(row.Device, probeResult, creds);
+            return new DiscoveryDialogResult(row.Device, probeResult.RtspMainUri, probeResult, creds);
         }
         catch (Exception ex)
         {
@@ -173,6 +174,16 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         {
             AddInProgress = false;
         }
+    }
+
+    // OpenIPC/Majestic RTSP convention (matches CameraEditor): rtsp://host/ for
+    // the default 554, an explicit port otherwise. The user can refine it.
+    private static Uri GuessRtspUri(DiscoveredDevice device)
+    {
+        var port = device.Ports.Contains(8554) && !device.Ports.Contains(554) ? 8554 : 554;
+        return port == 554
+            ? new Uri($"rtsp://{device.Host}/")
+            : new Uri($"rtsp://{device.Host}:{port}/");
     }
 
     public void Cancel()
@@ -226,7 +237,12 @@ public sealed partial class DiscoveredDeviceRowVm : ViewModelBase
     }
 }
 
+// The dialog's output: the picked device, the RTSP URL to pre-fill (from the
+// ONVIF probe when available, otherwise a sensible guess for non-ONVIF devices),
+// the ONVIF probe result (null for non-ONVIF — no PTZ/profile metadata), and any
+// credentials the user typed.
 public sealed record DiscoveryDialogResult(
     DiscoveredDevice Device,
-    OnvifProbeResult Probe,
+    Uri RtspMainUri,
+    OnvifProbeResult? Probe,
     CameraCredentials? Credentials);
