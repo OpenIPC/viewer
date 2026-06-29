@@ -175,7 +175,7 @@
                       <!-- Top-right: state badge -->
                       <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
                               CornerRadius="3" Padding="6,2"
-                              Background="{Binding State, Converter={x:Static conv:StateColorConverter.Instance}}">
+                              Background="{Binding Status, Converter={x:Static conv:CameraStatusColorConverter.Instance}}">
                         <TextBlock Text="{Binding StateLabel}" Foreground="White"
                                    FontFamily="{StaticResource FontMono}" FontSize="10" />
                       </Border>

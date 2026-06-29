@@ -123,6 +123,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Stream.Connecting"] = "Connecting…",
         ["Stream.Reconnecting"] = "Reconnecting…",
         ["Stream.Disconnected"] = "Disconnected",
+        ["Stream.Interrupted"] = "Stream interrupted",
         ["Stream.Unavailable"] = "Stream unavailable",
 
         ["Library.Title"] = "Cameras",
@@ -510,6 +511,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Stream.Connecting"] = "Подключение…",
         ["Stream.Reconnecting"] = "Переподключение…",
         ["Stream.Disconnected"] = "Нет соединения",
+        ["Stream.Interrupted"] = "Поток прерван",
         ["Stream.Unavailable"] = "Поток недоступен",
 
         ["Library.Title"] = "Камеры",
