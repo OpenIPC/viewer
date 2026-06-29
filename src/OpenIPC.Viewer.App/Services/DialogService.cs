@@ -215,6 +215,21 @@ public sealed class DialogService : IDialogService
         await dlg.ShowDialog(owner);
     }
 
+    public async Task ShowFirmwareDialogAsync(FirmwareDialogViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new FirmwareDialogContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion, fullScreen: true).ConfigureAwait(true);
+            return;
+        }
+
+        var owner = ResolveOwner();
+        if (owner is null) return;
+        var dlg = new FirmwareDialog { DataContext = viewModel };
+        await dlg.ShowDialog(owner);
+    }
+
     public async Task ShowManageLayoutCamerasAsync(ManageLayoutCamerasViewModel viewModel)
     {
         if (OverlayDialogPresenter.IsMobile)

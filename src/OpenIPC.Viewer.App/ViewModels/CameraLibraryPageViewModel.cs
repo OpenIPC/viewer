@@ -23,6 +23,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private readonly DiscoveryDialogFactory _discoveryFactory;
     private readonly SshTerminalFactory _terminalFactory;
     private readonly FileManagerFactory _fileManagerFactory;
+    private readonly FirmwareDialogFactory _firmwareFactory;
     private readonly ILogger<CameraLibraryPageViewModel> _logger;
 
     public string Title => Localizer.Instance["Library.Title"];
@@ -65,6 +66,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         ManageGroupsDialogFactory manageGroupsFactory,
         SshTerminalFactory terminalFactory,
         FileManagerFactory fileManagerFactory,
+        FirmwareDialogFactory firmwareFactory,
         UserSettingsService userSettings,
         IDiscoveryService discovery,
         IReachabilityProbe reachability,
@@ -76,6 +78,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         _discoveryFactory = discoveryFactory;
         _terminalFactory = terminalFactory;
         _fileManagerFactory = fileManagerFactory;
+        _firmwareFactory = firmwareFactory;
         _manageGroupsFactory = manageGroupsFactory;
         _userSettings = userSettings;
         _discovery = discovery;
@@ -418,6 +421,15 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
             return;
         var vm = _fileManagerFactory.Create(row.Camera);
         await _dialogs.OpenFileManagerAsync(vm).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task OpenFirmwareAsync(CameraRowViewModel? row)
+    {
+        if (row is null)
+            return;
+        var vm = _firmwareFactory.Create(row.Camera);
+        await _dialogs.ShowFirmwareDialogAsync(vm).ConfigureAwait(true);
     }
 
     [RelayCommand]

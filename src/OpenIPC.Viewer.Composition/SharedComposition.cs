@@ -146,6 +146,7 @@ public static class SharedComposition
         services.AddSingleton<RecordingPlayerPageFactory>();
         services.AddSingleton<CameraEditorFactory>();
         services.AddSingleton<DiscoveryDialogFactory>();
+        services.AddSingleton<FirmwareDialogFactory>();
         services.AddSingleton<ManageGroupsDialogFactory>();
         services.AddSingleton<SshTerminalFactory>();
         services.AddSingleton<FileManagerFactory>();
