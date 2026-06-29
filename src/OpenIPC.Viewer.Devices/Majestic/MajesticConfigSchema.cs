@@ -74,7 +74,48 @@ public sealed class MajesticConfigSchema : IMajesticConfigSchema
     {
         if (node is not JsonValue value) return; // skip objects/arrays
         if (!TryDescribe(value, out var kind, out var text)) return;
-        fields.Add(new MajesticConfigField(section, key, kind, text, Options: null, RequiresRestart: RestartsStream(section)));
+
+        // Upgrade well-known string fields to a constrained Enum (combo) so the
+        // generic editor is as brick-safe as the curated quick-controls. The
+        // live value is folded into the option set so we never hide it even if
+        // the firmware reports something outside our known list.
+        IReadOnlyList<string>? options = null;
+        if (kind == MajesticFieldKind.String && KnownOptions(section, key) is { } known)
+        {
+            options = MergeCurrent(known, text);
+            kind = MajesticFieldKind.Enum;
+        }
+
+        fields.Add(new MajesticConfigField(section, key, kind, text, options, RestartsStream(section)));
+    }
+
+    // Safe candidate sets for fields where a free-text typo can brick the camera.
+    // Conservative on purpose — only fields whose valid values are well-known.
+    private static IReadOnlyList<string>? KnownOptions(string section, string key)
+    {
+        if (section.StartsWith("video", StringComparison.OrdinalIgnoreCase))
+        {
+            return key switch
+            {
+                "codec" => new[] { "h264", "h265" },
+                "profile" => new[] { "baseline", "main", "high" },
+                "size" => new[] { "640x480", "1280x720", "1920x1080", "2560x1440", "3840x2160" },
+                _ => null,
+            };
+        }
+        if (section.Equals("isp", StringComparison.OrdinalIgnoreCase))
+            return key == "ircut" ? new[] { "on", "off", "auto" } : null;
+        return null;
+    }
+
+    private static IReadOnlyList<string> MergeCurrent(IReadOnlyList<string> known, string current)
+    {
+        foreach (var o in known)
+            if (string.Equals(o, current, StringComparison.OrdinalIgnoreCase))
+                return known;
+        var merged = new List<string>(known.Count + 1) { current };
+        merged.AddRange(known);
+        return merged;
     }
 
     // Map a JSON scalar to (kind, canonical string). Returns false for nulls and

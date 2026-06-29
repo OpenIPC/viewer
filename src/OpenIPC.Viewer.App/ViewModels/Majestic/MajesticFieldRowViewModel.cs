@@ -1,22 +1,29 @@
+using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OpenIPC.Viewer.Core.Majestic;
 
 namespace OpenIPC.Viewer.App.ViewModels.Majestic;
 
-// One editable row in the schema-driven "All settings" editor. Wraps a parsed
-// MajesticConfigField, holds the live edited Value as a string, and exposes
-// kind flags so the view can pick a control (toggle / combo / numeric / text)
-// without a DataTemplateSelector.
+// One editable row in the schema-driven editor. Wraps a parsed
+// MajesticConfigField, holds the live edited Value as a string, tracks whether
+// it differs from the loaded baseline (for highlight + revert), and exposes
+// kind flags so the view can pick a control without a DataTemplateSelector.
 public sealed partial class MajesticFieldRowViewModel : ObservableObject
 {
     private readonly MajesticConfigField _field;
+    // The value last seen on the camera. Updated on Commit() after a successful
+    // apply that doesn't rebuild the rows (e.g. live ISP), so a second apply
+    // diffs correctly and the "modified" marker clears.
+    private string _original;
 
-    public MajesticFieldRowViewModel(MajesticConfigField field, IReadOnlyList<string>? optionOverride = null)
+    public MajesticFieldRowViewModel(MajesticConfigField field)
     {
         _field = field;
+        _original = field.Value;
         _value = field.Value;
-        Options = optionOverride ?? field.Options;
+        Options = field.Options;
     }
 
     public string Section => _field.Section;
@@ -26,18 +33,41 @@ public sealed partial class MajesticFieldRowViewModel : ObservableObject
     public bool RequiresRestart => _field.RequiresRestart;
     public IReadOnlyList<string>? Options { get; }
 
-    // The current edited value, canonical string form. ComputeEdits compares
-    // this against the original to decide what to write back.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BoolValue))]
+    [NotifyPropertyChangedFor(nameof(IsModified))]
     private string _value;
+
+    // Set by the page's field filter; the view binds row visibility to this.
+    [ObservableProperty]
+    private bool _matchesFilter = true;
 
     // ToggleSwitch binds here; maps onto the string Value as "true"/"false".
     public bool BoolValue
     {
-        get => string.Equals(Value, "true", System.StringComparison.OrdinalIgnoreCase);
+        get => string.Equals(Value, "true", StringComparison.OrdinalIgnoreCase);
         set => Value = value ? "true" : "false";
     }
+
+    // True when the edited value differs from the camera baseline (kind-aware,
+    // matching the diff that Apply uses).
+    public bool IsModified => !MajesticConfigModel.ValuesEqual(_field.Kind, _original, Value);
+
+    [RelayCommand]
+    private void Revert() => Value = _original;
+
+    // Re-baseline to the current value (call after a successful apply that keeps
+    // the rows alive).
+    public void Commit()
+    {
+        _original = Value;
+        OnPropertyChanged(nameof(IsModified));
+    }
+
+    public bool Matches(string filter) =>
+        filter.Length == 0
+        || Key.Contains(filter, StringComparison.OrdinalIgnoreCase)
+        || Section.Contains(filter, StringComparison.OrdinalIgnoreCase);
 
     // Control selection — exactly one is true.
     public bool IsBool => _field.Kind == MajesticFieldKind.Bool;

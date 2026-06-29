@@ -115,6 +115,9 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // from the live config.json, grouped by section, as a superset of the curated
     // quick-controls above. Built on load from MajesticConfig.RawJson.
     [ObservableProperty] private bool _showAllSettings;
+
+    // Live name/section filter over the "All settings" editor.
+    [ObservableProperty] private string _fieldFilter = "";
     public ObservableCollection<MajesticConfigSectionViewModel> ConfigSections { get; } = new();
 
     // Live ISP (Slice C): the isp-section rows, surfaced as their own panel that
@@ -680,7 +683,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         {
             var rows = new List<MajesticFieldRowViewModel>(section.Fields.Count);
             foreach (var field in section.Fields)
-                rows.Add(new MajesticFieldRowViewModel(field, OptionOverrideFor(field)));
+                rows.Add(new MajesticFieldRowViewModel(field));
             ConfigSections.Add(new MajesticConfigSectionViewModel(section.Name, rows));
 
             if (section.Name.Equals("isp", StringComparison.OrdinalIgnoreCase))
@@ -688,19 +691,26 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         }
 
         HasIsp = IspFields.Count > 0;
+        ApplyFieldFilter();
     }
 
-    private IReadOnlyList<string>? OptionOverrideFor(MajesticConfigField field)
+    partial void OnFieldFilterChanged(string value) => ApplyFieldFilter();
+
+    // Show only rows whose key or section contains the filter; hide a section
+    // entirely when none of its rows match.
+    private void ApplyFieldFilter()
     {
-        if (!field.Section.StartsWith("video", StringComparison.OrdinalIgnoreCase)) return null;
-        return field.Key switch
+        var filter = FieldFilter?.Trim() ?? string.Empty;
+        foreach (var section in ConfigSections)
         {
-            "codec" => CodecOptions,
-            "size" => ResolutionOptions,
-            "profile" => ProfileOptions,
-            "fps" => FpsOptions.Select(i => i.ToString(CultureInfo.InvariantCulture)).ToArray(),
-            _ => null,
-        };
+            var any = false;
+            foreach (var row in section.Fields)
+            {
+                row.MatchesFilter = row.Matches(filter);
+                any |= row.MatchesFilter;
+            }
+            section.IsVisibleInFilter = any;
+        }
     }
 
     [RelayCommand]
@@ -815,8 +825,10 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await _majestic.UpdateRawConfigAsync(endpoint, updated, cts.Token).ConfigureAwait(true);
 
-            // Keep local state current without a stream-disrupting reload.
+            // Keep local state current without a stream-disrupting reload, and
+            // re-baseline the rows so the "modified" markers clear.
             MajesticConfig = MajesticConfig with { RawJson = updated };
+            foreach (var row in IspFields) row.Commit();
             ApplyStatus = Localizer.Instance["CameraPage.Majestic.IspApplied"];
         }
         catch (Exception ex)

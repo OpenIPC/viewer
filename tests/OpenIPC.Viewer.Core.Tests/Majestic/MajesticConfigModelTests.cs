@@ -67,6 +67,15 @@ public class MajesticConfigModelTests
         Assert.Equal("new", Assert.Single(edits).Value);
     }
 
+    [Theory]
+    [InlineData(MajesticFieldKind.Enum, "h264", "h264", true)]
+    [InlineData(MajesticFieldKind.Enum, "h264", "h265", false)]
+    [InlineData(MajesticFieldKind.Int, "30", " 30 ", true)]
+    public void ValuesEqual_is_kind_aware(MajesticFieldKind kind, string a, string b, bool equal)
+    {
+        Assert.Equal(equal, MajesticConfigModel.ValuesEqual(kind, a, b));
+    }
+
     [Fact]
     public void Sections_group_fields_in_first_seen_order()
     {

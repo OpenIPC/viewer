@@ -48,7 +48,9 @@ public sealed class MajesticConfigModel
         return edits;
     }
 
-    private static bool ValuesEqual(MajesticFieldKind kind, string a, string b)
+    // Kind-aware value comparison, shared with the editor's "modified" highlight
+    // so "30" vs "30.0" or "true" vs "True" never count as a change.
+    public static bool ValuesEqual(MajesticFieldKind kind, string a, string b)
     {
         a = a?.Trim() ?? string.Empty;
         b = b?.Trim() ?? string.Empty;
