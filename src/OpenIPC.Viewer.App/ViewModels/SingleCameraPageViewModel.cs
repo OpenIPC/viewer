@@ -125,6 +125,12 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private bool _hasIsp;
     public ObservableCollection<MajesticFieldRowViewModel> IspFields { get; } = new();
 
+    // Read-only Prometheus metrics (Slice D). Fetched on demand from /metrics;
+    // firmware without the endpoint just shows the error status.
+    [ObservableProperty] private bool _showMetrics;
+    [ObservableProperty] private string? _metricsStatus;
+    public ObservableCollection<MajesticMetricSample> Metrics { get; } = new();
+
     [ObservableProperty] private bool _isRecording;
     [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
 
@@ -879,6 +885,43 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         finally
         {
             ApplyInProgress = false;
+        }
+    }
+
+    // Toggle the read-only metrics panel; fetch on first open so we don't hit
+    // the camera until the user asks.
+    [RelayCommand]
+    private async Task ToggleMetricsAsync()
+    {
+        ShowMetrics = !ShowMetrics;
+        if (ShowMetrics && Metrics.Count == 0)
+            await LoadMetricsAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task LoadMetricsAsync()
+    {
+        if (!IsMajestic) return;
+        MetricsStatus = Localizer.Instance["CameraPage.ApplyingStatus"];
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var text = await _majestic.GetMetricsAsync(endpoint, cts.Token).ConfigureAwait(true);
+            var samples = PrometheusTextParser.Parse(text);
+            Metrics.Clear();
+            foreach (var s in samples) Metrics.Add(s);
+            MetricsStatus = Metrics.Count == 0
+                ? Localizer.Instance["CameraPage.Majestic.MetricsEmpty"]
+                : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Load Majestic metrics failed for {CameraId}", _camera.Id);
+            Metrics.Clear();
+            MetricsStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
         }
     }
 

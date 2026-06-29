@@ -150,6 +150,7 @@ public sealed class SnapshotServiceTests
         public Task UpdateConfigAsync(MajesticEndpoint endpoint, MajesticConfigPatch patch, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateRawConfigAsync(MajesticEndpoint endpoint, string rawJson, CancellationToken ct) => throw new NotSupportedException();
         public Task SetNightModeAsync(MajesticEndpoint endpoint, NightMode mode, CancellationToken ct) => throw new NotSupportedException();
+        public Task<string> GetMetricsAsync(MajesticEndpoint endpoint, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FakeCreds : ICameraCredentialsProvider

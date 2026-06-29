@@ -319,6 +319,11 @@
                   Padding="10,4" FontSize="11"
                   Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                   CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+          <Button Content="{Binding [CameraPage.Majestic.Metrics], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ToggleMetricsCommand}"
+                  Padding="10,4" FontSize="11"
+                  Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
           <Button Content="{Binding [CameraPage.Majestic.EditRaw], Source={x:Static svc:Localizer.Instance}}"
                   Command="{Binding EditRawConfigCommand}"
                   IsVisible="{Binding IsRawConfigEditorEnabled}"
@@ -477,6 +482,48 @@
                     Margin="8,0,8,8" HorizontalAlignment="Left"
                     Padding="14,4" FontSize="11"
                     Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="4" />
+          </StackPanel>
+        </Border>
+
+        <!-- Read-only Prometheus metrics (Slice D): name / value pairs from the
+             camera's /metrics endpoint, fetched on demand. -->
+        <Border IsVisible="{Binding ShowMetrics}"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderWeakBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+          <StackPanel Spacing="6" Margin="2">
+            <Grid ColumnDefinitions="*,Auto" Margin="8,6,8,0">
+              <TextBlock Grid.Column="0"
+                         Text="{Binding MetricsStatus}"
+                         VerticalAlignment="Center" FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         IsVisible="{Binding MetricsStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <Button Grid.Column="1"
+                      Content="{Binding [CameraPage.Majestic.MetricsRefresh], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding LoadMetricsCommand}"
+                      Padding="10,4" FontSize="11"
+                      Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                      CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+            </Grid>
+            <ScrollViewer MaxHeight="280" Padding="8,0,8,8">
+              <ItemsControl ItemsSource="{Binding Metrics}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                      <TextBlock Grid.Column="0" Text="{Binding Display}"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Margin="12,0,0,0"
+                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
           </StackPanel>
         </Border>
 
