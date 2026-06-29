@@ -295,9 +295,9 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         // everything before saving (RTSP URI especially — phase-04 risks §"ONVIF
         // returns wrong RTSP URI behind NAT" applies).
         var editor = _editorFactory.CreateForNew();
-        editor.Name = found.Discovered.Model ?? found.Discovered.Name ?? found.Discovered.Host;
-        editor.Host = found.Discovered.Host;
-        editor.OnvifPortText = found.Discovered.OnvifPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        editor.Name = found.Device.Model ?? found.Device.Name ?? found.Device.Host;
+        editor.Host = found.Device.Host;
+        editor.OnvifPortText = (found.Device.OnvifServiceUri?.Port ?? 80).ToString(System.Globalization.CultureInfo.InvariantCulture);
         editor.RtspMainText = found.Probe.RtspMainUri.ToString();
         editor.Username = found.Credentials?.Username ?? "";
         editor.Password = found.Credentials?.Password ?? "";

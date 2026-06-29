@@ -330,7 +330,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Discovery.Status.ProbingFormat"] = "Probing {0}…",
         ["Discovery.Status.ProbeOkFormat"] = "OK — {0} {1}",
         ["Discovery.Status.ProbeFailedFormat"] = "Probe failed: {0}",
+        ["Discovery.Status.NoOnvif"] = "This device has no ONVIF service — add it manually.",
         ["Discovery.UnknownModel"] = "(unknown model)",
+        ["Discovery.Confidence.Low"] = "low",
+        ["Discovery.Confidence.Medium"] = "medium",
+        ["Discovery.Confidence.High"] = "high",
 
         ["RawConfigEditor.Title"] = "Edit raw Majestic config",
         ["RawConfigEditor.InvalidJsonFormat"] = "Invalid JSON: {0}",
@@ -717,7 +721,11 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Discovery.Status.ProbingFormat"] = "Опрос {0}…",
         ["Discovery.Status.ProbeOkFormat"] = "OK — {0} {1}",
         ["Discovery.Status.ProbeFailedFormat"] = "Опрос не удался: {0}",
+        ["Discovery.Status.NoOnvif"] = "У устройства нет ONVIF-сервиса — добавьте вручную.",
         ["Discovery.UnknownModel"] = "(неизвестная модель)",
+        ["Discovery.Confidence.Low"] = "низкая",
+        ["Discovery.Confidence.Medium"] = "средняя",
+        ["Discovery.Confidence.High"] = "высокая",
 
         ["RawConfigEditor.Title"] = "Правка raw-конфига Majestic",
         ["RawConfigEditor.InvalidJsonFormat"] = "Невалидный JSON: {0}",

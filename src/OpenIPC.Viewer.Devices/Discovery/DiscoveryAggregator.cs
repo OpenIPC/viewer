@@ -18,7 +18,7 @@ namespace OpenIPC.Viewer.Devices.Discovery;
 //
 // Lives in Devices (not Core) because Core is netstandard2.1 with no package
 // deps — System.Threading.Channels needs the net9.0 BCL.
-public sealed class DiscoveryAggregator
+public sealed class DiscoveryAggregator : IDiscoveryAggregator
 {
     private readonly IReadOnlyList<IDiscoverySource> _sources;
     private readonly ILogger<DiscoveryAggregator> _logger;
