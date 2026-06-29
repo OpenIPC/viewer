@@ -16,6 +16,7 @@ public sealed class SingleCameraPageFactory
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly IMajesticConfigSchema _schema;
     private readonly IMajesticSshConfigClient _majesticSsh;
     private readonly RecordingService _recordings;
     private readonly UserSettingsService _userSettings;
@@ -31,6 +32,7 @@ public sealed class SingleCameraPageFactory
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        IMajesticConfigSchema schema,
         IMajesticSshConfigClient majesticSsh,
         RecordingService recordings,
         UserSettingsService userSettings,
@@ -45,6 +47,7 @@ public sealed class SingleCameraPageFactory
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _schema = schema;
         _majesticSsh = majesticSsh;
         _recordings = recordings;
         _userSettings = userSettings;
@@ -57,7 +60,7 @@ public sealed class SingleCameraPageFactory
     }
 
     public SingleCameraPageViewModel Create(Camera camera) =>
-        new(camera, _coordinator, _directory, _onvif, _majestic, _majesticSsh, _recordings, _userSettings, _dialogs, _snapshots, _audio,
+        new(camera, _coordinator, _directory, _onvif, _majestic, _schema, _majesticSsh, _recordings, _userSettings, _dialogs, _snapshots, _audio,
             new PushToTalkController(_audioInput, _backchannel),
             _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
 }
