@@ -47,6 +47,10 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     // when not scanning.
     [ObservableProperty] private double _scanProgress;
 
+    // Opt-in active /24 sweep — finds OpenIPC cameras that answer neither ONVIF
+    // nor mDNS, at the cost of knocking on every host. Off by default.
+    [ObservableProperty] private bool _deepScan;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyPropertyChangedFor(nameof(CanAdd))]
@@ -85,7 +89,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
 
         try
         {
-            var options = new DiscoveryOptions(TimeSpan.FromSeconds(6), DeepScan: false);
+            var options = new DiscoveryOptions(TimeSpan.FromSeconds(6), DeepScan);
             var progress = new Progress<double>(p => ScanProgress = p);
 
             await foreach (var device in _aggregator.ScanAsync(options, progress, ct).ConfigureAwait(true))

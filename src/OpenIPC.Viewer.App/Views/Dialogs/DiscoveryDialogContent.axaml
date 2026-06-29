@@ -22,14 +22,20 @@
                    Foreground="{StaticResource TextSecondaryBrush}"
                    TextWrapping="Wrap" />
       </StackPanel>
-      <Button Grid.Column="1"
-              Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
-              Command="{Binding ScanCommand}"
-              Padding="14,8"
-              Background="{StaticResource AccentBrush}"
-              Foreground="White"
-              CornerRadius="6"
-              VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="6" HorizontalAlignment="Right">
+        <Button Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding ScanCommand}"
+                Padding="14,8"
+                Background="{StaticResource AccentBrush}"
+                Foreground="White"
+                CornerRadius="6"
+                HorizontalAlignment="Right" />
+        <CheckBox IsChecked="{Binding DeepScan, Mode=TwoWay}"
+                  IsEnabled="{Binding !ScanInProgress}"
+                  Content="{Binding [Discovery.DeepScan], Source={x:Static svc:Localizer.Instance}}"
+                  FontSize="{StaticResource FontSizeSm}"
+                  Foreground="{StaticResource TextSecondaryBrush}" />
+      </StackPanel>
     </Grid>
 
     <!-- Scan progress (0..1), shown only while scanning. -->

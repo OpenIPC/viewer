@@ -89,6 +89,8 @@ public static class SharedComposition
         // Discovery v2: aggregate sources behind one pipeline. ONVIF wraps the
         // existing WS-Discovery; sweep + mDNS sources join the same DI list later.
         services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoverySource, OpenIPC.Viewer.Devices.Discovery.OnvifDiscoverySource>();
+        // Opt-in active /24 sweep (Slice C) — finds non-ONVIF/non-mDNS OpenIPC.
+        services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoverySource, OpenIPC.Viewer.Devices.Discovery.SubnetSweepDiscoverySource>();
         services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoveryAggregator, OpenIPC.Viewer.Devices.Discovery.DiscoveryAggregator>();
         services.AddSingleton<OpenIPC.Viewer.Core.Onvif.Discovery.INetworkInterfaceProvider,
             OpenIPC.Viewer.Devices.Onvif.Discovery.SystemNetworkInterfaceProvider>();
