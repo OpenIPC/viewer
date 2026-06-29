@@ -98,6 +98,9 @@ public static class SharedComposition
             OpenIPC.Viewer.Infrastructure.Ssh.JsonFileHostKeyStore>();
         services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
         services.AddSingleton<IMajesticSshConfigClient, MajesticSshConfigClient>();
+        // Firmware-lite (reboot / time / logs) over the same SSH layer.
+        services.AddSingleton<OpenIPC.Viewer.Core.Firmware.IFirmwareMaintenanceService,
+            OpenIPC.Viewer.Devices.Firmware.FirmwareMaintenanceService>();
 
         // Local AI analytics (Phase 15). One shared detector + engine; the model
         // is fetched on first enable and inference falls back to CPU when a GPU
