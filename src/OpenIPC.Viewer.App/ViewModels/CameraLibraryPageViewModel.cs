@@ -12,6 +12,7 @@ using OpenIPC.Viewer.App.ViewModels.Dialogs;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Status;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
@@ -471,8 +472,6 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     }
 }
 
-public enum CameraReachability { Checking, Online, Offline }
-
 public sealed partial class CameraRowViewModel : ViewModelBase
 {
     // Probe timeout per camera. Kept short so a screen of offline cameras
@@ -492,15 +491,29 @@ public sealed partial class CameraRowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isIncludedInGrid;
 
+    // Raw probe signals fed to the shared CameraStatusPolicy. The library has no
+    // live video session, so the policy only ever yields Connecting/Online/Offline
+    // here — never Attention (that needs a faulted session). ProbeInFlight starts
+    // true so a freshly-loaded row reads "Checking" until the first probe lands.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Status))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
-    private CameraReachability _status = CameraReachability.Checking;
+    private bool? _reachable;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Status))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _probeInFlight = true;
+
+    // Unified status, same model + enum the grid and single view use.
+    public CameraStatus Status =>
+        CameraStatusPolicy.Resolve(new CameraStatusInputs(Reachable: Reachable, ProbeInFlight: ProbeInFlight)).Status;
 
     public string StatusText => Localizer.Instance[Status switch
     {
-        CameraReachability.Online => "Library.Online",
-        CameraReachability.Checking => "Library.Checking",
-        _ => "Library.Offline",
+        CameraStatus.Online => "Library.Online",
+        CameraStatus.Offline => "Library.Offline",
+        _ => "Library.Checking",
     }];
 
     public CameraRowViewModel(Camera camera) : this(camera, null, null, null) { }
@@ -529,7 +542,7 @@ public sealed partial class CameraRowViewModel : ViewModelBase
         if (_reachability is null)
             return;
 
-        Status = CameraReachability.Checking;
+        ProbeInFlight = true;
 
         // RTSP default port is 554; Uri.Port yields -1 when the scheme has no
         // registered default and the URI omits an explicit port.
@@ -544,15 +557,18 @@ public sealed partial class CameraRowViewModel : ViewModelBase
 
         try
         {
-            var reachable = await _reachability
+            Reachable = await _reachability
                 .IsReachableAsync(host, port, ProbeTimeout, ct)
                 .ConfigureAwait(true);
-            Status = reachable ? CameraReachability.Online : CameraReachability.Offline;
         }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Reachability probe failed for {CameraId}", Camera.Id);
-            Status = CameraReachability.Offline;
+            Reachable = false;
+        }
+        finally
+        {
+            ProbeInFlight = false;
         }
     }
 
