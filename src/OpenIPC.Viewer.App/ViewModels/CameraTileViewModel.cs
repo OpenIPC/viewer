@@ -30,6 +30,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly AudioMonitor _audio;
     private readonly IReachabilityProbe _reachability;
+    private readonly CameraStatusRegistry _statusRegistry;
     private readonly ILogger<CameraTileViewModel> _logger;
 
     // On a stream fault we TCP-probe the camera so the status policy can tell a
@@ -219,6 +220,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         AnalyticsBootstrap analyticsBootstrap,
         AudioMonitor audio,
         IReachabilityProbe reachability,
+        CameraStatusRegistry statusRegistry,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
@@ -230,6 +232,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _analyticsBootstrap = analyticsBootstrap;
         _audio = audio;
         _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
@@ -359,9 +362,16 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         var reachable = await _reachability
             .ProbeAsync(Camera, ReachabilityProbeTimeout, CancellationToken.None, _logger)
             .ConfigureAwait(true);
+        _statusRegistry.ReportReachability(Camera.Id, reachable);
         if (State == SessionState.Failed)
             PortReachable = reachable;
     }
+
+    // Mirror every state move into the shared registry so the library + Health
+    // Center reflect this tile's live session (incl. Attention), not just their
+    // own probe. Covers manual Idle resets (quality swap / retry) too.
+    partial void OnStateChanged(SessionState value) =>
+        _statusRegistry?.ReportSession(Camera.Id, value);
 
     // Coordinator dropped every cached session (e.g. RtspTransport flipped in
     // Settings). Our current Session ref is now disposed — drop subscriptions,
@@ -465,6 +475,9 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        // No live session for this camera anymore — clear our signal so the
+        // registry falls back to the reachability probe alone.
+        _statusRegistry.ReportSession(Camera.Id, null);
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _audio.Changed -= OnAudioChanged;
         _audio.Detach(Camera.Id); // no-op unless this tile is the current source

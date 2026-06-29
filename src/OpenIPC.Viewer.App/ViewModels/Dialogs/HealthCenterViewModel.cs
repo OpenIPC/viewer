@@ -24,6 +24,7 @@ public sealed partial class HealthCenterViewModel : ViewModelBase
 
     private readonly CameraDirectoryService _directory;
     private readonly IReachabilityProbe _reachability;
+    private readonly CameraStatusRegistry _statusRegistry;
     private readonly ILogger<HealthCenterViewModel> _logger;
 
     public ObservableCollection<HealthRowViewModel> Rows { get; } = new();
@@ -52,10 +53,12 @@ public sealed partial class HealthCenterViewModel : ViewModelBase
     public HealthCenterViewModel(
         CameraDirectoryService directory,
         IReachabilityProbe reachability,
+        CameraStatusRegistry statusRegistry,
         ILogger<HealthCenterViewModel> logger)
     {
         _directory = directory;
         _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _logger = logger;
     }
 
@@ -79,7 +82,7 @@ public sealed partial class HealthCenterViewModel : ViewModelBase
 
             // Probe every camera in parallel — worst-case wait is a single
             // timeout, not the sum across the whole list.
-            await Task.WhenAll(rows.Select(r => r.ProbeAsync(_reachability, ProbeTimeout, _logger, ct)))
+            await Task.WhenAll(rows.Select(r => r.ProbeAsync(_reachability, _statusRegistry, ProbeTimeout, _logger, ct)))
                 .ConfigureAwait(true);
 
             // Worst first so anything needing attention sits at the top.
@@ -132,12 +135,17 @@ public sealed partial class HealthRowViewModel : ViewModelBase
 
     public HealthRowViewModel(Camera camera) => Camera = camera;
 
-    // TCP-probes the dialed RTSP endpoint and collapses the result through the
-    // shared policy. A probe exception is just "not reachable" for the overview.
-    public async Task ProbeAsync(IReachabilityProbe probe, TimeSpan timeout, ILogger logger, CancellationToken ct)
+    // TCP-probes the dialed RTSP endpoint, reports it into the registry, then
+    // reads back the MERGED verdict — so a camera whose grid session is wedged
+    // shows Attention here, not a bare "reachable". A probe exception is just
+    // "not reachable" for the overview.
+    public async Task ProbeAsync(
+        IReachabilityProbe probe, CameraStatusRegistry registry, TimeSpan timeout, ILogger logger, CancellationToken ct)
     {
         var reachable = await probe.ProbeAsync(Camera, timeout, ct, logger).ConfigureAwait(true);
-        var result = CameraStatusPolicy.Resolve(new CameraStatusInputs(Reachable: reachable));
+        registry.ReportReachability(Camera.Id, reachable);
+
+        var result = registry.Get(Camera.Id);
         Status = result.Status;
         Reason = result.Reason;
     }

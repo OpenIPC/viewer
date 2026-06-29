@@ -46,6 +46,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private readonly UserSettingsService _userSettings;
     private readonly IDiscoveryService _discovery;
     private readonly IReachabilityProbe _reachability;
+    private readonly CameraStatusRegistry _statusRegistry;
     private readonly ManageGroupsDialogFactory _manageGroupsFactory;
     private bool _autoScanRanThisSession;
     private System.Collections.Generic.IReadOnlyList<Camera> _allCameras = System.Array.Empty<Camera>();
@@ -69,6 +70,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         UserSettingsService userSettings,
         IDiscoveryService discovery,
         IReachabilityProbe reachability,
+        CameraStatusRegistry statusRegistry,
         ILogger<CameraLibraryPageViewModel> logger)
     {
         _directory = directory;
@@ -81,13 +83,34 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         _userSettings = userSettings;
         _discovery = discovery;
         _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _logger = logger;
         WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
+        // Live status: a grid session's verdict (incl. Attention) flows here so a
+        // library row reflects it, not just its own probe.
+        _statusRegistry.Changed += OnStatusRegistryChanged;
         Cameras.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasCameras));
             OnPropertyChanged(nameof(IsEmpty));
         };
+    }
+
+    // Registry verdict moved for some camera — push it onto the matching row.
+    // Marshalled to the UI thread since the report can come off a session thread.
+    private void OnStatusRegistryChanged(object? sender, CameraStatusSnapshot snapshot)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var row in Cameras)
+            {
+                if (row.Camera.Id == snapshot.CameraId)
+                {
+                    row.ApplyStatus(snapshot.Result.Status);
+                    break;
+                }
+            }
+        });
     }
 
     // Config import (Phase 19.2): reload so imported cameras appear immediately.
@@ -223,7 +246,12 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
 
         Cameras.Clear();
         foreach (var camera in filtered)
-            Cameras.Add(new CameraRowViewModel(camera, _directory, _reachability, _logger, _gridMembership.Contains(camera.Id)));
+        {
+            var row = new CameraRowViewModel(camera, _directory, _reachability, _statusRegistry, _logger, _gridMembership.Contains(camera.Id));
+            // Seed from whatever the registry already knows (e.g. a live grid session).
+            row.ApplyStatus(_statusRegistry.Get(camera.Id).Status);
+            Cameras.Add(row);
+        }
 
         // Kick off reachability probes for the freshly-built rows. Fire-and-forget:
         // each row updates its own Status independently, in parallel.
@@ -481,6 +509,7 @@ public sealed partial class CameraRowViewModel : ViewModelBase
 
     private readonly CameraDirectoryService? _directory;
     private readonly IReachabilityProbe? _reachability;
+    private readonly CameraStatusRegistry? _statusRegistry;
     private readonly ILogger? _logger;
 
     public Camera Camera { get; }
@@ -491,41 +520,35 @@ public sealed partial class CameraRowViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isIncludedInGrid;
 
-    // Raw probe signals fed to the shared CameraStatusPolicy. The library has no
-    // live video session, so the policy only ever yields Connecting/Online/Offline
-    // here — never Attention (that needs a faulted session). ProbeInFlight starts
-    // true so a freshly-loaded row reads "Checking" until the first probe lands.
+    // Displayed status, pushed from the shared CameraStatusRegistry via the page's
+    // Changed handler. The registry merges this row's own probe with any live grid
+    // session, so a wedged grid stream surfaces here as Attention too. Starts
+    // Unknown → reads "Checking" until the first verdict lands.
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Status))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
-    private bool? _reachable;
+    private CameraStatus _status = CameraStatus.Unknown;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Status))]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    private bool _probeInFlight = true;
-
-    // Unified status, same model + enum the grid and single view use.
-    public CameraStatus Status =>
-        CameraStatusPolicy.Resolve(new CameraStatusInputs(Reachable: Reachable, ProbeInFlight: ProbeInFlight)).Status;
+    public void ApplyStatus(CameraStatus status) => Status = status;
 
     public string StatusText => Localizer.Instance[Status switch
     {
         CameraStatus.Online => "Library.Online",
+        CameraStatus.Attention => "Library.Attention",
         CameraStatus.Offline => "Library.Offline",
-        _ => "Library.Checking",
+        _ => "Library.Checking", // Connecting / Unknown
     }];
 
-    public CameraRowViewModel(Camera camera) : this(camera, null, null, null) { }
+    public CameraRowViewModel(Camera camera) : this(camera, null, null, null, null) { }
 
     public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, ILogger? logger)
-        : this(camera, directory, null, logger) { }
+        : this(camera, directory, null, null, logger) { }
 
-    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, ILogger? logger, bool? includedInGrid = null)
+    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, CameraStatusRegistry? statusRegistry, ILogger? logger, bool? includedInGrid = null)
     {
         Camera = camera;
         _directory = directory;
         _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _logger = logger;
         // Field (not property) so seeding the checkbox doesn't trigger a persist.
         // Defaults to the active-layout membership (Phase 19.1), else the flag.
@@ -533,26 +556,26 @@ public sealed partial class CameraRowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// TCP-probes the camera's RTSP port and updates <see cref="Status"/>.
-    /// Started from the UI thread; the connect runs off-thread and the status
-    /// write resumes on the UI thread (ConfigureAwait(true)).
+    /// TCP-probes the camera's RTSP port and reports it into the registry; the
+    /// merged verdict comes back via the page's Changed handler. With no registry
+    /// (design-time) it sets <see cref="Status"/> directly.
     /// </summary>
     public async Task RefreshReachabilityAsync(CancellationToken ct)
     {
         if (_reachability is null)
             return;
 
-        ProbeInFlight = true;
-        try
-        {
-            Reachable = await _reachability
-                .ProbeAsync(Camera, ProbeTimeout, ct, _logger)
-                .ConfigureAwait(true);
-        }
-        finally
-        {
-            ProbeInFlight = false;
-        }
+        _statusRegistry?.ReportReachability(Camera.Id, null, probeInFlight: true);
+        if (_statusRegistry is null) Status = CameraStatus.Connecting;
+
+        var reachable = await _reachability
+            .ProbeAsync(Camera, ProbeTimeout, ct, _logger)
+            .ConfigureAwait(true);
+
+        if (_statusRegistry is null)
+            Status = reachable ? CameraStatus.Online : CameraStatus.Offline;
+        else
+            _statusRegistry.ReportReachability(Camera.Id, reachable);
     }
 
     partial void OnIsIncludedInGridChanged(bool value)

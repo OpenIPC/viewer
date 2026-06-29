@@ -49,6 +49,8 @@ public static class SharedComposition
         services.AddSingleton<CameraDirectoryService>();
         services.AddSingleton<ICameraCredentialsProvider>(sp => sp.GetRequiredService<CameraDirectoryService>());
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
+        // Process-wide status merge point — grid sessions write, library + Health read.
+        services.AddSingleton<OpenIPC.Viewer.Core.Status.CameraStatusRegistry>();
 
         // Snapshots (Phase 14): HD-always capture + thumbnail generation.
         services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
