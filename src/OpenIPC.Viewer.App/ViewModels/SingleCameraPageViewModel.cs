@@ -117,6 +117,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private bool _showAllSettings;
     public ObservableCollection<MajesticConfigSectionViewModel> ConfigSections { get; } = new();
 
+    // Live ISP (Slice C): the isp-section rows, surfaced as their own panel that
+    // applies on the fly WITHOUT restarting the video stream (Majestic re-reads
+    // image params at runtime). Same row instances as the "All settings" editor,
+    // so edits stay in sync between the two views.
+    [ObservableProperty] private bool _showIsp;
+    [ObservableProperty] private bool _hasIsp;
+    public ObservableCollection<MajesticFieldRowViewModel> IspFields { get; } = new();
+
     [ObservableProperty] private bool _isRecording;
     [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
 
@@ -647,6 +655,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private void BuildConfigSections()
     {
         ConfigSections.Clear();
+        IspFields.Clear();
+        HasIsp = false;
         if (MajesticConfig is null) return;
 
         MajesticConfigModel model;
@@ -666,7 +676,12 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             foreach (var field in section.Fields)
                 rows.Add(new MajesticFieldRowViewModel(field, OptionOverrideFor(field)));
             ConfigSections.Add(new MajesticConfigSectionViewModel(section.Name, rows));
+
+            if (section.Name.Equals("isp", StringComparison.OrdinalIgnoreCase))
+                foreach (var row in rows) IspFields.Add(row);
         }
+
+        HasIsp = IspFields.Count > 0;
     }
 
     private IReadOnlyList<string>? OptionOverrideFor(MajesticConfigField field)
@@ -749,6 +764,66 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     [RelayCommand]
     private void ToggleAllSettings() => ShowAllSettings = !ShowAllSettings;
+
+    [RelayCommand]
+    private void ToggleIsp() => ShowIsp = !ShowIsp;
+
+    // Apply only the edited isp-section fields, live. Unlike Apply (video knobs)
+    // this does NOT tear down and re-acquire the stream — Majestic re-reads image
+    // params at runtime, so brightness/contrast/etc. take effect on the running
+    // feed. We refresh the in-memory RawJson locally instead of refetching, so a
+    // second apply correctly diffs against what we just wrote.
+    [RelayCommand]
+    private async Task ApplyIspLiveAsync()
+    {
+        if (!IsMajestic || MajesticConfig is null || IspFields.Count == 0) return;
+
+        MajesticConfigModel model;
+        try
+        {
+            model = _schema.Parse(MajesticConfig.RawJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Parse Majestic config for apply-isp failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+            return;
+        }
+
+        var editedByPath = IspFields.ToDictionary(r => r.Path, r => r.Value);
+        var edits = model.ComputeEdits(editedByPath);
+        if (edits.Count == 0)
+        {
+            ApplyStatus = Localizer.Instance["CameraPage.Majestic.NoChanges"];
+            return;
+        }
+
+        ApplyInProgress = true;
+        ApplyStatus = Localizer.Instance["CameraPage.ApplyingStatus"];
+        try
+        {
+            var updated = _schema.ApplyEdits(MajesticConfig.RawJson, edits);
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await _majestic.UpdateRawConfigAsync(endpoint, updated, cts.Token).ConfigureAwait(true);
+
+            // Keep local state current without a stream-disrupting reload.
+            MajesticConfig = MajesticConfig with { RawJson = updated };
+            ApplyStatus = Localizer.Instance["CameraPage.Majestic.IspApplied"];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Apply-isp Majestic config failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+        }
+        finally
+        {
+            ApplyInProgress = false;
+        }
+    }
 
     // Apply every edited field from the schema-driven editor. Diffs the rows
     // against the loaded config (so unchanged fields are never written), folds

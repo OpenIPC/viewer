@@ -313,6 +313,12 @@
                   Padding="10,4" FontSize="11"
                   Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                   CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+          <Button Content="{Binding [CameraPage.Majestic.Isp], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ToggleIspCommand}"
+                  IsVisible="{Binding HasIsp}"
+                  Padding="10,4" FontSize="11"
+                  Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
           <Button Content="{Binding [CameraPage.Majestic.EditRaw], Source={x:Static svc:Localizer.Instance}}"
                   Command="{Binding EditRawConfigCommand}"
                   IsVisible="{Binding IsRawConfigEditorEnabled}"
@@ -360,6 +366,53 @@
                      BorderThickness="0"
                      Foreground="{StaticResource TextSecondaryBrush}" />
           </ScrollViewer>
+        </Border>
+
+        <!-- Live ISP panel (Slice C): the isp-section fields, applied on the fly
+             without restarting the stream. Same row instances as the All-settings
+             editor, so edits stay in sync. -->
+        <Border IsVisible="{Binding ShowIsp}"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderWeakBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+          <StackPanel Spacing="6" Margin="2">
+            <ScrollViewer MaxHeight="260" Padding="8">
+              <ItemsControl ItemsSource="{Binding IspFields}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="160,*" Margin="0,1">
+                      <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                 FontSize="11" VerticalAlignment="Center"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <ToggleSwitch Grid.Column="1"
+                                    IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                    IsVisible="{Binding IsBool}"
+                                    OnContent="" OffContent=""
+                                    HorizontalAlignment="Left" />
+                      <ComboBox Grid.Column="1"
+                                ItemsSource="{Binding Options}"
+                                SelectedItem="{Binding Value, Mode=TwoWay}"
+                                IsVisible="{Binding IsCombo}"
+                                MinWidth="140" HorizontalAlignment="Left" />
+                      <TextBox Grid.Column="1"
+                               Text="{Binding Value, Mode=TwoWay}"
+                               IsVisible="{Binding IsTextual}"
+                               FontFamily="{StaticResource FontMono}"
+                               FontSize="11" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <Button Content="{Binding [CameraPage.Majestic.IspApply], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ApplyIspLiveCommand}"
+                    IsEnabled="{Binding !ApplyInProgress}"
+                    Margin="8,0,8,8" HorizontalAlignment="Left"
+                    Padding="14,4" FontSize="11"
+                    Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="4" />
+          </StackPanel>
         </Border>
 
         <!-- Schema-driven "All settings" editor (Slice B): every scalar field from
