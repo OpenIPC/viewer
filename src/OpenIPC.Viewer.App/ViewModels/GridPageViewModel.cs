@@ -110,6 +110,15 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         };
     }
 
+    // Health Center (Slice D): probe-based overview of every camera's status.
+    // Built inline — we already hold the directory, probe and logger factory.
+    [RelayCommand]
+    private async Task OpenHealthAsync()
+    {
+        var vm = new HealthCenterViewModel(_directory, _reachability, _loggerFactory.CreateLogger<HealthCenterViewModel>());
+        await _dialogs.ShowHealthCenterAsync(vm).ConfigureAwait(true);
+    }
+
     public async Task LoadAsync(CancellationToken ct)
     {
         if (_minimized) return;

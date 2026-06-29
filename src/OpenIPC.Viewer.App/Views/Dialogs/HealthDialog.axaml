@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+        xmlns:svc="using:OpenIPC.Viewer.App.Services"
+        xmlns:dialogs="using:OpenIPC.Viewer.App.Views.Dialogs"
+        x:Class="OpenIPC.Viewer.App.Views.Dialogs.HealthDialog"
+        x:DataType="vm:HealthCenterViewModel"
+        Title="{Binding [Health.WindowTitle], Source={x:Static svc:Localizer.Instance}}"
+        Width="520" Height="600"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{StaticResource Bg1Brush}">
+
+  <dialogs:HealthCenterContent Name="InnerContent" />
+
+</Window>
