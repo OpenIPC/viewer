@@ -356,28 +356,11 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     // (Offline). Fire-and-forget; a late result is dropped if we've recovered.
     private async Task ProbeReachabilityAsync()
     {
-        try
-        {
-            // The RTSP URI host can differ from Camera.Host (NAT, mDNS name) — probe
-            // the endpoint actually dialed. Default RTSP port 554 when unspecified.
-            var host = Camera.RtspMainUri.Host;
-            if (string.IsNullOrEmpty(host)) host = Camera.Host;
-            var port = Camera.RtspMainUri.Port;
-            if (port <= 0) port = 554;
-
-            var reachable = await _reachability
-                .IsReachableAsync(host, port, ReachabilityProbeTimeout, CancellationToken.None)
-                .ConfigureAwait(true);
-
-            if (State == SessionState.Failed)
-                PortReachable = reachable;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Reachability probe failed for tile {Camera}", Camera.Name);
-            if (State == SessionState.Failed)
-                PortReachable = false;
-        }
+        var reachable = await _reachability
+            .ProbeAsync(Camera, ReachabilityProbeTimeout, CancellationToken.None, _logger)
+            .ConfigureAwait(true);
+        if (State == SessionState.Failed)
+            PortReachable = reachable;
     }
 
     // Coordinator dropped every cached session (e.g. RtspTransport flipped in

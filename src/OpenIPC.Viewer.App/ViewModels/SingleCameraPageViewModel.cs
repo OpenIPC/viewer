@@ -235,26 +235,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // have since recovered.
     private async Task ProbeReachabilityAsync()
     {
-        try
-        {
-            var host = _camera.RtspMainUri.Host;
-            if (string.IsNullOrEmpty(host)) host = _camera.Host;
-            var port = _camera.RtspMainUri.Port;
-            if (port <= 0) port = 554;
-
-            var reachable = await _reachability
-                .IsReachableAsync(host, port, ReachabilityProbeTimeout, CancellationToken.None)
-                .ConfigureAwait(true);
-
-            if (State == SessionState.Failed)
-                PortReachable = reachable;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Reachability probe failed for camera {CameraId}", _camera.Id);
-            if (State == SessionState.Failed)
-                PortReachable = false;
-        }
+        var reachable = await _reachability
+            .ProbeAsync(_camera, ReachabilityProbeTimeout, CancellationToken.None, _logger)
+            .ConfigureAwait(true);
+        if (State == SessionState.Failed)
+            PortReachable = reachable;
     }
 
     // Combined visibility — both the user setting is on AND the session has

@@ -84,16 +84,14 @@ public sealed partial class HealthCenterViewModel : ViewModelBase
 
             // Worst first so anything needing attention sits at the top.
             var sorted = Rows
-                .OrderBy(r => SortRank(r.Status))
+                .OrderBy(r => HealthRollup.SortRank(r.Status))
                 .ThenBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
             Rows.Clear();
             foreach (var r in sorted)
                 Rows.Add(r);
 
-            OnlineCount = sorted.Count(r => r.Status == CameraStatus.Online);
-            AttentionCount = sorted.Count(r => r.Status == CameraStatus.Attention);
-            OfflineCount = sorted.Count(r => r.Status is CameraStatus.Offline or CameraStatus.Unknown);
+            (OnlineCount, AttentionCount, OfflineCount) = HealthRollup.Counts(sorted.Select(r => r.Status));
         }
         catch (Exception ex)
         {
@@ -104,15 +102,6 @@ public sealed partial class HealthCenterViewModel : ViewModelBase
             IsRefreshing = false;
         }
     }
-
-    private static int SortRank(CameraStatus s) => s switch
-    {
-        CameraStatus.Offline => 0,
-        CameraStatus.Attention => 1,
-        CameraStatus.Connecting => 2,
-        CameraStatus.Unknown => 3,
-        _ => 4, // Online
-    };
 }
 
 public sealed partial class HealthRowViewModel : ViewModelBase
@@ -144,25 +133,10 @@ public sealed partial class HealthRowViewModel : ViewModelBase
     public HealthRowViewModel(Camera camera) => Camera = camera;
 
     // TCP-probes the dialed RTSP endpoint and collapses the result through the
-    // shared policy. Reachability failures are swallowed into Offline — a probe
-    // exception is just "not reachable" for the overview.
+    // shared policy. A probe exception is just "not reachable" for the overview.
     public async Task ProbeAsync(IReachabilityProbe probe, TimeSpan timeout, ILogger logger, CancellationToken ct)
     {
-        bool reachable;
-        try
-        {
-            var host = Camera.RtspMainUri.Host;
-            if (string.IsNullOrEmpty(host)) host = Camera.Host;
-            var port = Camera.RtspMainUri.Port;
-            if (port <= 0) port = 554;
-            reachable = await probe.IsReachableAsync(host, port, timeout, ct).ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Health probe failed for {CameraId}", Camera.Id);
-            reachable = false;
-        }
-
+        var reachable = await probe.ProbeAsync(Camera, timeout, ct, logger).ConfigureAwait(true);
         var result = CameraStatusPolicy.Resolve(new CameraStatusInputs(Reachable: reachable));
         Status = result.Status;
         Reason = result.Reason;

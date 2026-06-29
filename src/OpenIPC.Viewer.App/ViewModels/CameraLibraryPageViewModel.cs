@@ -543,28 +543,11 @@ public sealed partial class CameraRowViewModel : ViewModelBase
             return;
 
         ProbeInFlight = true;
-
-        // RTSP default port is 554; Uri.Port yields -1 when the scheme has no
-        // registered default and the URI omits an explicit port.
-        var port = Camera.RtspMainUri.Port;
-        if (port <= 0) port = 554;
-
-        // Probe the endpoint the player actually dials. The RTSP URI host can
-        // differ from the Host field (ONVIF behind NAT, mDNS name vs IP) — a
-        // probe against the wrong one showed OFFLINE while the stream played.
-        var host = Camera.RtspMainUri.Host;
-        if (string.IsNullOrEmpty(host)) host = Camera.Host;
-
         try
         {
             Reachable = await _reachability
-                .IsReachableAsync(host, port, ProbeTimeout, ct)
+                .ProbeAsync(Camera, ProbeTimeout, ct, _logger)
                 .ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Reachability probe failed for {CameraId}", Camera.Id);
-            Reachable = false;
         }
         finally
         {
