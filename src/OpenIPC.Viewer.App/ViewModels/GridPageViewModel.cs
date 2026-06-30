@@ -66,6 +66,29 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     public int Columns => LayoutSize;
     public int Rows => LayoutSize;
 
+    // Pagination within a layout. The visual grid (LayoutSize² cells) is one
+    // page; a layout can hold more cameras than fit, so the member list is
+    // windowed by page. Only the current page's cameras get live sessions, so
+    // a 16-camera layout at 2×2 keeps just 4 decoders alive at a time.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPageDisplay))]
+    [NotifyPropertyChangedFor(nameof(CanPrevPage))]
+    [NotifyPropertyChangedFor(nameof(CanNextPage))]
+    private int _currentPage; // 0-based
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMultiplePages))]
+    [NotifyPropertyChangedFor(nameof(CanNextPage))]
+    private int _pageCount = 1;
+
+    // 1-based page numbers shown as "1 2 3 …" in the pager.
+    public ObservableCollection<int> Pages { get; } = new();
+
+    public int CurrentPageDisplay => CurrentPage + 1;
+    public bool HasMultiplePages => PageCount > 1;
+    public bool CanPrevPage => CurrentPage > 0;
+    public bool CanNextPage => CurrentPage + 1 < PageCount;
+
     public GridPageViewModel(
         CameraDirectoryService directory,
         LiveStreamCoordinator coordinator,
@@ -126,6 +149,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         var activeId = _userSettings.Current.ActiveLayoutId;
         ActiveLayout = Layouts.FirstOrDefault(l => l.Id.Value == activeId) ?? Layouts.FirstOrDefault();
         if (ActiveLayout is { } a) LayoutSize = a.GridSize;
+        CurrentPage = 0;
     }
 
     // Parameter is string because XAML CommandParameter literals are strings; using
@@ -135,12 +159,46 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     {
         if (!int.TryParse(size, out var n) || n < 1 || n > 5) return;
         LayoutSize = n;
+        CurrentPage = 0; // page size changed → repaginate from the first page
         if (ActiveLayout is { } a)
         {
             await _layouts.SetGridSizeAsync(a.Id, n, CancellationToken.None).ConfigureAwait(true);
             ActiveLayout = a with { GridSize = n };
             ReplaceLayoutInList(ActiveLayout);
         }
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    // --- Pagination -------------------------------------------------------
+    // CommandParameter is the boxed 1-based page number from the Pages binding;
+    // an object? parameter sidesteps the AsyncRelayCommand<int> render crash
+    // that string/int literals trigger (see SetLayoutAsync).
+    [RelayCommand]
+    private async Task GoToPageAsync(object? page)
+    {
+        if (page is null) return;
+        int oneBased;
+        try { oneBased = System.Convert.ToInt32(page, System.Globalization.CultureInfo.InvariantCulture); }
+        catch (Exception) { return; }
+        var target = oneBased - 1;
+        if (target < 0 || target >= PageCount || target == CurrentPage) return;
+        CurrentPage = target;
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task NextPageAsync()
+    {
+        if (!CanNextPage) return;
+        CurrentPage++;
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task PrevPageAsync()
+    {
+        if (!CanPrevPage) return;
+        CurrentPage--;
         await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
@@ -151,6 +209,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         if (layout is null || (ActiveLayout is { } cur && cur.Id == layout.Id)) return;
         ActiveLayout = layout;
         LayoutSize = layout.GridSize;
+        CurrentPage = 0; // new layout → start at its first page
         await PersistActiveLayoutAsync(layout.Id.Value).ConfigureAwait(true);
         await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
     }
@@ -244,40 +303,64 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     private async Task RefreshTilesAsync(CancellationToken ct)
     {
-        // Two caps stack: the layout selector (1×1 … 5×5 = up to 25 slots) and
-        // the Settings → Video → MaxConcurrentGridSessions ceiling. The lower
-        // of the two wins, so a "max 4" user with a 3x3 grid sees 4 live tiles
-        // and 5 empty placeholders (which still render via the Slots padding
-        // below).
-        var capacity = Math.Min(LayoutSize * LayoutSize, Math.Max(1, _userSettings.MaxConcurrentGridSessions));
+        // One page = the visual grid (LayoutSize² cells). Within a page two caps
+        // stack: the page size and the Settings → Video → MaxConcurrentGridSessions
+        // ceiling. The lower wins, so a "max 4" user with a 3×3 grid sees 4 live
+        // tiles and 5 empty placeholders (which still render via the Slots
+        // padding below).
+        var pageSize = LayoutSize * LayoutSize;
+        var capacity = Math.Min(pageSize, Math.Max(1, _userSettings.MaxConcurrentGridSessions));
 
-        // Tiles come from the active layout's ordered membership (Phase 19.1),
-        // mapped onto the loaded camera records. Falls back to the legacy
-        // IncludedInGrid flag if there's no layout (shouldn't happen post-migration).
-        List<Camera> visible;
+        // Full ordered membership of the active layout (Phase 19.1), mapped onto
+        // the loaded camera records. Falls back to the legacy IncludedInGrid flag
+        // if there's no layout (shouldn't happen post-migration).
+        List<Camera> members;
         if (ActiveLayout is { } layout)
         {
             var tileIds = await _layouts.GetTilesAsync(layout.Id, ct).ConfigureAwait(true);
             var byId = _allCameras.ToDictionary(c => c.Id);
-            visible = tileIds.Where(byId.ContainsKey).Select(id => byId[id]).Take(capacity).ToList();
+            members = tileIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
         }
         else
         {
-            visible = _allCameras.Where(c => c.IncludedInGrid).Take(capacity).ToList();
+            members = _allCameras.Where(c => c.IncludedInGrid).ToList();
         }
+
+        // Repaginate: ceil(members / pageSize), at least one page. Clamp the
+        // current page in case membership shrank since the last render.
+        var pageCount = Math.Max(1, (members.Count + pageSize - 1) / pageSize);
+        if (CurrentPage >= pageCount) CurrentPage = pageCount - 1;
+        if (CurrentPage < 0) CurrentPage = 0;
+        UpdatePager(pageCount);
+
+        // Window into the current page, then cap live tiles. capacity ≤ pageSize,
+        // so any remainder of the page beyond the session cap shows as empty slots.
+        var visible = members.Skip(CurrentPage * pageSize).Take(capacity).ToList();
         var visibleIds = visible.Select(c => c.Id).ToHashSet();
 
-        // Drop tiles that aren't in the new visible set.
+        // Drop tiles that aren't in the new visible set. Flipping pages swaps the
+        // whole set, and each outgoing session's DisposeAsync joins its decode
+        // thread (up to ~2s if a stalled RTSP read is unwinding). Awaiting that
+        // inline left the grid blank until every old tile finished — the "hang"
+        // on page switch. Instead, remove them from the collection now and tear
+        // down in the background, in parallel.
+        //
+        // This is also cap-safe: LiveStreamCoordinator.ReleaseAsync frees the
+        // session-registry slot synchronously (under its lock) before the slow
+        // thread-join, and kicking off DisposeAsync below runs that synchronous
+        // prefix before this method returns to acquire the new page's sessions.
+        // So the new tiles never race the MaxConcurrentSessions ceiling.
+        var stale = new List<CameraTileViewModel>();
         for (var i = Tiles.Count - 1; i >= 0; i--)
         {
             if (!visibleIds.Contains(Tiles[i].Camera.Id))
             {
-                var stale = Tiles[i];
+                stale.Add(Tiles[i]);
                 Tiles.RemoveAt(i);
-                try { await stale.DisposeAsync().ConfigureAwait(true); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Error releasing tile"); }
             }
         }
+        if (stale.Count > 0)
+            _ = DisposeTilesInBackgroundAsync(stale);
 
         // Reconcile against the freshly-loaded records: keep unchanged tiles,
         // rebuild ones whose stream URL was edited, add new ones. Without the
@@ -384,15 +467,18 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
         try
         {
-            // Tiles is only the visible (capacity-capped) prefix of the layout's
-            // membership; reorder within the full member list so cameras beyond
-            // the cap keep their place.
+            // Tiles holds only the current page's visible prefix; reorder within
+            // the full member list (offset by the page) so cameras on other pages
+            // and beyond the session cap keep their place.
+            var offset = CurrentPage * LayoutSize * LayoutSize;
+            var from = offset + fromIndex;
+            var to = offset + toIndex;
             var full = (await _layouts.GetTilesAsync(a.Id, ct).ConfigureAwait(true)).ToList();
-            if (fromIndex < full.Count && toIndex < full.Count)
+            if (from < full.Count && to < full.Count)
             {
-                var moved = full[fromIndex];
-                full.RemoveAt(fromIndex);
-                full.Insert(toIndex, moved);
+                var moved = full[from];
+                full.RemoveAt(from);
+                full.Insert(to, moved);
                 await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
             }
         }
@@ -413,6 +499,29 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         RebuildSlots();
         try { await tile.DisposeAsync().ConfigureAwait(true); }
         catch (Exception ex) { _logger.LogWarning(ex, "Error releasing closed tile"); }
+    }
+
+    // Tear down outgoing tiles off the UI path, in parallel. Each DisposeAsync
+    // releases its coordinator slot synchronously, then joins the decode thread
+    // (the slow part) in the background — so a page flip stays responsive.
+    private async Task DisposeTilesInBackgroundAsync(IReadOnlyList<CameraTileViewModel> tiles)
+    {
+        await Task.WhenAll(tiles.Select(async tile =>
+        {
+            try { await tile.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Error releasing tile in background"); }
+        })).ConfigureAwait(false);
+    }
+
+    // Sync the pager (page count + 1-based page-number list) after a refresh.
+    private void UpdatePager(int pageCount)
+    {
+        PageCount = pageCount;
+        if (Pages.Count != pageCount)
+        {
+            Pages.Clear();
+            for (var i = 1; i <= pageCount; i++) Pages.Add(i);
+        }
     }
 
     // Re-pad Slots to the visual grid size (LayoutSize²), filling trailing

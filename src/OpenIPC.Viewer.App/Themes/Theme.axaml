@@ -62,6 +62,8 @@
   <StreamGeometry x:Key="IconCheck">M20,6 L9,17 L4,12</StreamGeometry>
   <StreamGeometry x:Key="IconChevronRight">M9,18 L15,12 L9,6</StreamGeometry>
   <StreamGeometry x:Key="IconChevronLeft">M15,18 L9,12 L15,6</StreamGeometry>
+  <!-- IconMaximize — enter fullscreen / kiosk (Phase 20). -->
+  <StreamGeometry x:Key="IconMaximize">M8,3 H5 a2,2 0 0 0 -2,2 V8 M21,8 V5 a2,2 0 0 0 -2,-2 h-3 M3,16 v3 a2,2 0 0 0 2,2 h3 M16,21 h3 a2,2 0 0 0 2,-2 v-3</StreamGeometry>
   <!-- IconPlay / IconPause — transport for the recordings player (Phase 16). -->
   <StreamGeometry x:Key="IconPlay">M6,3 L20,12 L6,21 Z</StreamGeometry>
   <StreamGeometry x:Key="IconPause">M6,4 H10 V20 H6 Z M14,4 H18 V20 H14 Z</StreamGeometry>

@@ -30,6 +30,9 @@ public sealed partial class SettingsPage : UserControl
         if (_vm is not null)
         {
             _vm.PropertyChanged += OnVmPropertyChanged;
+            // Hydrate the credential-sync passphrase from the secrets store (async,
+            // can't run in the VM's synchronous Load()).
+            _ = _vm.LoadConfigSyncSecretAsync();
             ApplyLayout();
         }
     }

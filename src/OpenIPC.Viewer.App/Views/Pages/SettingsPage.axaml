@@ -439,6 +439,56 @@
                      Text="{Binding BackupStatus}"
                      IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+          <!-- Network config auto-sync (Phase 20) -->
+          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
+          <TextBlock Classes="section-title"
+                     Text="{Binding [Settings.ConfigSync.Section], Source={x:Static svc:Localizer.Instance}}" />
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     TextWrapping="Wrap"
+                     Text="{Binding [Settings.ConfigSync.Description], Source={x:Static svc:Localizer.Instance}}" />
+          <CheckBox IsChecked="{Binding ConfigSyncEnabled}"
+                    Content="{Binding [Settings.ConfigSync.Enable], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <StackPanel Spacing="6" IsEnabled="{Binding ConfigSyncEnabled}">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.ConfigSync.PathLabel], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBox Text="{Binding ConfigSyncPath, Mode=TwoWay}"
+                     PlaceholderText="{Binding [Settings.ConfigSync.PathPlaceholder], Source={x:Static svc:Localizer.Instance}}"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="{StaticResource FontSizeSm}" />
+          </StackPanel>
+          <CheckBox IsChecked="{Binding ConfigSyncIncludeCredentials}"
+                    IsEnabled="{Binding ConfigSyncEnabled}"
+                    Content="{Binding [Settings.ConfigSync.IncludeCreds], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          <StackPanel Spacing="6" IsVisible="{Binding ConfigSyncIncludeCredentials}"
+                      IsEnabled="{Binding ConfigSyncEnabled}">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.ConfigSync.Passphrase], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBox Text="{Binding ConfigSyncPassphrase, Mode=TwoWay}"
+                     PasswordChar="•"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="{StaticResource FontSizeSm}" />
+            <TextBlock Foreground="{StaticResource TextTertiaryBrush}"
+                       FontSize="{StaticResource FontSizeSm}"
+                       TextWrapping="Wrap"
+                       Text="{Binding [Settings.ConfigSync.PassphraseHint], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+          <TextBlock Foreground="{StaticResource WarningBrush}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ConfigSyncEnabled}"
+                     Text="{Binding [Settings.ConfigSync.MirrorWarning], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="outlined"
+                  IsEnabled="{Binding ConfigSyncEnabled}"
+                  Content="{Binding [Settings.ConfigSync.SyncNow], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding SyncConfigNowCommand}" />
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     TextWrapping="Wrap"
+                     Text="{Binding ConfigSyncStatusText}"
+                     IsVisible="{Binding ConfigSyncStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
           <!-- Notifications (Phase 19.3) -->
           <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
           <TextBlock Classes="section-title"

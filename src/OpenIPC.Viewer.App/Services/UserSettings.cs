@@ -49,6 +49,21 @@ public sealed record UserSettings(
     // Tabbed layouts (Phase 19.1). Id of the layout shown in the Live grid; 0 =
     // not yet chosen → fall back to the first layout.
     int ActiveLayoutId = 0,
+    // Network config auto-sync (Phase 20). When enabled, on startup the app
+    // MIRRORS its cameras + layouts from the JSON at ConfigSyncPath (a local or
+    // UNC path, e.g. a shared folder) — the file is the source of truth, so
+    // locally-added cameras/layouts are removed. Off (default) → no sync, local
+    // editing as usual. If the path is unreachable the last-applied local config
+    // keeps working. ConfigSyncSignature is the SHA-256 of the last-applied file
+    // content, so an unchanged file isn't re-imported on every launch.
+    bool ConfigSyncEnabled = false,
+    string ConfigSyncPath = "",
+    string ConfigSyncSignature = "",
+    // Opt-in (Phase 20 Slice B): also sync camera passwords, carried ENCRYPTED in
+    // the file with a fleet passphrase (the passphrase itself lives in the OS
+    // secrets store, never in this JSON). Off → topology only, passwords stay
+    // local. The passphrase is read from ISecretsStore under ConfigSyncSecretKey.
+    bool ConfigSyncIncludeCredentials = false,
     // Notifications (Phase 19.3).
     bool NotificationsEnabled = true,
     bool NotifyOnMotion = true,

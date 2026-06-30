@@ -38,6 +38,8 @@ public partial class MainView : UserControl
 
     private bool _isWideLayout = true;
     private bool _isFullscreen;
+    // Window state to restore when desktop fullscreen exits (Normal or Maximized).
+    private WindowState _preFullscreenState = WindowState.Normal;
     private bool _showSidebar = true;
     private bool _showBottomNav;
     private Thickness _contentPadding = WidePadding;
@@ -98,9 +100,27 @@ public partial class MainView : UserControl
         _isFullscreen = on;
         UpdateChrome();
 
+        var top = TopLevel.GetTopLevel(this);
+
+        // Desktop: drive a real fullscreen window (kiosk). Mobile has no Window
+        // here — the InsetsManager below hides the system bars instead.
+        if (top is Window window)
+        {
+            if (on)
+            {
+                if (window.WindowState != WindowState.FullScreen)
+                    _preFullscreenState = window.WindowState;
+                window.WindowState = WindowState.FullScreen;
+            }
+            else
+            {
+                window.WindowState = _preFullscreenState;
+            }
+        }
+
         // System status/navigation bars follow the app chrome on mobile;
         // InsetsManager is null on desktop so this is a no-op there.
-        var insets = TopLevel.GetTopLevel(this)?.InsetsManager;
+        var insets = top?.InsetsManager;
         if (insets is not null)
             insets.IsSystemBarVisible = !on;
     }
