@@ -62,6 +62,11 @@ public sealed class MajesticConfigModel
                 if (long.TryParse(a, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ia)
                     && long.TryParse(b, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ib))
                     return ia == ib;
+                // An int field can receive a "30.0"-style value from the editor;
+                // fall back to numeric comparison so it isn't a spurious change.
+                if (double.TryParse(a, NumberStyles.Float, CultureInfo.InvariantCulture, out var dia)
+                    && double.TryParse(b, NumberStyles.Float, CultureInfo.InvariantCulture, out var dib))
+                    return dia.Equals(dib);
                 return string.Equals(a, b, StringComparison.Ordinal);
             case MajesticFieldKind.Number:
                 if (double.TryParse(a, NumberStyles.Float, CultureInfo.InvariantCulture, out var da)
