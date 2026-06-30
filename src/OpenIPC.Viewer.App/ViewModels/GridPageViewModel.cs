@@ -32,6 +32,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine _analytics;
     private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly AudioMonitor _audio;
+    private readonly IReachabilityProbe _reachability;
+    private readonly OpenIPC.Viewer.Core.Status.CameraStatusRegistry _statusRegistry;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
     private readonly IDialogService _dialogs;
     private readonly ILoggerFactory _loggerFactory;
@@ -74,6 +76,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine analytics,
         AnalyticsBootstrap analyticsBootstrap,
         AudioMonitor audio,
+        IReachabilityProbe reachability,
+        OpenIPC.Viewer.Core.Status.CameraStatusRegistry statusRegistry,
         OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
         IDialogService dialogs,
         ILoggerFactory loggerFactory)
@@ -85,6 +89,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         _analytics = analytics;
         _analyticsBootstrap = analyticsBootstrap;
         _audio = audio;
+        _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _layouts = layouts;
         _dialogs = dialogs;
         _loggerFactory = loggerFactory;
@@ -105,6 +111,15 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             try { await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => RefreshTilesAsync(CancellationToken.None)); }
             catch (Exception ex) { _logger.LogWarning(ex, "Grid refresh after settings change failed"); }
         };
+    }
+
+    // Health Center (Slice D): probe-based overview of every camera's status.
+    // Built inline — we already hold the directory, probe and logger factory.
+    [RelayCommand]
+    private async Task OpenHealthAsync()
+    {
+        var vm = new HealthCenterViewModel(_directory, _reachability, _statusRegistry, _loggerFactory.CreateLogger<HealthCenterViewModel>());
+        await _dialogs.ShowHealthCenterAsync(vm).ConfigureAwait(true);
     }
 
     public async Task LoadAsync(CancellationToken ct)
@@ -308,7 +323,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 try { await existing.DisposeAsync().ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
-                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _loggerFactory.CreateLogger<CameraTileViewModel>());
                 rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
@@ -316,7 +331,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 continue;
             }
 
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _loggerFactory.CreateLogger<CameraTileViewModel>());
             tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }

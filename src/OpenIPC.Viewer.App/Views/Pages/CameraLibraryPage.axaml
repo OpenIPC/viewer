@@ -152,7 +152,7 @@
                         <TextBlock Text="{Binding StatusText}"
                                    FontFamily="{StaticResource FontMono}"
                                    FontSize="10"
-                                   Foreground="{Binding Status, Converter={x:Static conv:ReachabilityColorConverter.Instance}}" />
+                                   Foreground="{Binding Status, Converter={x:Static conv:LibraryStatusColorConverter.Instance}}" />
                       </Border>
                     </WrapPanel>
                   </StackPanel>

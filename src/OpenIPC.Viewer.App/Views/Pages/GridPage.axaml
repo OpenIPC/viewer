@@ -20,6 +20,13 @@
                  VerticalAlignment="Center" />
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+        <Button Command="{Binding OpenHealthCommand}"
+                Padding="10,6" CornerRadius="6" Margin="0,0,8,0"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Health.Tooltip], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconActivity}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
         <Button Content="1×1" Command="{Binding SetLayoutCommand}" CommandParameter="1"
                 Padding="10,6" CornerRadius="6"
                 Background="{StaticResource Bg2Brush}"
@@ -175,7 +182,7 @@
                       <!-- Top-right: state badge -->
                       <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
                               CornerRadius="3" Padding="6,2"
-                              Background="{Binding State, Converter={x:Static conv:StateColorConverter.Instance}}">
+                              Background="{Binding Status, Converter={x:Static conv:CameraStatusColorConverter.Instance}}">
                         <TextBlock Text="{Binding StateLabel}" Foreground="White"
                                    FontFamily="{StaticResource FontMono}" FontSize="10" />
                       </Border>

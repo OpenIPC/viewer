@@ -184,7 +184,7 @@
       <Border IsVisible="{Binding IsFailed}"
               Background="#A0000000">
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420">
-          <TextBlock Text="{Binding [Stream.Disconnected], Source={x:Static svc:Localizer.Instance}}"
+          <TextBlock Text="{Binding StatusHeading}"
                      Foreground="White"
                      FontSize="{StaticResource FontSizeLg}"
                      FontWeight="SemiBold"

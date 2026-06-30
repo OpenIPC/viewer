@@ -1,0 +1,104 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.HealthCenterContent"
+             x:DataType="vm:HealthCenterViewModel"
+             MaxWidth="520" MaxHeight="640"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24" MinWidth="420">
+
+    <!-- Header: title + refresh -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding [Health.Title], Source={x:Static svc:Localizer.Instance}}"
+                 FontSize="{StaticResource FontSizeLg}"
+                 FontWeight="SemiBold"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1"
+              Command="{Binding RefreshCommand}"
+              IsEnabled="{Binding !IsRefreshing}"
+              Padding="10,6" CornerRadius="6"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              ToolTip.Tip="{Binding [Health.Refresh], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconRadar}"
+              Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+      </Button>
+    </Grid>
+
+    <!-- Summary line -->
+    <TextBlock Grid.Row="1"
+               Text="{Binding SummaryText}"
+               Foreground="{StaticResource TextSecondaryBrush}"
+               FontFamily="{StaticResource FontMono}"
+               FontSize="{StaticResource FontSizeSm}"
+               Margin="0,8,0,16" />
+
+    <!-- Empty state -->
+    <TextBlock Grid.Row="2"
+               Text="{Binding [Health.Empty], Source={x:Static svc:Localizer.Instance}}"
+               IsVisible="{Binding Rows.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"
+               Foreground="{StaticResource TextSecondaryBrush}"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+
+    <!-- Camera list -->
+    <ScrollViewer Grid.Row="2" IsVisible="{Binding Rows.Count}">
+      <ItemsControl ItemsSource="{Binding Rows}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="6" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:HealthRowViewModel">
+            <Border Background="{StaticResource Bg2Brush}"
+                    CornerRadius="6"
+                    Padding="12,10">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Ellipse Grid.Column="0"
+                         Width="10" Height="10"
+                         VerticalAlignment="Center"
+                         Margin="0,0,12,0"
+                         Fill="{Binding Status, Converter={x:Static conv:CameraStatusColorConverter.Instance}}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                  <TextBlock Text="{Binding HostAndPort}"
+                             Foreground="{StaticResource TextTertiaryBrush}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="{StaticResource FontSizeSm}" />
+                </StackPanel>
+                <TextBlock Grid.Column="2"
+                           Text="{Binding ReasonText}"
+                           VerticalAlignment="Center"
+                           TextAlignment="Right"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="{StaticResource FontSizeSm}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <Button Grid.Row="3"
+            Name="CloseButton"
+            Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
+            HorizontalAlignment="Right"
+            Margin="0,24,0,0"
+            Padding="14,6"
+            Background="Transparent"
+            BorderBrush="{StaticResource BorderMediumBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Foreground="{StaticResource TextPrimaryBrush}" />
+
+  </Grid>
+
+</UserControl>
