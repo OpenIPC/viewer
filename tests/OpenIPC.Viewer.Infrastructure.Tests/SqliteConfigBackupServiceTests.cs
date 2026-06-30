@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.IO;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 
 namespace OpenIPC.Viewer.Infrastructure.Tests;
@@ -15,7 +17,17 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
             try { if (File.Exists(db)) File.Delete(db); } catch { /* temp */ }
     }
 
-    private async Task<(SqliteCameraRepository cams, SqliteLayoutRepository layouts, SqliteConfigBackupService backup)> NewDbAsync()
+    // In-memory secrets store so credential export/mirror can be exercised.
+    private sealed class FakeSecrets : ISecretsStore
+    {
+        private readonly ConcurrentDictionary<string, string> _store = new();
+        public Task<string?> GetAsync(string key, CancellationToken ct) =>
+            Task.FromResult(_store.TryGetValue(key, out var v) ? v : null);
+        public Task SetAsync(string key, string value, CancellationToken ct) { _store[key] = value; return Task.CompletedTask; }
+        public Task RemoveAsync(string key, CancellationToken ct) { _store.TryRemove(key, out _); return Task.CompletedTask; }
+    }
+
+    private async Task<(SqliteCameraRepository cams, SqliteLayoutRepository layouts, SqliteConfigBackupService backup, FakeSecrets secrets)> NewDbAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), $"oipc-backup-{Guid.NewGuid():N}.db");
         _dbs.Add(path);
@@ -23,7 +35,8 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
         await new MigrationRunner(factory, NullLogger<MigrationRunner>.Instance).MigrateAsync(CancellationToken.None);
         var cams = new SqliteCameraRepository(factory);
         var layouts = new SqliteLayoutRepository(factory);
-        return (cams, layouts, new SqliteConfigBackupService(cams, layouts));
+        var secrets = new FakeSecrets();
+        return (cams, layouts, new SqliteConfigBackupService(cams, layouts, secrets), secrets);
     }
 
     [Fact]
@@ -35,7 +48,7 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
         var def = (await src.layouts.GetAllAsync(CancellationToken.None))[0];
         await src.layouts.SetTilesAsync(def.Id, new[] { b, a }, CancellationToken.None);
 
-        var json = await src.backup.ExportAsync(CancellationToken.None);
+        var json = await src.backup.ExportAsync(null, CancellationToken.None);
 
         // Import into a fresh machine/db.
         var dst = await NewDbAsync();
@@ -61,7 +74,7 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
         var src = await NewDbAsync();
         await src.cams.AddAsync(Cam("A"), CancellationToken.None);
         await src.cams.AddAsync(Cam("B"), CancellationToken.None);
-        var json = await src.backup.ExportAsync(CancellationToken.None);
+        var json = await src.backup.ExportAsync(null, CancellationToken.None);
 
         // Re-importing into the same db updates both.
         var preview = await src.backup.PreviewAsync(json, CancellationToken.None);
@@ -82,9 +95,76 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
     {
         var src = await NewDbAsync();
         await src.cams.AddAsync(Cam("A"), CancellationToken.None);
-        var json = await src.backup.ExportAsync(CancellationToken.None);
+        var json = await src.backup.ExportAsync(null, CancellationToken.None);
         // No plaintext credential material — the entity carries none.
         Assert.DoesNotContain("hunter2", json);
+    }
+
+    [Fact]
+    public async Task Export_WithPassphrase_EncryptsCredentials_AndMirrorRestoresThem()
+    {
+        var src = await NewDbAsync();
+        var cam = Cam("A") with { UsernameRef = "u-ref", PasswordRef = "p-ref" };
+        var id = await src.cams.AddAsync(cam, CancellationToken.None);
+        await src.secrets.SetAsync("u-ref", "admin", CancellationToken.None);
+        await src.secrets.SetAsync("p-ref", "hunter2", CancellationToken.None);
+
+        var json = await src.backup.ExportAsync("fleet-key", CancellationToken.None);
+        // Password is present but only as ciphertext — never plaintext.
+        Assert.DoesNotContain("hunter2", json);
+        Assert.Contains("CredsSalt", json);
+
+        // Mirror into a fresh machine with the same passphrase → secrets restored.
+        var dst = await NewDbAsync();
+        await dst.backup.MirrorAsync(json, "fleet-key", CancellationToken.None);
+        Assert.Equal("admin", await dst.secrets.GetAsync("u-ref", CancellationToken.None));
+        Assert.Equal("hunter2", await dst.secrets.GetAsync("p-ref", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Mirror_WrongPassphrase_DoesNotRestoreCredentials()
+    {
+        var src = await NewDbAsync();
+        var cam = Cam("A") with { UsernameRef = "u-ref", PasswordRef = "p-ref" };
+        await src.cams.AddAsync(cam, CancellationToken.None);
+        await src.secrets.SetAsync("u-ref", "admin", CancellationToken.None);
+        await src.secrets.SetAsync("p-ref", "hunter2", CancellationToken.None);
+        var json = await src.backup.ExportAsync("fleet-key", CancellationToken.None);
+
+        var dst = await NewDbAsync();
+        await dst.backup.MirrorAsync(json, "wrong-key", CancellationToken.None);
+        Assert.Null(await dst.secrets.GetAsync("p-ref", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Mirror_RemovesCamerasAbsentFromFile()
+    {
+        var src = await NewDbAsync();
+        await src.cams.AddAsync(Cam("Keep"), CancellationToken.None);
+        var json = await src.backup.ExportAsync(null, CancellationToken.None);
+
+        // dst starts with an extra camera that the file omits → mirror drops it.
+        var dst = await NewDbAsync();
+        await dst.cams.AddAsync(Cam("Stale"), CancellationToken.None);
+        var result = await dst.backup.MirrorAsync(json, null, CancellationToken.None);
+
+        Assert.Equal(1, result.CamerasRemoved);
+        var cams = await dst.cams.GetAllAsync(CancellationToken.None);
+        Assert.Single(cams);
+        Assert.Equal("Keep", cams[0].Name);
+    }
+
+    [Fact]
+    public async Task Mirror_EmptyCameraFile_DoesNotWipeLocalCameras()
+    {
+        var dst = await NewDbAsync();
+        await dst.cams.AddAsync(Cam("Local"), CancellationToken.None);
+        var emptyJson = "{ \"SchemaVersion\": 2, \"Cameras\": [], \"Layouts\": [] }";
+
+        var result = await dst.backup.MirrorAsync(emptyJson, null, CancellationToken.None);
+
+        Assert.Equal(0, result.CamerasRemoved);
+        Assert.Single(await dst.cams.GetAllAsync(CancellationToken.None));
     }
 
     private static Camera Cam(string name) => new(

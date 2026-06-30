@@ -18,6 +18,11 @@ public sealed record WindowMinimizedMessage;
 
 public sealed record WindowRestoredMessage;
 
+// Desktop kiosk fullscreen (Phase 20): toggles a chrome-free fullscreen grid
+// for an unattended guard station. Raised by the grid's fullscreen button and
+// the F11 key; MainWindowViewModel owns the state.
+public sealed record ToggleKioskMessage;
+
 // Raised by a grid tile's Close button (error cell). The grid drops the tile
 // for this session; it comes back on the next Live-tab refresh since the
 // camera's IncludedInGrid flag is untouched.

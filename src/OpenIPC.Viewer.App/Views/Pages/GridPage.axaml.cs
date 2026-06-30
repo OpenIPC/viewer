@@ -153,6 +153,12 @@ public sealed partial class GridPage : UserControl
         }
     }
 
+    // Enter the desktop kiosk fullscreen (Phase 20). MainWindowViewModel owns
+    // the state; F11/Esc toggle it too. Exit chrome stays hidden by design —
+    // the guard sees just the grid.
+    private void OnFullscreenClick(object? sender, RoutedEventArgs e)
+        => WeakReferenceMessenger.Default.Send(new ToggleKioskMessage());
+
     private void OnTileTapped(object? sender, TappedEventArgs e)
     {
         if (sender is not Control { DataContext: CameraTileViewModel tile }) return;

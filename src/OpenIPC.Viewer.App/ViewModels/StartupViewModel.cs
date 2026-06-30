@@ -21,6 +21,7 @@ public sealed partial class StartupViewModel : ViewModelBase
 {
     private readonly IMigrationRunner _migrations;
     private readonly EventIngestionService _events;
+    private readonly Services.ConfigSyncService _configSync;
     private readonly ILogger<StartupViewModel> _logger;
 
     [ObservableProperty]
@@ -40,10 +41,12 @@ public sealed partial class StartupViewModel : ViewModelBase
     public StartupViewModel(
         IMigrationRunner migrations,
         EventIngestionService events,
+        Services.ConfigSyncService configSync,
         ILogger<StartupViewModel> logger)
     {
         _migrations = migrations;
         _events = events;
+        _configSync = configSync;
         _logger = logger;
     }
 
@@ -59,6 +62,17 @@ public sealed partial class StartupViewModel : ViewModelBase
             // UI thread so the splash animates; ConfigureAwait(true) resumes on
             // the UI thread to update the bound properties.
             await Task.Run(() => _migrations.MigrateAsync(CancellationToken.None)).ConfigureAwait(true);
+
+            // Network config auto-sync (Phase 20): mirror cameras+layouts from a
+            // shared file before the main window opens. Best-effort — it never
+            // throws (unreachable path falls back to the local config), so a
+            // down share doesn't stall startup.
+            if (_configSync.IsConfigured)
+            {
+                StatusText = Localizer.Instance["Startup.SyncingConfig"];
+                Progress = 0.45;
+                await Task.Run(() => _configSync.RunStartupSyncAsync(CancellationToken.None)).ConfigureAwait(true);
+            }
 
             StatusText = Localizer.Instance["Startup.StartingServices"];
             Progress = 0.7;

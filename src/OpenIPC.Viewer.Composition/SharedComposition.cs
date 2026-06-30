@@ -177,6 +177,10 @@ public static class SharedComposition
         // subscription is wired up (singletons are lazy by default).
         services.AddSingleton<LiveStreamSettingsBridge>();
 
+        // Network config auto-sync (Phase 20): mirrors cameras+layouts from a
+        // shared file at startup. Run from StartupViewModel and Settings.
+        services.AddSingleton<ConfigSyncService>();
+
         // ViewModels — singletons so navigation preserves state across
         // sidebar/tab switches and messenger registrations stay alive.
         services.AddSingleton<MainWindowViewModel>();

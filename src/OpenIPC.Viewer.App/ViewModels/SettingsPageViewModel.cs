@@ -22,6 +22,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly ISshHostKeyStore _hostKeys;
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
+    private readonly ConfigSyncService _configSync;
     private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
     private bool _suppressSave;
 
@@ -150,6 +151,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         INetworkInterfaceProvider nics,
         ISshHostKeyStore hostKeys,
         OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
+        ConfigSyncService configSync,
         OpenIPC.Viewer.Core.Notifications.INotificationService notifications)
     {
         _settings = settings;
@@ -157,6 +159,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         _dialogs = dialogs;
         _hostKeys = hostKeys;
         _backup = backup;
+        _configSync = configSync;
         _notifications = notifications;
 
         var options = new List<NetworkInterfaceOption>
@@ -212,6 +215,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             QuietHoursEnabled = s.QuietHoursEnabled;
             QuietHoursStartHour = s.QuietHoursStartHour;
             QuietHoursEndHour = s.QuietHoursEndHour;
+            ConfigSyncEnabled = s.ConfigSyncEnabled;
+            ConfigSyncPath = s.ConfigSyncPath;
+            ConfigSyncIncludeCredentials = s.ConfigSyncIncludeCredentials;
         }
         finally { _suppressSave = false; }
     }
@@ -268,6 +274,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             QuietHoursEnabled = QuietHoursEnabled,
             QuietHoursStartHour = QuietHoursStartHour,
             QuietHoursEndHour = QuietHoursEndHour,
+            ConfigSyncEnabled = ConfigSyncEnabled,
+            ConfigSyncPath = ConfigSyncPath,
+            ConfigSyncIncludeCredentials = ConfigSyncIncludeCredentials,
         };
         // Fire-and-forget; binding setters are synchronous and any save
         // error is logged inside UpdateAsync.
@@ -339,6 +348,64 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             Localizer.Instance["Settings.Notifications.TestBody"],
             OpenIPC.Viewer.Core.Events.EventKind.Motion));
 
+    // --- Network config auto-sync (Phase 20) ------------------------------
+    [ObservableProperty] private bool _configSyncEnabled;
+    [ObservableProperty] private string _configSyncPath = "";
+    [ObservableProperty] private bool _configSyncIncludeCredentials;
+    [ObservableProperty] private string _configSyncPassphrase = "";
+    [ObservableProperty] private string? _configSyncStatusText;
+
+    partial void OnConfigSyncEnabledChanged(bool value) => Persist();
+    partial void OnConfigSyncPathChanged(string value) => Persist();
+    partial void OnConfigSyncIncludeCredentialsChanged(bool value) => Persist();
+
+    // Persist the passphrase to the secrets store (not usersettings.json), so it
+    // stays DPAPI-encrypted at rest. Skipped during the async hydrate below.
+    partial void OnConfigSyncPassphraseChanged(string value)
+    {
+        if (_suppressSave) return;
+        _ = _configSync.SetPassphraseAsync(value, CancellationToken.None);
+    }
+
+    // Loaded from the secrets store after construction (Load() is synchronous and
+    // can't await). Called from the Settings view once it's attached.
+    public async Task LoadConfigSyncSecretAsync()
+    {
+        var pass = await _configSync.GetPassphraseAsync(CancellationToken.None).ConfigureAwait(true);
+        _suppressSave = true;
+        try { ConfigSyncPassphrase = pass ?? ""; }
+        finally { _suppressSave = false; }
+    }
+
+    [RelayCommand]
+    private async Task SyncConfigNowAsync()
+    {
+        try
+        {
+            // Persist the latest path/enabled before reading them back in the service.
+            Persist();
+            var outcome = await _configSync.SyncAsync(force: true, CancellationToken.None).ConfigureAwait(true);
+            ConfigSyncStatusText = outcome.Status switch
+            {
+                ConfigSyncStatus.Disabled => Localizer.Instance["Settings.ConfigSync.Disabled"],
+                ConfigSyncStatus.Unreachable => string.Format(CultureInfo.CurrentCulture,
+                    Localizer.Instance["Settings.ConfigSync.Unreachable"], outcome.Error),
+                ConfigSyncStatus.Unchanged => Localizer.Instance["Settings.ConfigSync.Unchanged"],
+                ConfigSyncStatus.Applied => string.Format(CultureInfo.CurrentCulture,
+                    Localizer.Instance["Settings.ConfigSync.AppliedFormat"],
+                    outcome.Result!.CamerasAdded, outcome.Result.CamerasUpdated,
+                    outcome.Result.CamerasRemoved, outcome.Result.LayoutsReplaced),
+                _ => null,
+            };
+            if (outcome.Status == ConfigSyncStatus.Applied)
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new Messages.ConfigImportedMessage());
+        }
+        catch (Exception ex)
+        {
+            ConfigSyncStatusText = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Backup.FailedFormat"], ex.Message);
+        }
+    }
+
     // --- Config export / import (Phase 19.2) ------------------------------
     [ObservableProperty] private string? _backupStatus;
 
@@ -347,7 +414,12 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     {
         try
         {
-            var json = await _backup.ExportAsync(CancellationToken.None).ConfigureAwait(true);
+            // Include encrypted credentials only when the user opted in AND set a
+            // passphrase — so a shared file can carry passwords for a managed fleet.
+            var passphrase = ConfigSyncIncludeCredentials && !string.IsNullOrEmpty(ConfigSyncPassphrase)
+                ? ConfigSyncPassphrase
+                : null;
+            var json = await _backup.ExportAsync(passphrase, CancellationToken.None).ConfigureAwait(true);
             var path = await _dialogs.PickSaveFileAsync("openipc-config.json",
                 Localizer.Instance["Settings.Backup.ExportTitle"], "json").ConfigureAwait(true);
             if (string.IsNullOrEmpty(path)) return;

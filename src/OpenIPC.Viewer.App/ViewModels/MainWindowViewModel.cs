@@ -15,7 +15,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     IRecipient<OpenCameraMessage>,
     IRecipient<GoBackToLibraryMessage>,
     IRecipient<OpenRecordingMessage>,
-    IRecipient<GoBackToRecordingsMessage>
+    IRecipient<GoBackToRecordingsMessage>,
+    IRecipient<ToggleKioskMessage>
 {
     private readonly CameraDirectoryService _directory;
     private readonly SingleCameraPageFactory _singleCameraFactory;
@@ -49,6 +50,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     // the viewport is in mobile landscape; fullscreen engages only while the
     // single-camera page is open, so list/settings pages keep their chrome.
     private bool _isMobileLandscape;
+
+    // Desktop kiosk (Phase 20): a manually-toggled chrome-free fullscreen grid
+    // for an unattended guard station. Independent of the mobile orientation
+    // path above; both feed IsFullscreen via UpdateFullscreen.
+    [ObservableProperty]
+    private bool _kioskMode;
 
     [ObservableProperty]
     private bool _isFullscreen;
@@ -88,6 +95,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);
         WeakReferenceMessenger.Default.Register<OpenRecordingMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToRecordingsMessage>(this);
+        WeakReferenceMessenger.Default.Register<ToggleKioskMessage>(this);
 
         // While a mobile overlay dialog is open the bottom nav must not switch
         // pages under it — the dim layer doesn't reliably swallow those taps.
@@ -110,12 +118,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
 
     private void UpdateFullscreen()
     {
-        IsFullscreen = _isMobileLandscape && CurrentPage is SingleCameraPageViewModel;
+        IsFullscreen = KioskMode
+            || (_isMobileLandscape && CurrentPage is SingleCameraPageViewModel);
         // Camera-to-camera swipe replaces the page VM while IsFullscreen stays
         // true, so the flag is pushed to the current page explicitly instead
         // of relying on the property-changed callback.
         if (CurrentPage is SingleCameraPageViewModel camera)
             camera.IsFullscreen = IsFullscreen;
+    }
+
+    // Toggle the desktop kiosk. Entering tears down any single-camera/player
+    // page and drops to the live grid — kiosk is the grid, full-bleed. Exiting
+    // restores the chrome; the window state is reverted by MainView.
+    public void Receive(ToggleKioskMessage message)
+    {
+        KioskMode = !KioskMode;
+        if (KioskMode)
+        {
+            if (_activeSingleCamera is not null) _ = DisposeActiveSingleCameraAsync();
+            if (_activePlayer is not null) _ = DisposeActivePlayerAsync();
+            CurrentPage = Live;
+        }
+        UpdateFullscreen();
+    }
+
+    [RelayCommand]
+    private void ToggleKiosk() => Receive(new ToggleKioskMessage());
+
+    // Esc only exits (never enters) — a no-op elsewhere, so it won't swallow
+    // Escape from dialogs that aren't in kiosk.
+    [RelayCommand]
+    private void ExitKiosk()
+    {
+        if (!KioskMode) return;
+        KioskMode = false;
+        UpdateFullscreen();
     }
 
     private static bool CanNavigate() => !OverlayDialogPresenter.IsAnyOpen;

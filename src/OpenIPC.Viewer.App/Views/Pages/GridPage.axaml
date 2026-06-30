@@ -8,7 +8,7 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.GridPage"
              x:DataType="vm:GridPageViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,*">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Toolbar -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
@@ -52,6 +52,15 @@
                 Background="{StaticResource Bg2Brush}"
                 BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                 Foreground="{StaticResource TextPrimaryBrush}" />
+
+        <!-- Fullscreen / kiosk: full-bleed grid for a guard station (Phase 20). -->
+        <Button Click="OnFullscreenClick"
+                Margin="8,0,0,0" Padding="10,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                ToolTip.Tip="{Binding [Grid.Tooltip.Fullscreen], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconMaximize}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
       </StackPanel>
     </Grid>
 
@@ -283,6 +292,56 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <!-- Pager: < 1 2 3 > — pages of the active layout (LayoutSize² per page). -->
+    <Border Grid.Row="3"
+            IsVisible="{Binding HasMultiplePages}"
+            HorizontalAlignment="Center"
+            Margin="0,12,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Command="{Binding PrevPageCommand}"
+                IsEnabled="{Binding CanPrevPage}"
+                Padding="8,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+          <Path Classes="lucide" Data="{StaticResource IconChevronLeft}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
+
+        <ItemsControl ItemsSource="{Binding Pages}" x:CompileBindings="False">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Content="{Binding}"
+                      Command="{Binding DataContext.GoToPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                      CommandParameter="{Binding}"
+                      MinWidth="32" Padding="8,6" CornerRadius="6"
+                      HorizontalContentAlignment="Center"
+                      Foreground="{StaticResource TextPrimaryBrush}"
+                      BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+                <Button.Background>
+                  <MultiBinding Converter="{x:Static conv:PageActiveBrushConverter.Instance}">
+                    <Binding />
+                    <Binding Path="DataContext.CurrentPageDisplay" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                  </MultiBinding>
+                </Button.Background>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Button Command="{Binding NextPageCommand}"
+                IsEnabled="{Binding CanNextPage}"
+                Padding="8,6" CornerRadius="6"
+                Background="{StaticResource Bg2Brush}"
+                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+          <Path Classes="lucide" Data="{StaticResource IconChevronRight}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+        </Button>
+      </StackPanel>
+    </Border>
 
   </Grid>
 

@@ -10,6 +10,12 @@
         MinWidth="900" MinHeight="600"
         Background="{StaticResource Bg1Brush}">
 
+  <Window.KeyBindings>
+    <!-- F11 toggles the kiosk fullscreen; Esc only exits it (no-op otherwise). -->
+    <KeyBinding Gesture="F11" Command="{Binding ToggleKioskCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding ExitKioskCommand}" />
+  </Window.KeyBindings>
+
   <views:MainView />
 
 </Window>
