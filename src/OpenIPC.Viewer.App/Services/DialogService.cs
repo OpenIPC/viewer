@@ -230,6 +230,21 @@ public sealed class DialogService : IDialogService
         await dlg.ShowDialog(owner);
     }
 
+    public async Task ShowHealthCenterAsync(HealthCenterViewModel viewModel)
+    {
+        if (OverlayDialogPresenter.IsMobile)
+        {
+            var content = new HealthCenterContent { DataContext = viewModel };
+            await OverlayDialogPresenter.ShowAsync(content, content.Completion).ConfigureAwait(true);
+            return;
+        }
+
+        var owner = ResolveOwner();
+        if (owner is null) return;
+        var dlg = new HealthDialog { DataContext = viewModel };
+        await dlg.ShowDialog(owner);
+    }
+
     public async Task ShowManageLayoutCamerasAsync(ManageLayoutCamerasViewModel viewModel)
     {
         if (OverlayDialogPresenter.IsMobile)

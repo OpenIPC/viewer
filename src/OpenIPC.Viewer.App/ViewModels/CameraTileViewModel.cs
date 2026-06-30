@@ -15,6 +15,7 @@ using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Events;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
+using OpenIPC.Viewer.Core.Status;
 using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.App.ViewModels;
@@ -28,7 +29,14 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly IAnalyticsEngine _analytics;
     private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly AudioMonitor _audio;
+    private readonly IReachabilityProbe _reachability;
+    private readonly CameraStatusRegistry _statusRegistry;
     private readonly ILogger<CameraTileViewModel> _logger;
+
+    // On a stream fault we TCP-probe the camera so the status policy can tell a
+    // wedged-but-alive camera (Attention) from a truly unreachable one (Offline).
+    // Short timeout: a screen of dead tiles must settle quickly.
+    private static readonly TimeSpan ReachabilityProbeTimeout = TimeSpan.FromSeconds(2);
 
     // True while this tile is the live audio source. Tracked locally so we can
     // turn the audio decoder back off when another tile displaces us (one-source
@@ -58,7 +66,15 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     [NotifyPropertyChangedFor(nameof(IsFailed))]
     [NotifyPropertyChangedFor(nameof(ErrorDetail))]
     [NotifyPropertyChangedFor(nameof(ConnectingLabel))]
+    [NotifyPropertyChangedFor(nameof(Status))]
     private SessionState _state = SessionState.Idle;
+
+    // Last TCP probe of the camera's stream port (null = not probed). Only set
+    // while Failed, to split Attention from Offline; reset on recovery.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StateLabel))]
+    [NotifyPropertyChangedFor(nameof(Status))]
+    private bool? _portReachable;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatsLabel))]
     [NotifyPropertyChangedFor(nameof(HasStats))]
@@ -83,15 +99,23 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     public bool HasDetections => AnalyticsEnabled && Detections.Count > 0;
 
     public string Name => Camera.Name;
-    public string StateLabel => State switch
-    {
-        SessionState.Playing => "LIVE",
-        SessionState.Connecting => "CONNECTING…",
-        SessionState.Reconnecting => "RECONNECTING…",
-        SessionState.Paused => "PAUSED",
-        SessionState.Failed => "OFFLINE",
-        _ => "IDLE",
-    };
+
+    // Unified health verdict (grid + sidebar share this). A faulted stream that
+    // still answers on its port reads Attention, not Offline — see CameraStatusPolicy.
+    public CameraStatus Status =>
+        CameraStatusPolicy.Resolve(new CameraStatusInputs(State, PortReachable)).Status;
+
+    public string StateLabel => Status == CameraStatus.Attention
+        ? "ATTENTION"
+        : State switch
+        {
+            SessionState.Playing => "LIVE",
+            SessionState.Connecting => "CONNECTING…",
+            SessionState.Reconnecting => "RECONNECTING…",
+            SessionState.Paused => "PAUSED",
+            SessionState.Failed => "OFFLINE",
+            _ => "IDLE",
+        };
 
     // Mid-connect dim overlay (spinner). Gated on Session so the pre-activate
     // window doesn't flash a spinner out of nowhere.
@@ -195,6 +219,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         IAnalyticsEngine analytics,
         AnalyticsBootstrap analyticsBootstrap,
         AudioMonitor audio,
+        IReachabilityProbe reachability,
+        CameraStatusRegistry statusRegistry,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
@@ -205,6 +231,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _analytics = analytics;
         _analyticsBootstrap = analyticsBootstrap;
         _audio = audio;
+        _reachability = reachability;
+        _statusRegistry = statusRegistry;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
@@ -271,7 +299,14 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
             {
                 State = s;
                 if (s == SessionState.Failed)
+                {
                     ErrorMessage = session.LastError;
+                    _ = ProbeReachabilityAsync(); // Attention vs Offline
+                }
+                else
+                {
+                    PortReachable = null; // stale once we're no longer failed
+                }
             });
             _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
             Session = session;
@@ -294,6 +329,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         {
             _logger.LogError(ex, "Failed to start tile session for camera {Id}", Camera.Id);
             State = SessionState.Failed;
+            _ = ProbeReachabilityAsync(); // Attention vs Offline
         }
     }
 
@@ -317,6 +353,25 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _analytics.Detach(Camera.Id);
         Detections = Array.Empty<Detection>();
     }
+
+    // Stream faulted — TCP-probe the port the player dials so the status policy
+    // can distinguish a wedged-but-alive camera (Attention) from one that's gone
+    // (Offline). Fire-and-forget; a late result is dropped if we've recovered.
+    private async Task ProbeReachabilityAsync()
+    {
+        var reachable = await _reachability
+            .ProbeAsync(Camera, ReachabilityProbeTimeout, CancellationToken.None, _logger)
+            .ConfigureAwait(true);
+        _statusRegistry.ReportReachability(Camera.Id, reachable);
+        if (State == SessionState.Failed)
+            PortReachable = reachable;
+    }
+
+    // Mirror every state move into the shared registry so the library + Health
+    // Center reflect this tile's live session (incl. Attention), not just their
+    // own probe. Covers manual Idle resets (quality swap / retry) too.
+    partial void OnStateChanged(SessionState value) =>
+        _statusRegistry?.ReportSession(Camera.Id, value);
 
     // Coordinator dropped every cached session (e.g. RtspTransport flipped in
     // Settings). Our current Session ref is now disposed — drop subscriptions,
@@ -420,6 +475,9 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        // No live session for this camera anymore — clear our signal so the
+        // registry falls back to the reachability probe alone.
+        _statusRegistry.ReportSession(Camera.Id, null);
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _audio.Changed -= OnAudioChanged;
         _audio.Detach(Camera.Id); // no-op unless this tile is the current source

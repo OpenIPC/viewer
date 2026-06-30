@@ -10,9 +10,9 @@
              FontSize="{StaticResource FontSizeBase}"
              Foreground="{StaticResource TextPrimaryBrush}">
 
-  <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="24">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="24">
 
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <StackPanel Grid.Column="0" Spacing="4">
         <TextBlock Text="{Binding [Discovery.Header], Source={x:Static svc:Localizer.Instance}}"
                    FontSize="{StaticResource FontSizeLg}"
@@ -22,17 +22,32 @@
                    Foreground="{StaticResource TextSecondaryBrush}"
                    TextWrapping="Wrap" />
       </StackPanel>
-      <Button Grid.Column="1"
-              Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
-              Command="{Binding ScanCommand}"
-              Padding="14,8"
-              Background="{StaticResource AccentBrush}"
-              Foreground="White"
-              CornerRadius="6"
-              VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="6" HorizontalAlignment="Right">
+        <Button Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
+                Command="{Binding ScanCommand}"
+                Padding="14,8"
+                Background="{StaticResource AccentBrush}"
+                Foreground="White"
+                CornerRadius="6"
+                HorizontalAlignment="Right" />
+        <CheckBox IsChecked="{Binding DeepScan, Mode=TwoWay}"
+                  IsEnabled="{Binding !ScanInProgress}"
+                  Content="{Binding [Discovery.DeepScan], Source={x:Static svc:Localizer.Instance}}"
+                  FontSize="{StaticResource FontSizeSm}"
+                  Foreground="{StaticResource TextSecondaryBrush}" />
+      </StackPanel>
     </Grid>
 
-    <Border Grid.Row="1"
+    <!-- Scan progress (0..1), shown only while scanning. -->
+    <ProgressBar Grid.Row="1"
+                 Minimum="0" Maximum="1"
+                 Value="{Binding ScanProgress}"
+                 IsVisible="{Binding ScanInProgress}"
+                 Height="4"
+                 Margin="0,0,0,12"
+                 Foreground="{StaticResource AccentBrush}" />
+
+    <Border Grid.Row="2"
             Background="{StaticResource Bg2Brush}"
             BorderBrush="{StaticResource BorderWeakBrush}"
             BorderThickness="1"
@@ -44,7 +59,7 @@
                Background="Transparent"
                BorderThickness="0">
         <ListBox.ItemTemplate>
-          <DataTemplate DataType="vm:DiscoveredCameraRowVm">
+          <DataTemplate DataType="vm:DiscoveredDeviceRowVm">
             <Grid ColumnDefinitions="*,Auto" Margin="8">
               <StackPanel Grid.Column="0" Spacing="2">
                 <TextBlock Text="{Binding DisplayName}"
@@ -54,19 +69,27 @@
                            FontSize="{StaticResource FontSizeSm}"
                            Foreground="{StaticResource TextSecondaryBrush}" />
               </StackPanel>
-              <TextBlock Grid.Column="1"
-                         Text="{Binding HostPort}"
-                         FontFamily="{StaticResource FontMono}"
-                         FontSize="{StaticResource FontSizeSm}"
-                         Foreground="{StaticResource TextSecondaryBrush}"
-                         VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
+                <TextBlock Text="{Binding HostPort}"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           HorizontalAlignment="Right" />
+                <TextBlock FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           HorizontalAlignment="Right">
+                  <Run Text="{Binding ProtocolsText}" />
+                  <Run Text=" · " />
+                  <Run Text="{Binding ConfidenceText}" />
+                </TextBlock>
+              </StackPanel>
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
     </Border>
 
-    <Grid Grid.Row="2" ColumnDefinitions="*,12,*" Margin="0,16,0,0"
+    <Grid Grid.Row="3" ColumnDefinitions="*,12,*" Margin="0,16,0,0"
           IsVisible="{Binding IsRowSelected}">
       <StackPanel Grid.Column="0" Spacing="6">
         <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
@@ -78,7 +101,7 @@
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
       <Button Grid.Column="1"
               Name="CancelButton"
               Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"

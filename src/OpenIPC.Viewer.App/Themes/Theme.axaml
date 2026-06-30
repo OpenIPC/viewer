@@ -81,6 +81,8 @@
   <StreamGeometry x:Key="IconAdvanced">M10,5 H3 M12,19 H3 M14,3 V7 M16,17 V21 M21,12 H12 M21,19 H16 M21,5 H14 M8,10 V14 M8,12 H3</StreamGeometry>
   <!-- IconAbout — info (i in circle). -->
   <StreamGeometry x:Key="IconAbout">M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z M12,16 v-4 M12,8 h0.01</StreamGeometry>
+  <!-- IconActivity — Lucide "activity" (pulse line), Health Center entry (Slice D). -->
+  <StreamGeometry x:Key="IconActivity">M22,12 h-2.48 a2,2 0 0 0 -1.93,1.46 l-2.35,8.36 a0.25,0.25 0 0 1 -0.48,0 L9.24,2.18 a0.25,0.25 0 0 0 -0.48,0 l-2.35,8.36 A2,2 0 0 1 4.49,12 H2</StreamGeometry>
   <!-- IconTerminal — Lucide "terminal", SSH section (Phase 13). -->
   <StreamGeometry x:Key="IconTerminal">M4,17 L10,11 L4,5 M12,19 H20</StreamGeometry>
   <!-- IconPlugOff — Lucide "unplug", for the grid error/Offline cell. -->

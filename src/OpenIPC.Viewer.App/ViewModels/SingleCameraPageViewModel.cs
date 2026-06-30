@@ -16,6 +16,7 @@ using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Snapshots;
+using OpenIPC.Viewer.Core.Status;
 using OpenIPC.Viewer.Core.Video;
 using Avalonia.Threading;
 
@@ -34,9 +35,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly ISnapshotService _snapshots;
     private readonly AudioMonitor _audio;
     private readonly PushToTalkController _talk;
+    private readonly IReachabilityProbe _reachability;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
+
+    // On a stream fault, TCP-probe the camera so we can tell a wedged-but-alive
+    // camera (Attention) from one that's truly gone (Offline). Short timeout.
+    private static readonly TimeSpan ReachabilityProbeTimeout = TimeSpan.FromSeconds(2);
 
     private readonly StreamQuality _quality = StreamQuality.Main;
     private IDisposable? _stateSub;
@@ -61,7 +67,26 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConnecting))]
     [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(Status))]
+    [NotifyPropertyChangedFor(nameof(StatusHeading))]
     private SessionState _state = SessionState.Idle;
+
+    // Last TCP probe of the stream port (null = not probed). Only set while
+    // Failed, to split Attention from Offline; reset on recovery.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Status))]
+    [NotifyPropertyChangedFor(nameof(StatusHeading))]
+    private bool? _portReachable;
+
+    // Unified health verdict, shared with the grid via CameraStatusPolicy. A
+    // faulted stream that still answers on its port reads Attention, not Offline.
+    public CameraStatus Status =>
+        CameraStatusPolicy.Resolve(new CameraStatusInputs(State, PortReachable)).Status;
+
+    // Heading on the error overlay — "interrupted" (camera reachable, stream
+    // wedged) reads differently from a hard "disconnected".
+    public string StatusHeading => Localizer.Instance[
+        Status == CameraStatus.Attention ? "Stream.Interrupted" : "Stream.Disconnected"];
 
     [ObservableProperty] private SessionTelemetry? _telemetry;
     [ObservableProperty] private string? _errorMessage;
@@ -155,6 +180,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         ISnapshotService snapshots,
         AudioMonitor audio,
         PushToTalkController talk,
+        IReachabilityProbe reachability,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -169,6 +195,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _snapshots = snapshots;
         _audio = audio;
         _talk = talk;
+        _reachability = reachability;
         _logger = logger;
 
         // Hydrate the shared monitor from the persisted prefs and reflect any
@@ -201,6 +228,18 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             try { await ReloadStreamAsync().ConfigureAwait(true); }
             catch (Exception ex) { _logger.LogWarning(ex, "SingleCamera reload after invalidation failed"); }
         });
+    }
+
+    // Stream faulted — TCP-probe the dialed endpoint so the status policy can tell
+    // Attention (port answers) from Offline (gone). A late result is dropped if we
+    // have since recovered.
+    private async Task ProbeReachabilityAsync()
+    {
+        var reachable = await _reachability
+            .ProbeAsync(_camera, ReachabilityProbeTimeout, CancellationToken.None, _logger)
+            .ConfigureAwait(true);
+        if (State == SessionState.Failed)
+            PortReachable = reachable;
     }
 
     // Combined visibility — both the user setting is on AND the session has
@@ -532,7 +571,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                 {
                     State = s;
                     if (s == SessionState.Failed)
+                    {
                         ErrorMessage = session.LastError;
+                        _ = ProbeReachabilityAsync(); // Attention vs Offline
+                    }
+                    else
+                    {
+                        PortReachable = null; // stale once we're no longer failed
+                    }
                 });
                 _telemetrySub = session.Telemetry.Subscribe(t => Telemetry = t);
                 // Capability detect: first decoded audio frame reveals the camera
@@ -558,6 +604,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                 _logger.LogError(ex, "Failed to start session for camera {CameraId}", _camera.Id);
                 ErrorMessage = ex.Message;
                 State = SessionState.Failed;
+                _ = ProbeReachabilityAsync(); // Attention vs Offline
             }
 
             if (HasPtz)

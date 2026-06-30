@@ -49,6 +49,8 @@ public static class SharedComposition
         services.AddSingleton<CameraDirectoryService>();
         services.AddSingleton<ICameraCredentialsProvider>(sp => sp.GetRequiredService<CameraDirectoryService>());
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
+        // Process-wide status merge point — grid sessions write, library + Health read.
+        services.AddSingleton<OpenIPC.Viewer.Core.Status.CameraStatusRegistry>();
 
         // Snapshots (Phase 14): HD-always capture + thumbnail generation.
         services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
@@ -86,6 +88,14 @@ public static class SharedComposition
         services.AddSingleton<IOnvifClient, OnvifCoreClient>();
         services.AddSingleton<OnvifProbeService>();
         services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
+        // Discovery v2: aggregate sources behind one pipeline. ONVIF wraps the
+        // existing WS-Discovery; sweep + mDNS sources join the same DI list later.
+        services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoverySource, OpenIPC.Viewer.Devices.Discovery.OnvifDiscoverySource>();
+        // Passive mDNS (Slice D) — catches OpenIPC that advertise zeroconf.
+        services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoverySource, OpenIPC.Viewer.Devices.Discovery.MdnsDiscoverySource>();
+        // Opt-in active /24 sweep (Slice C) — finds non-ONVIF/non-mDNS OpenIPC.
+        services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoverySource, OpenIPC.Viewer.Devices.Discovery.SubnetSweepDiscoverySource>();
+        services.AddSingleton<OpenIPC.Viewer.Core.Discovery.IDiscoveryAggregator, OpenIPC.Viewer.Devices.Discovery.DiscoveryAggregator>();
         services.AddSingleton<OpenIPC.Viewer.Core.Onvif.Discovery.INetworkInterfaceProvider,
             OpenIPC.Viewer.Devices.Onvif.Discovery.SystemNetworkInterfaceProvider>();
 
