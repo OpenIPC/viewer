@@ -324,10 +324,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         // everything before saving (RTSP URI especially — phase-04 risks §"ONVIF
         // returns wrong RTSP URI behind NAT" applies).
         var editor = _editorFactory.CreateForNew();
-        editor.Name = found.Discovered.Model ?? found.Discovered.Name ?? found.Discovered.Host;
-        editor.Host = found.Discovered.Host;
-        editor.OnvifPortText = found.Discovered.OnvifPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        editor.RtspMainText = found.Probe.RtspMainUri.ToString();
+        editor.Name = found.Device.Model ?? found.Device.Name ?? found.Device.Host;
+        editor.Host = found.Device.Host;
+        editor.OnvifPortText = (found.Device.OnvifServiceUri?.Port ?? 80).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        editor.RtspMainText = found.RtspMainUri.ToString();
         editor.Username = found.Credentials?.Username ?? "";
         editor.Password = found.Credentials?.Password ?? "";
 
@@ -340,7 +340,9 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
             var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
             // Persist HasPtz / ProfileToken / manufacturer info from the probe so
             // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
-            await _directory.SaveOnvifMetadataAsync(id, found.Probe, CancellationToken.None).ConfigureAwait(true);
+            // Non-ONVIF devices (sweep/mDNS) have no probe — nothing to persist.
+            if (found.Probe is { } probe)
+                await _directory.SaveOnvifMetadataAsync(id, probe, CancellationToken.None).ConfigureAwait(true);
             await LoadAsync(CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)
