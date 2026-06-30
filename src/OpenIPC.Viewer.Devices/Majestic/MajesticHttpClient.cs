@@ -197,6 +197,15 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
         await EnsureSuccessAsync(resp, ct).ConfigureAwait(false);
     }
 
+    public async Task<string> GetMetricsAsync(MajesticEndpoint endpoint, CancellationToken ct)
+    {
+        // Prometheus exposition lives at /metrics (not under /api/v1). Returns
+        // text/plain; we hand the raw body to PrometheusTextParser.
+        using var resp = await SendAsync(endpoint, HttpMethod.Get, "metrics", ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(resp, ct).ConfigureAwait(false);
+        return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<byte[]> SnapshotJpegAsync(MajesticEndpoint endpoint, MajesticSnapshotOptions options, CancellationToken ct)
     {
         var path = "image.jpg";

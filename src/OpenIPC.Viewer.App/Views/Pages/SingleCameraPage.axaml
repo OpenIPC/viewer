@@ -308,6 +308,22 @@
                   Padding="10,4" FontSize="11"
                   Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                   CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+          <Button Content="{Binding [CameraPage.Majestic.AllSettings], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ToggleAllSettingsCommand}"
+                  Padding="10,4" FontSize="11"
+                  Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+          <Button Content="{Binding [CameraPage.Majestic.Isp], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ToggleIspCommand}"
+                  IsVisible="{Binding HasIsp}"
+                  Padding="10,4" FontSize="11"
+                  Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+          <Button Content="{Binding [CameraPage.Majestic.Metrics], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ToggleMetricsCommand}"
+                  Padding="10,4" FontSize="11"
+                  Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
           <Button Content="{Binding [CameraPage.Majestic.EditRaw], Source={x:Static svc:Localizer.Instance}}"
                   Command="{Binding EditRawConfigCommand}"
                   IsVisible="{Binding IsRawConfigEditorEnabled}"
@@ -355,6 +371,194 @@
                      BorderThickness="0"
                      Foreground="{StaticResource TextSecondaryBrush}" />
           </ScrollViewer>
+        </Border>
+
+        <!-- Live ISP panel (Slice C): the isp-section fields, applied on the fly
+             without restarting the stream. Same row instances as the All-settings
+             editor, so edits stay in sync. -->
+        <Border IsVisible="{Binding ShowIsp}"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderWeakBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+          <StackPanel Spacing="6" Margin="2">
+            <ScrollViewer MaxHeight="260" Padding="8">
+              <ItemsControl ItemsSource="{Binding IspFields}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="160,*,Auto" Margin="0,1">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                        <TextBlock Text="●" FontSize="11"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   IsVisible="{Binding IsModified}" />
+                        <TextBlock Text="{Binding Label}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <ToggleSwitch Grid.Column="1"
+                                    IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                    IsVisible="{Binding IsBool}"
+                                    OnContent="" OffContent=""
+                                    HorizontalAlignment="Left" />
+                      <ComboBox Grid.Column="1"
+                                ItemsSource="{Binding Options}"
+                                SelectedItem="{Binding Value, Mode=TwoWay}"
+                                IsVisible="{Binding IsCombo}"
+                                MinWidth="140" HorizontalAlignment="Left" />
+                      <TextBox Grid.Column="1"
+                               Text="{Binding Value, Mode=TwoWay}"
+                               IsVisible="{Binding IsTextual}"
+                               FontFamily="{StaticResource FontMono}"
+                               FontSize="11" />
+                      <Button Grid.Column="2" Content="↺"
+                              Command="{Binding RevertCommand}"
+                              IsVisible="{Binding IsModified}"
+                              ToolTip.Tip="{Binding [CameraPage.Majestic.Revert], Source={x:Static svc:Localizer.Instance}}"
+                              Padding="6,0" FontSize="11" MinHeight="0" Margin="6,0,0,0"
+                              Background="Transparent" BorderThickness="0"
+                              Foreground="{StaticResource AccentBrush}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <Button Content="{Binding [CameraPage.Majestic.IspApply], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ApplyIspLiveCommand}"
+                    IsEnabled="{Binding !ApplyInProgress}"
+                    Margin="8,0,8,8" HorizontalAlignment="Left"
+                    Padding="14,4" FontSize="11"
+                    Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="4" />
+          </StackPanel>
+        </Border>
+
+        <!-- Schema-driven "All settings" editor (Slice B): every scalar field from
+             the live config.json, grouped by section. A superset of the curated
+             knobs above; "⟳" flags fields that restart the stream. -->
+        <Border IsVisible="{Binding ShowAllSettings}"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderWeakBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+          <StackPanel Spacing="6" Margin="2">
+            <TextBox Text="{Binding FieldFilter, Mode=TwoWay}"
+                     PlaceholderText="{Binding [CameraPage.Majestic.Search], Source={x:Static svc:Localizer.Instance}}"
+                     Margin="8,6,8,0" FontSize="11" />
+            <ScrollViewer MaxHeight="320" Padding="8">
+              <ItemsControl ItemsSource="{Binding ConfigSections}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Spacing="3" Margin="0,0,0,8"
+                                IsVisible="{Binding IsVisibleInFilter}">
+                      <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,2">
+                        <TextBlock Grid.Column="0" Text="{Binding Header}"
+                                   FontWeight="SemiBold" FontSize="11"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <Button Grid.Column="1" Content="↺"
+                                Command="{Binding RevertSectionCommand}"
+                                ToolTip.Tip="{Binding [CameraPage.Majestic.RevertSection], Source={x:Static svc:Localizer.Instance}}"
+                                Padding="6,0" FontSize="11" MinHeight="0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource TextTertiaryBrush}" />
+                      </Grid>
+                      <ItemsControl ItemsSource="{Binding Fields}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid ColumnDefinitions="160,*,Auto" Margin="0,1"
+                                  IsVisible="{Binding MatchesFilter}">
+                              <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock Text="●" FontSize="11"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           IsVisible="{Binding IsModified}" />
+                                <TextBlock Text="{Binding Label}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="⟳" FontSize="11"
+                                           Foreground="{StaticResource WarningBrush}"
+                                           IsVisible="{Binding RequiresRestart}"
+                                           ToolTip.Tip="{Binding [CameraPage.Majestic.RestartHint], Source={x:Static svc:Localizer.Instance}}" />
+                              </StackPanel>
+                              <ToggleSwitch Grid.Column="1"
+                                            IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                            IsVisible="{Binding IsBool}"
+                                            OnContent="" OffContent=""
+                                            HorizontalAlignment="Left" />
+                              <ComboBox Grid.Column="1"
+                                        ItemsSource="{Binding Options}"
+                                        SelectedItem="{Binding Value, Mode=TwoWay}"
+                                        IsVisible="{Binding IsCombo}"
+                                        MinWidth="140" HorizontalAlignment="Left" />
+                              <TextBox Grid.Column="1"
+                                       Text="{Binding Value, Mode=TwoWay}"
+                                       IsVisible="{Binding IsTextual}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11" />
+                              <Button Grid.Column="2" Content="↺"
+                                      Command="{Binding RevertCommand}"
+                                      IsVisible="{Binding IsModified}"
+                                      ToolTip.Tip="{Binding [CameraPage.Majestic.Revert], Source={x:Static svc:Localizer.Instance}}"
+                                      Padding="6,0" FontSize="11" MinHeight="0" Margin="6,0,0,0"
+                                      Background="Transparent" BorderThickness="0"
+                                      Foreground="{StaticResource AccentBrush}" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <Button Content="{Binding [CameraPage.Majestic.ApplyAll], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding ApplyAllSettingsCommand}"
+                    IsEnabled="{Binding !ApplyInProgress}"
+                    Margin="8,0,8,8" HorizontalAlignment="Left"
+                    Padding="14,4" FontSize="11"
+                    Background="{StaticResource AccentBrush}" Foreground="White" CornerRadius="4" />
+          </StackPanel>
+        </Border>
+
+        <!-- Read-only Prometheus metrics (Slice D): name / value pairs from the
+             camera's /metrics endpoint, fetched on demand. -->
+        <Border IsVisible="{Binding ShowMetrics}"
+                Background="{StaticResource Bg0Brush}"
+                BorderBrush="{StaticResource BorderWeakBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+          <StackPanel Spacing="6" Margin="2">
+            <Grid ColumnDefinitions="*,Auto" Margin="8,6,8,0">
+              <TextBlock Grid.Column="0"
+                         Text="{Binding MetricsStatus}"
+                         VerticalAlignment="Center" FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         IsVisible="{Binding MetricsStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <Button Grid.Column="1"
+                      Content="{Binding [CameraPage.Majestic.MetricsRefresh], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding LoadMetricsCommand}"
+                      Padding="10,4" FontSize="11"
+                      Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                      CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
+            </Grid>
+            <ScrollViewer MaxHeight="280" Padding="8,0,8,8">
+              <ItemsControl ItemsSource="{Binding Metrics}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                      <TextBlock Grid.Column="0" Text="{Binding Display}"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Margin="12,0,0,0"
+                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
         </Border>
 
       </StackPanel>

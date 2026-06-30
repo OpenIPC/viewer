@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -10,6 +12,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
+using OpenIPC.Viewer.App.ViewModels.Majestic;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
@@ -28,6 +31,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly CameraDirectoryService _directory;
     private readonly IOnvifClient _onvif;
     private readonly IMajesticClient _majestic;
+    private readonly IMajesticConfigSchema _schema;
     private readonly IMajesticSshConfigClient _majesticSsh;
     private readonly RecordingService _recordings;
     private readonly UserSettingsService _userSettings;
@@ -132,6 +136,29 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private string? _applyStatus;
     [ObservableProperty] private bool _showRawJson;
 
+    // Schema-driven "All settings" editor (Slice B). Surfaces every scalar field
+    // from the live config.json, grouped by section, as a superset of the curated
+    // quick-controls above. Built on load from MajesticConfig.RawJson.
+    [ObservableProperty] private bool _showAllSettings;
+
+    // Live name/section filter over the "All settings" editor.
+    [ObservableProperty] private string _fieldFilter = "";
+    public ObservableCollection<MajesticConfigSectionViewModel> ConfigSections { get; } = new();
+
+    // Live ISP (Slice C): the isp-section rows, surfaced as their own panel that
+    // applies on the fly WITHOUT restarting the video stream (Majestic re-reads
+    // image params at runtime). Same row instances as the "All settings" editor,
+    // so edits stay in sync between the two views.
+    [ObservableProperty] private bool _showIsp;
+    [ObservableProperty] private bool _hasIsp;
+    public ObservableCollection<MajesticFieldRowViewModel> IspFields { get; } = new();
+
+    // Read-only Prometheus metrics (Slice D). Fetched on demand from /metrics;
+    // firmware without the endpoint just shows the error status.
+    [ObservableProperty] private bool _showMetrics;
+    [ObservableProperty] private string? _metricsStatus;
+    public ObservableCollection<MajesticMetricSample> Metrics { get; } = new();
+
     [ObservableProperty] private bool _isRecording;
     [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
 
@@ -173,6 +200,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         CameraDirectoryService directory,
         IOnvifClient onvif,
         IMajesticClient majestic,
+        IMajesticConfigSchema schema,
         IMajesticSshConfigClient majesticSsh,
         RecordingService recordings,
         UserSettingsService userSettings,
@@ -188,6 +216,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _directory = directory;
         _onvif = onvif;
         _majestic = majestic;
+        _schema = schema;
         _majesticSsh = majesticSsh;
         _recordings = recordings;
         _userSettings = userSettings;
@@ -673,6 +702,62 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         DraftProfile = MajesticConfig.Profile;
         DraftRtmpEnabled = MajesticConfig.RtmpEnabled;
         DraftRtmpUrl = MajesticConfig.RtmpUrl;
+        BuildConfigSections();
+    }
+
+    // Parse the raw config into the schema-driven editor model. Enriches the
+    // well-known video knobs with the same brick-safe option lists the curated
+    // dropdowns use, so codec/size/fps/profile render as combos here too.
+    private void BuildConfigSections()
+    {
+        ConfigSections.Clear();
+        IspFields.Clear();
+        HasIsp = false;
+        if (MajesticConfig is null) return;
+
+        MajesticConfigModel model;
+        try
+        {
+            model = _schema.Parse(MajesticConfig.RawJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse Majestic config schema for {CameraId}", _camera.Id);
+            return;
+        }
+
+        foreach (var section in model.Sections)
+        {
+            var rows = new List<MajesticFieldRowViewModel>(section.Fields.Count);
+            foreach (var field in section.Fields)
+                rows.Add(new MajesticFieldRowViewModel(field));
+            ConfigSections.Add(new MajesticConfigSectionViewModel(section.Name, rows));
+
+            if (section.Name.Equals("isp", StringComparison.OrdinalIgnoreCase))
+                foreach (var row in rows) IspFields.Add(row);
+        }
+
+        HasIsp = IspFields.Count > 0;
+        ApplyFieldFilter();
+    }
+
+    partial void OnFieldFilterChanged(string value) => ApplyFieldFilter();
+
+    // Show only rows whose key or section contains the filter; hide a section
+    // entirely when none of its rows match.
+    private void ApplyFieldFilter()
+    {
+        var filter = FieldFilter?.Trim() ?? string.Empty;
+        foreach (var section in ConfigSections)
+        {
+            var any = false;
+            foreach (var row in section.Fields)
+            {
+                row.MatchesFilter = row.Matches(filter);
+                any |= row.MatchesFilter;
+            }
+            section.IsVisibleInFilter = any;
+        }
     }
 
     [RelayCommand]
@@ -739,6 +824,165 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     [RelayCommand]
     private void ToggleRawJson() => ShowRawJson = !ShowRawJson;
+
+    [RelayCommand]
+    private void ToggleAllSettings() => ShowAllSettings = !ShowAllSettings;
+
+    [RelayCommand]
+    private void ToggleIsp() => ShowIsp = !ShowIsp;
+
+    // Apply only the edited isp-section fields, live. Unlike Apply (video knobs)
+    // this does NOT tear down and re-acquire the stream — Majestic re-reads image
+    // params at runtime, so brightness/contrast/etc. take effect on the running
+    // feed. We refresh the in-memory RawJson locally instead of refetching, so a
+    // second apply correctly diffs against what we just wrote.
+    [RelayCommand]
+    private async Task ApplyIspLiveAsync()
+    {
+        if (!IsMajestic || MajesticConfig is null || IspFields.Count == 0) return;
+
+        MajesticConfigModel model;
+        try
+        {
+            model = _schema.Parse(MajesticConfig.RawJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Parse Majestic config for apply-isp failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+            return;
+        }
+
+        var editedByPath = IspFields.ToDictionary(r => r.Path, r => r.Value);
+        var edits = model.ComputeEdits(editedByPath);
+        if (edits.Count == 0)
+        {
+            ApplyStatus = Localizer.Instance["CameraPage.Majestic.NoChanges"];
+            return;
+        }
+
+        ApplyInProgress = true;
+        ApplyStatus = Localizer.Instance["CameraPage.ApplyingStatus"];
+        try
+        {
+            var updated = _schema.ApplyEdits(MajesticConfig.RawJson, edits);
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await _majestic.UpdateRawConfigAsync(endpoint, updated, cts.Token).ConfigureAwait(true);
+
+            // Keep local state current without a stream-disrupting reload, and
+            // re-baseline the rows so the "modified" markers clear.
+            MajesticConfig = MajesticConfig with { RawJson = updated };
+            foreach (var row in IspFields) row.Commit();
+            ApplyStatus = Localizer.Instance["CameraPage.Majestic.IspApplied"];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Apply-isp Majestic config failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+        }
+        finally
+        {
+            ApplyInProgress = false;
+        }
+    }
+
+    // Apply every edited field from the schema-driven editor. Diffs the rows
+    // against the loaded config (so unchanged fields are never written), folds
+    // the changes into the full raw JSON, and POSTs the whole payload.
+    [RelayCommand]
+    private async Task ApplyAllSettingsAsync()
+    {
+        if (!IsMajestic || MajesticConfig is null) return;
+
+        MajesticConfigModel model;
+        try
+        {
+            model = _schema.Parse(MajesticConfig.RawJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Parse Majestic config for apply-all failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+            return;
+        }
+
+        var editedByPath = ConfigSections
+            .SelectMany(s => s.Fields)
+            .ToDictionary(r => r.Path, r => r.Value);
+        var edits = model.ComputeEdits(editedByPath);
+        if (edits.Count == 0)
+        {
+            ApplyStatus = Localizer.Instance["CameraPage.Majestic.NoChanges"];
+            return;
+        }
+
+        ApplyInProgress = true;
+        ApplyStatus = Localizer.Instance["CameraPage.ApplyingStatus"];
+        try
+        {
+            var updated = _schema.ApplyEdits(MajesticConfig.RawJson, edits);
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await _majestic.UpdateRawConfigAsync(endpoint, updated, cts.Token).ConfigureAwait(true);
+
+            ApplyStatus = Localizer.Instance["CameraPage.AppliedRestarting"];
+            await ReloadStreamAsync().ConfigureAwait(true);
+            ApplyStatus = Localizer.Instance["CameraPage.ApplyDone"];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Apply-all Majestic config failed");
+            ApplyStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+        }
+        finally
+        {
+            ApplyInProgress = false;
+        }
+    }
+
+    // Toggle the read-only metrics panel; fetch on first open so we don't hit
+    // the camera until the user asks.
+    [RelayCommand]
+    private async Task ToggleMetricsAsync()
+    {
+        ShowMetrics = !ShowMetrics;
+        if (ShowMetrics && Metrics.Count == 0)
+            await LoadMetricsAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task LoadMetricsAsync()
+    {
+        if (!IsMajestic) return;
+        MetricsStatus = Localizer.Instance["CameraPage.ApplyingStatus"];
+        try
+        {
+            var creds = await _directory.GetCredentialsAsync(_camera.Id, CancellationToken.None).ConfigureAwait(true);
+            var endpoint = new MajesticEndpoint(_camera.Host, _camera.HttpPort, creds);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var text = await _majestic.GetMetricsAsync(endpoint, cts.Token).ConfigureAwait(true);
+            var samples = PrometheusTextParser.Parse(text);
+            Metrics.Clear();
+            foreach (var s in samples) Metrics.Add(s);
+            MetricsStatus = Metrics.Count == 0
+                ? Localizer.Instance["CameraPage.Majestic.MetricsEmpty"]
+                : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Load Majestic metrics failed for {CameraId}", _camera.Id);
+            Metrics.Clear();
+            MetricsStatus = string.Format(CultureInfo.CurrentCulture,
+                Localizer.Instance["CameraPage.ApplyFailedFormat"], ex.Message);
+        }
+    }
 
     // Bound to the Retry button on the Disconnected overlay. Clears the error
     // banner and re-runs the full Activate path (which re-acquires the session

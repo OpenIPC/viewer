@@ -27,6 +27,12 @@ public interface IMajesticClient
 
     Task SetNightModeAsync(MajesticEndpoint endpoint, NightMode mode, CancellationToken ct);
 
+    // Fetches the raw Prometheus exposition text from the camera's /metrics
+    // endpoint (read-only telemetry). Throws MajesticHttpException on non-2xx
+    // (e.g. firmware without the endpoint returns 404). Caller parses with
+    // PrometheusTextParser.
+    Task<string> GetMetricsAsync(MajesticEndpoint endpoint, CancellationToken ct);
+
     // Returns the JPEG bytes from /image.jpg — caller decides where to write.
     // Faster than decoding a video frame because no codec round-trip; phase-05
     // §5.7 says ~50–100ms on a typical SoC.

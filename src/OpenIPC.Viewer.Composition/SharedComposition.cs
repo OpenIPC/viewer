@@ -101,6 +101,7 @@ public static class SharedComposition
 
         // Majestic HTTP
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+        services.AddSingleton<IMajesticConfigSchema, MajesticConfigSchema>();
 
         // SSH device suite (Phase 13): factory creates per-use sessions; the
         // SSH transport for majestic.yaml is the fallback when HTTP is off.
