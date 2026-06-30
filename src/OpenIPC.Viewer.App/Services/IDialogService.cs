@@ -45,9 +45,14 @@ public interface IDialogService
 
     Task ShowManageGroupsAsync(ManageGroupsViewModel viewModel);
 
+    // Firmware-lite (reboot / time / logs) dialog — modal window on desktop,
+    // overlay on mobile. Completes when dismissed.
+    Task ShowFirmwareDialogAsync(FirmwareDialogViewModel viewModel);
+
     // Health Center (Slice D): a read-only overview of every camera's status +
     // reason. Completes when the dialog is dismissed.
     Task ShowHealthCenterAsync(HealthCenterViewModel viewModel);
+
 
     // Camera picker for a single layout (Phase 19.1 polish). Toggling rows
     // mutates the layout live; completes when the dialog is dismissed.

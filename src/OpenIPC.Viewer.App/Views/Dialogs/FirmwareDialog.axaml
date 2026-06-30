@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+        xmlns:svc="using:OpenIPC.Viewer.App.Services"
+        xmlns:dialogs="using:OpenIPC.Viewer.App.Views.Dialogs"
+        x:Class="OpenIPC.Viewer.App.Views.Dialogs.FirmwareDialog"
+        x:DataType="vm:FirmwareDialogViewModel"
+        Title="{Binding [Firmware.Title], Source={x:Static svc:Localizer.Instance}}"
+        Width="560" Height="640"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{StaticResource Bg1Brush}">
+
+  <dialogs:FirmwareDialogContent Name="InnerContent" />
+
+</Window>

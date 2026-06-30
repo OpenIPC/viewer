@@ -1,0 +1,128 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels.Dialogs"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.Dialogs.FirmwareDialogContent"
+             x:DataType="vm:FirmwareDialogViewModel"
+             MaxWidth="560" MaxHeight="680"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}"
+             FontSize="{StaticResource FontSizeBase}"
+             Foreground="{StaticResource TextPrimaryBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24" MinWidth="460">
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0" Spacing="2" Margin="0,0,0,12">
+      <TextBlock Text="{Binding [Firmware.Title], Source={x:Static svc:Localizer.Instance}}"
+                 FontSize="{StaticResource FontSizeLg}" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextSecondaryBrush}"
+                 FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}" />
+    </StackPanel>
+
+    <!-- No-credentials hint -->
+    <TextBlock Grid.Row="1"
+               Text="{Binding [Firmware.NoCredentials], Source={x:Static svc:Localizer.Instance}}"
+               IsVisible="{Binding !HasCredentials}"
+               Foreground="{StaticResource WarningBrush}"
+               TextWrapping="Wrap" Margin="0,0,0,8" />
+
+    <ScrollViewer Grid.Row="2" IsVisible="{Binding HasCredentials}">
+      <StackPanel Spacing="16">
+
+        <!-- Time -->
+        <Border Background="{StaticResource Bg2Brush}" CornerRadius="8" Padding="14">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding [Firmware.Time], Source={x:Static svc:Localizer.Instance}}" FontWeight="Medium" />
+            <TextBlock FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                       Foreground="{StaticResource TextSecondaryBrush}">
+              <Run Text="{Binding DeviceTime}" />
+            </TextBlock>
+            <TextBlock IsVisible="{Binding Timezone, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextTertiaryBrush}">
+              <Run Text="TZ: " /><Run Text="{Binding Timezone}" />
+            </TextBlock>
+            <TextBlock IsVisible="{Binding Uptime, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextTertiaryBrush}"
+                       Text="{Binding Uptime}" TextWrapping="Wrap" />
+            <WrapPanel>
+              <Button Content="{Binding [Firmware.SetFromPc], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding SetTimeFromHostCommand}" IsEnabled="{Binding !IsBusy}"
+                      Padding="12,6" CornerRadius="6" Margin="0,4,8,0"
+                      Background="{StaticResource AccentBrush}" Foreground="White" />
+              <Button Content="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding RefreshTimeCommand}" IsEnabled="{Binding !IsBusy}"
+                      Padding="12,6" CornerRadius="6" Margin="0,4,0,0"
+                      Background="{StaticResource Bg1Brush}" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            </WrapPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+              <TextBox Grid.Column="0" Text="{Binding NtpServer, Mode=TwoWay}"
+                       PlaceholderText="pool.ntp.org" VerticalAlignment="Center" />
+              <Button Grid.Column="1"
+                      Content="{Binding [Firmware.SyncNtp], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding SyncNtpCommand}" IsEnabled="{Binding !IsBusy}"
+                      Margin="8,0,0,0" Padding="12,6" CornerRadius="6"
+                      Background="{StaticResource Bg1Brush}" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Logs -->
+        <Border Background="{StaticResource Bg2Brush}" CornerRadius="8" Padding="14">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                         Text="{Binding [Firmware.Logs], Source={x:Static svc:Localizer.Instance}}" FontWeight="Medium" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding LogKinds}"
+                        SelectedItem="{Binding SelectedLogKind, Mode=TwoWay}" MinWidth="120" />
+              <Button Grid.Column="2"
+                      Content="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding RefreshLogCommand}" IsEnabled="{Binding !IsBusy}"
+                      Margin="8,0,0,0" Padding="12,6" CornerRadius="6"
+                      Background="{StaticResource Bg1Brush}" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            </Grid>
+            <TextBox Text="{Binding LogText}" IsReadOnly="True"
+                     FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                     AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="180" MaxHeight="240"
+                     Background="{StaticResource Bg0Brush}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Reboot -->
+        <Border Background="{StaticResource Bg2Brush}" CornerRadius="8" Padding="14">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="{Binding [Firmware.Reboot], Source={x:Static svc:Localizer.Instance}}" FontWeight="Medium" />
+              <TextBlock Text="{Binding [Firmware.Reboot.Hint], Source={x:Static svc:Localizer.Instance}}"
+                         FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextTertiaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="{Binding [Firmware.Reboot], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding RebootCommand}" IsEnabled="{Binding !IsBusy}"
+                    Padding="14,8" CornerRadius="6" VerticalAlignment="Center"
+                    Background="{StaticResource DangerBrush}" Foreground="White" />
+          </Grid>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Footer: status + close -->
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+      <TextBlock Grid.Column="0" Text="{Binding StatusText}" VerticalAlignment="Center"
+                 Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <Button Grid.Column="1" Name="CloseButton"
+              Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
+              Padding="14,6" CornerRadius="6"
+              Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+    </Grid>
+
+  </Grid>
+
+</UserControl>
