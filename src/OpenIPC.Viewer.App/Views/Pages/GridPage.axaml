@@ -27,6 +27,26 @@
                 ToolTip.Tip="{Binding [Health.Tooltip], Source={x:Static svc:Localizer.Instance}}">
           <Path Classes="lucide" Data="{StaticResource IconActivity}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
         </Button>
+        <!-- Stills mode: periodic snapshots instead of live video (cheap on big walls). -->
+        <ToggleButton IsChecked="{Binding StillsMode, Mode=TwoWay}"
+                      Padding="10,6" CornerRadius="6" Margin="0,0,8,0"
+                      Foreground="{StaticResource TextPrimaryBrush}"
+                      ToolTip.Tip="{Binding [Grid.Tooltip.Stills], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconCamera}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="15" Height="15" />
+        </ToggleButton>
+        <ComboBox ItemsSource="{Binding StillsIntervalOptions}"
+                  SelectedItem="{Binding StillsIntervalSeconds, Mode=TwoWay}"
+                  IsVisible="{Binding StillsMode}"
+                  MinWidth="64" Margin="0,0,8,0"
+                  x:CompileBindings="False"
+                  VerticalAlignment="Center">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding StringFormat='{}{0}s'}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
         <Button Content="1×1" Command="{Binding SetLayoutCommand}" CommandParameter="1"
                 Padding="10,6" CornerRadius="6"
                 Background="{StaticResource Bg2Brush}"
@@ -167,7 +187,13 @@
                           Tapped="OnTileTapped"
                           PointerPressed="OnTilePointerPressed"
                           PointerMoved="OnTilePointerMoved">
-                      <controls:RtspVideoView Session="{Binding Session}" />
+                      <controls:RtspVideoView Session="{Binding Session}"
+                                              IsVisible="{Binding !StillsMode}" />
+
+                      <!-- Stills mode: periodic HTTP snapshot instead of live video. -->
+                      <Image Source="{Binding StillFrame}"
+                             Stretch="Uniform"
+                             IsVisible="{Binding StillsMode}" />
 
                       <!-- AI detection boxes (Phase 15.5), above the video. -->
                       <controls:DetectionOverlay Detections="{Binding Detections}"

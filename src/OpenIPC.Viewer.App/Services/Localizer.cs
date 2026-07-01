@@ -497,6 +497,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Grid.EmptySlot"] = "no camera",
         ["Grid.Tooltip.Fullscreen"] = "Fullscreen grid (F11) — Esc to exit",
+        ["Grid.Tooltip.Stills"] = "Stills mode — periodic snapshots instead of live video",
         ["Tile.Snapshot"] = "Snapshot (HD)",
 
         ["Welcome.Language"] = "Language",
@@ -961,6 +962,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Grid.EmptySlot"] = "нет камеры",
         ["Grid.Tooltip.Fullscreen"] = "Сетка на весь экран (F11) — Esc для выхода",
+        ["Grid.Tooltip.Stills"] = "Режим кадров — периодические снимки вместо живого видео",
         ["Tile.Snapshot"] = "Снимок (HD)",
 
         ["Welcome.Language"] = "Язык",
