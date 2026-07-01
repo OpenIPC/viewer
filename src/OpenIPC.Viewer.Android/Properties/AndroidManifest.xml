@@ -22,7 +22,14 @@
                android:roundIcon="@mipmap/icon"
                android:allowBackup="true"
                android:supportsRtl="true"
-               android:name=".MainApplication">
+               android:name=".MainApplication"
+               android:usesCleartextTraffic="true">
+    <!-- usesCleartextTraffic: OpenIPC cameras speak plain HTTP on the LAN
+         (Majestic config.json + image.jpg snapshots, no TLS). Android blocks
+         cleartext HTTP by default for targetSdk>=28, which silently killed every
+         camera HTTP call on-device — the Majestic panel never loaded and
+         snapshots failed, while RTSP video (not HTTP) still worked. LAN devices
+         have no certs, so cleartext is required. -->
     <!-- Phase 14.6 — share sheet. FileProvider grants the receiving app a
          scoped, temporary read URI to a snapshot instead of a file:// path. -->
     <provider android:name="androidx.core.content.FileProvider"
