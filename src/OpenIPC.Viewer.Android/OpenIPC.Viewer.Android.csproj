@@ -39,22 +39,19 @@
   </PropertyGroup>
 
   <!--
-    ONVIF SOAP on Android. The ONVIF client (Onvif.Core over WCF /
-    System.ServiceModel) serializes the generated WSDL contract types
+    ONVIF SOAP on Android is a known limitation. The ONVIF client (Onvif.Core
+    over WCF / System.ServiceModel) serializes the generated WSDL contract types
     (Onvif.Core.Client.Common.DeviceEntity et al.) with XmlSerializer, which
-    reflects over those types at runtime. Release builds default to
-    AndroidLinkMode=SdkOnly, which trims the framework serialization assemblies
-    (System.Private.Xml / System.Private.ServiceModel) and breaks that
-    reflection -> "XmlType reflection error" on the first device probe (the
-    discovery add-flow). Disable the linker in Release until we ship a surgical
-    ILLink descriptor that roots only the serialization + ONVIF metadata. Debug
-    already links None, so this only affects Release APK size / startup. The
-    add-flow also degrades to a guessed RTSP URL when the probe still fails, so
-    a device stays addable regardless of this switch.
+    reflects over those types at runtime; Release trimming (AndroidLinkMode
+    defaults to SdkOnly) strips the framework serialization metadata and that
+    reflection throws "XmlType reflection error" on the ONVIF device probe.
+    We deliberately keep the default linker here: AndroidLinkMode=None fixed the
+    probe but ballooned the APK to ~200 MB and broke app startup. The discovery
+    add-flow degrades to a guessed RTSP URL when the probe fails, so a device is
+    still addable on Android — just without auto-pulled model/profiles/PTZ.
+    Proper fix (later): replace the WCF XmlSerializer path with hand-rolled
+    SOAP over HttpClient + XDocument (trim-safe), or a surgical ILLink descriptor.
   -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <AndroidLinkMode>None</AndroidLinkMode>
-  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
