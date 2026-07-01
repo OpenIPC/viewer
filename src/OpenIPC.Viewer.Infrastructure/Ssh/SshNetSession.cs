@@ -21,22 +21,25 @@ internal sealed class SshNetSession : ISshSession
 {
     private readonly ISshHostKeyStore _hostKeys;
     private readonly IUserSettingsAccessor _settings;
+    private readonly ISshHostKeyPrompt _prompt;
     private readonly ILogger _logger;
 
     private SshClient? _ssh;
     private ScpClient? _scp;
 
     private string? _knownFingerprint;
+    private string? _presentedFingerprint;
     private bool _shouldStore;
     private bool _mismatch;
     private bool _strict = true;
     private string _host = "";
     private int _port;
 
-    public SshNetSession(ISshHostKeyStore hostKeys, IUserSettingsAccessor settings, ILogger logger)
+    public SshNetSession(ISshHostKeyStore hostKeys, IUserSettingsAccessor settings, ISshHostKeyPrompt prompt, ILogger logger)
     {
         _hostKeys = hostKeys;
         _settings = settings;
+        _prompt = prompt;
         _logger = logger;
     }
 
@@ -47,26 +50,51 @@ internal sealed class SshNetSession : ISshSession
         _strict = _settings.SshStrictHostKey;
         _knownFingerprint = await _hostKeys.GetAsync(endpoint.Host, endpoint.Port, ct).ConfigureAwait(false);
 
-        _ssh = new SshClient(BuildConnectionInfo(endpoint));
-        _scp = new ScpClient(BuildConnectionInfo(endpoint));
-        _ssh.HostKeyReceived += OnHostKeyReceived;
-        _scp.HostKeyReceived += OnHostKeyReceived;
-
-        await _ssh.ConnectAsync(ct).ConfigureAwait(false);
-        await _scp.ConnectAsync(ct).ConfigureAwait(false);
-
-        if (_mismatch)
+        // Retry loop: a strict-mode key mismatch is not a hard failure — we ask the
+        // user (cross-platform confirm) whether to trust the new key, and on yes
+        // re-pin it and reconnect once so the handler matches. First use and a
+        // matching key connect on the first pass.
+        while (true)
         {
-            await DisposeAsync().ConfigureAwait(false);
-            throw new SshConnectionException(
-                $"Host key for {endpoint.Host}:{endpoint.Port} changed — refusing to connect.");
-        }
+            _mismatch = false;
+            _shouldStore = false;
+            _presentedFingerprint = null;
 
-        if (_shouldStore && _knownFingerprint is { } fp)
-        {
-            await _hostKeys.SetAsync(endpoint.Host, endpoint.Port, fp, ct).ConfigureAwait(false);
-            _logger.LogInformation("Pinned SSH host key for {Host}:{Port} (SHA256 {Fingerprint})",
-                endpoint.Host, endpoint.Port, fp);
+            _ssh = new SshClient(BuildConnectionInfo(endpoint));
+            _scp = new ScpClient(BuildConnectionInfo(endpoint));
+            _ssh.HostKeyReceived += OnHostKeyReceived;
+            _scp.HostKeyReceived += OnHostKeyReceived;
+
+            try
+            {
+                await _ssh.ConnectAsync(ct).ConfigureAwait(false);
+                await _scp.ConnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (SshConnectionException) when (_mismatch)
+            {
+                await DisposeAsync().ConfigureAwait(false);
+                var presented = _presentedFingerprint;
+                var accept = presented is not null
+                    && await _prompt.ConfirmChangedKeyAsync(endpoint.Host, endpoint.Port, _knownFingerprint, presented, ct)
+                        .ConfigureAwait(false);
+                if (!accept)
+                    throw new SshConnectionException(
+                        $"Host key for {endpoint.Host}:{endpoint.Port} changed — refusing to connect.");
+
+                await _hostKeys.SetAsync(endpoint.Host, endpoint.Port, presented!, ct).ConfigureAwait(false);
+                _logger.LogInformation("User trusted changed SSH host key for {Host}:{Port} (SHA256 {Fingerprint})",
+                    endpoint.Host, endpoint.Port, presented);
+                _knownFingerprint = presented; // now trusted → next pass matches
+                continue;
+            }
+
+            if (_shouldStore && _knownFingerprint is { } fp)
+            {
+                await _hostKeys.SetAsync(endpoint.Host, endpoint.Port, fp, ct).ConfigureAwait(false);
+                _logger.LogInformation("Pinned SSH host key for {Host}:{Port} (SHA256 {Fingerprint})",
+                    endpoint.Host, endpoint.Port, fp);
+            }
+            return;
         }
     }
 
@@ -77,6 +105,7 @@ internal sealed class SshNetSession : ISshSession
     private void OnHostKeyReceived(object? sender, HostKeyEventArgs e)
     {
         var presented = e.FingerPrintSHA256;
+        _presentedFingerprint = presented;
         if (_knownFingerprint is null)
         {
             _knownFingerprint = presented;

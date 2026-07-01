@@ -7,7 +7,16 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.SingleCameraPage"
              x:DataType="vm:SingleCameraPageViewModel">
 
-  <Grid RowDefinitions="Auto,*,Auto,Auto">
+  <!-- PageScroll: Disabled by default so on desktop/wide the Grid fills the
+       viewport and the video row (*) stretches — identical to a plain Grid.
+       On phone-width viewports the code-behind switches the video row to a
+       fixed 16:9 height and enables vertical scroll so the Majestic config
+       panel below the video is reachable (it otherwise runs off-screen). -->
+  <ScrollViewer Name="PageScroll"
+                VerticalScrollBarVisibility="Disabled"
+                HorizontalScrollBarVisibility="Disabled">
+  <Grid Name="RootGrid" RowDefinitions="Auto,*,Auto,Auto">
+
 
     <!-- Header. Hidden in landscape fullscreen — only the video row stays. -->
     <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12"
@@ -361,7 +370,7 @@
                 CornerRadius="4"
                 MaxHeight="220">
           <ScrollViewer>
-            <TextBox Text="{Binding MajesticConfig.RawJson, Mode=OneWay}"
+            <TextBox Text="{Binding MajesticRawJsonPretty, Mode=OneWay}"
                      IsReadOnly="True"
                      AcceptsReturn="True"
                      TextWrapping="NoWrap"
@@ -730,5 +739,6 @@
     </WrapPanel>
 
   </Grid>
+  </ScrollViewer>
 
 </UserControl>

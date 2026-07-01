@@ -12,6 +12,7 @@ public sealed partial class SshTerminalContent : UserControl
     private readonly TaskCompletionSource<bool> _tcs = new();
     private TerminalView? _term;
     private bool _started;
+    private bool _connected;
 
     public Task<bool> Completion => _tcs.Task;
 
@@ -42,10 +43,27 @@ public sealed partial class SshTerminalContent : UserControl
         _term.Emulator = vm.Emulator;
         _term.TerminalFontSize = vm.FontSize;
         _term.Input += (_, text) => _ = vm.SendAsync(text);
-        _term.GridResized += (_, g) => _ = vm.ResizeAsync(g.Columns, g.Rows);
-
-        _ = vm.ConnectAsync();
+        // Defer the connect until the terminal has been measured: SSH.NET's
+        // ShellStream can't be resized mid-session, so the PTY keeps whatever
+        // size we open it with. Opening at the default 80x24 before layout means
+        // a narrow (phone) view gets 80-column output that overflows off-screen.
+        // Wait for the first real grid size, then open the shell to match.
+        _term.GridResized += OnGridResized;
         _term.Focus();
+    }
+
+    private void OnGridResized(object? sender, (int Columns, int Rows) grid)
+    {
+        if (DataContext is not SshTerminalViewModel vm)
+            return;
+        _ = vm.ResizeAsync(grid.Columns, grid.Rows);
+        // The pre-layout pass reports a 1x1 grid (Bounds still 0) — wait for a
+        // real measurement before opening the shell at that size.
+        if (!_connected && grid.Columns > 1 && grid.Rows > 1)
+        {
+            _connected = true;
+            _ = vm.ConnectAsync();
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
