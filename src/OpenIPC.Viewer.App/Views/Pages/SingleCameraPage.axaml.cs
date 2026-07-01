@@ -20,11 +20,17 @@ public sealed partial class SingleCameraPage : UserControl
     private Point? _pressOrigin;
     private DateTime _pressAt;
 
+    // Below this viewport width (phone) the page scrolls with a fixed 16:9 video
+    // preview; at/above it the video fills and the page doesn't scroll. Mirrors
+    // the app-wide 700px breakpoint.
+    private const double MobileBreakpoint = 700;
+
     public SingleCameraPage()
     {
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        SizeChanged += OnPageSizeChanged;
 
         // Holding defaults to touch-only; enabling mouse-hold lets us
         // validate the PTZ-toggle gesture on desktop too.
@@ -44,6 +50,29 @@ public sealed partial class SingleCameraPage : UserControl
         TalkButton.AddHandler(InputElement.PointerPressedEvent, OnTalkPressed, RoutingStrategies.Tunnel);
         TalkButton.AddHandler(InputElement.PointerReleasedEvent, OnTalkReleased, RoutingStrategies.Tunnel);
         TalkButton.PointerExited += OnTalkReleased;
+    }
+
+    // Phone-width viewports can't fit the video plus the full Majestic config
+    // panel, and a Grid alone would just run the panel off the bottom. Switch the
+    // video row to a fixed 16:9 preview and let PageScroll scroll; on wider
+    // viewports keep the fill layout (star row, scrolling disabled).
+    private void OnPageSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var width = e.NewSize.Width;
+        if (width <= 0)
+            return;
+
+        var videoRow = RootGrid.RowDefinitions[1];
+        if (width < MobileBreakpoint)
+        {
+            videoRow.Height = new GridLength(System.Math.Round(width * 9.0 / 16.0));
+            PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        }
+        else
+        {
+            videoRow.Height = new GridLength(1, GridUnitType.Star);
+            PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        }
     }
 
     private async void OnTalkPressed(object? sender, PointerPressedEventArgs e)
