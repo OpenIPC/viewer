@@ -56,16 +56,24 @@ public sealed partial class SingleCameraPage : UserControl
     // panel, and a Grid alone would just run the panel off the bottom. Switch the
     // video row to a fixed 16:9 preview and let PageScroll scroll; on wider
     // viewports keep the fill layout (star row, scrolling disabled).
-    private void OnPageSizeChanged(object? sender, SizeChangedEventArgs e)
+    private void OnPageSizeChanged(object? sender, SizeChangedEventArgs e) =>
+        ApplyResponsiveLayout(e.NewSize.Width);
+
+    private void ApplyResponsiveLayout(double width)
     {
-        var width = e.NewSize.Width;
+        // Width can be 0 before the first arrange (e.g. when called from Loaded).
+        // A mobile head is always a phone-width viewport, so fall back to the
+        // mobile layout there — this guarantees the page scrolls and the Majestic
+        // panel below the video is reachable even if SizeChanged hasn't fired yet.
         if (width <= 0)
-            return;
+            width = OpenIPC.Viewer.App.Services.OverlayDialogPresenter.IsMobile ? 400 : 1000;
 
         var videoRow = RootGrid.RowDefinitions[1];
         if (width < MobileBreakpoint)
         {
-            videoRow.Height = new GridLength(System.Math.Round(width * 9.0 / 16.0));
+            var videoHeight = System.Math.Round(width * 9.0 / 16.0);
+            if (videoHeight < 160) videoHeight = 200; // sane floor before real measure
+            videoRow.Height = new GridLength(videoHeight);
             PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
         }
         else
@@ -89,6 +97,11 @@ public sealed partial class SingleCameraPage : UserControl
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        // Engage the responsive layout up front — SizeChanged only fires on a
+        // change, which on some Android layouts may not happen before the page
+        // is shown, leaving it in the desktop (fill, no-scroll) state.
+        ApplyResponsiveLayout(Bounds.Width);
+
         if (Vm is { } vm)
             await vm.ActivateAsync(CancellationToken.None);
     }
