@@ -45,8 +45,10 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
 
     [ObservableProperty] private Bitmap? _stillFrame;
 
-    // Drives the template: Image (stills) vs RtspVideoView (live).
-    public bool StillsMode => _stillsMode;
+    // Drives the template: Image (stills) vs RtspVideoView (live). A camera with
+    // no cheap HTTP still (non-Majestic) stays on live RTSP even when the grid
+    // stills toggle is on, rather than blanking to an empty tile.
+    public bool StillsMode => _stillsMode && _frameSource.Supports(Camera);
 
     // On a stream fault we TCP-probe the camera so the status policy can tell a
     // wedged-but-alive camera (Attention) from a truly unreachable one (Offline).
@@ -301,7 +303,8 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _started = true;
 
         // Stills mode: no decoder, just poll an HTTP snapshot on an interval.
-        if (_stillsMode)
+        // Only for cameras that expose one — others fall through to live RTSP.
+        if (StillsMode)
         {
             StartStillsLoop();
             return;

@@ -33,6 +33,10 @@ public sealed class HttpSnapshotFrameSource : ISnapshotFrameSource
         _logger = logger;
     }
 
+    // Only OpenIPC/Majestic exposes /image.jpg today. ONVIF GetSnapshotUri will
+    // extend this to generic ONVIF cameras later.
+    public bool Supports(Camera camera) => camera.IsMajestic;
+
     public async Task<byte[]?> GrabAsync(Camera camera, CancellationToken ct)
     {
         if (camera.IsMajestic)

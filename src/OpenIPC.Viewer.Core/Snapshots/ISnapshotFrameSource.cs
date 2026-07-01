@@ -13,5 +13,12 @@ namespace OpenIPC.Viewer.Core.Snapshots;
 /// </summary>
 public interface ISnapshotFrameSource
 {
+    /// <summary>
+    /// True when the camera exposes a cheap HTTP still endpoint (OpenIPC/Majestic
+    /// <c>/image.jpg</c>). Cameras without one keep their live RTSP view in grid
+    /// stills mode instead of blanking to an empty tile.
+    /// </summary>
+    bool Supports(Camera camera);
+
     Task<byte[]?> GrabAsync(Camera camera, CancellationToken ct);
 }
