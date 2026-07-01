@@ -9,10 +9,17 @@
     <OutputType>Exe</OutputType>
     <Nullable>enable</Nullable>
     <ApplicationId>org.openipc.viewer</ApplicationId>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>0.1.0-beta</ApplicationDisplayVersion>
+    <ApplicationVersion>30001</ApplicationVersion>
+    <ApplicationDisplayVersion>0.3.1</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <!-- Full AOT (Release default) emits libaot-*.so; on the current workload
+         (android 36.1.43 / build-tools 35) their packaging is malformed — a ZIP
+         entry's declared size is off by a few bytes, so apksigner/Android reject
+         the APK as corrupt ("INSTALL_PARSE_FAILED_NO_CERTIFICATES", digest
+         mismatch). We don't need AOT yet, so keep it off until we revisit it as a
+         page-alignment-safe polish step. -->
+    <RunAOTCompilation>false</RunAOTCompilation>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <!--
       FFmpeg native libs are produced by tools/build-ffmpeg-android.sh from
