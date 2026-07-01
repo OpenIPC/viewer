@@ -211,6 +211,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Title"] = "Settings",
         ["Settings.Appearance"] = "Appearance",
         ["Settings.Appearance.Language"] = "Language",
+        ["Settings.Appearance.ShowSplash"] = "Show animated splash screen on launch",
         ["Settings.Video"] = "Video",
         ["Settings.Recording"] = "Recording",
         ["Settings.Discovery"] = "Discovery",
@@ -247,7 +248,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Discovery.AutoScan"] = "Run WS-Discovery on launch",
 
         ["Settings.Advanced.VerboseLogging"] = "Verbose logging (debug level)",
-        ["Settings.Advanced.RawConfigEditor"] = "Allow raw Majestic config editing (advanced)",
+        ["Settings.Advanced.RawConfigEditor"] = "Allow risky device tools (raw config editing, file manager)",
         ["Settings.Advanced.OpenAppData"] = "Open app data folder",
 
         ["Settings.About.Repository"] = "GitHub repository →",
@@ -353,9 +354,6 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Ssh.HostKeyChanged.Message"] = "The SSH key presented by {0} does not match the one pinned earlier.\n\nNew:    {1}\nPinned: {2}\n\nThis is expected if the camera was reflashed or replaced — but could also mean someone is intercepting the connection. Trust the new key and continue?",
         ["Ssh.HostKeyChanged.Trust"] = "Trust new key",
         ["FileManager.Title"] = "Files",
-        ["FileManager.RiskTitle"] = "Browse camera files?",
-        ["FileManager.RiskMessage"] = "This opens the camera's live filesystem over SSH. Deleting, moving or overwriting the wrong file can break the camera and require a reflash. Only continue if you know what you're doing.",
-        ["FileManager.RiskConfirm"] = "Open anyway",
         ["FileManager.Connecting"] = "Connecting…",
         ["FileManager.NoCreds"] = "No SSH credentials set for this camera.",
         ["FileManager.FailedFormat"] = "Error: {0}",
@@ -676,6 +674,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Title"] = "Настройки",
         ["Settings.Appearance"] = "Внешний вид",
         ["Settings.Appearance.Language"] = "Язык",
+        ["Settings.Appearance.ShowSplash"] = "Показывать анимированную заставку при запуске",
         ["Settings.Video"] = "Видео",
         ["Settings.Recording"] = "Запись",
         ["Settings.Discovery"] = "Поиск",
@@ -712,7 +711,7 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Settings.Discovery.AutoScan"] = "Запускать WS-Discovery при старте",
 
         ["Settings.Advanced.VerboseLogging"] = "Подробные логи (debug)",
-        ["Settings.Advanced.RawConfigEditor"] = "Разрешить правку raw-конфига Majestic (продвинутое)",
+        ["Settings.Advanced.RawConfigEditor"] = "Разрешить рискованные инструменты (raw-конфиг, файловый менеджер)",
         ["Settings.Advanced.OpenAppData"] = "Открыть папку данных",
 
         ["Settings.About.Repository"] = "Репозиторий на GitHub →",
@@ -818,9 +817,6 @@ public sealed class Localizer : INotifyPropertyChanged
         ["Ssh.HostKeyChanged.Message"] = "SSH-ключ, который предъявил {0}, не совпадает с ранее сохранённым.\n\nНовый:      {1}\nСохранённый: {2}\n\nЭто нормально, если камеру перепрошили или заменили, — но может означать и перехват соединения. Доверять новому ключу и продолжить?",
         ["Ssh.HostKeyChanged.Trust"] = "Доверять ключу",
         ["FileManager.Title"] = "Файлы",
-        ["FileManager.RiskTitle"] = "Открыть файлы камеры?",
-        ["FileManager.RiskMessage"] = "Откроется живая файловая система камеры по SSH. Удаление, перемещение или перезапись не того файла может сломать камеру вплоть до перепрошивки. Продолжайте, только если понимаете, что делаете.",
-        ["FileManager.RiskConfirm"] = "Всё равно открыть",
         ["FileManager.Connecting"] = "Подключение…",
         ["FileManager.NoCreds"] = "Для камеры не заданы SSH-учётные данные.",
         ["FileManager.FailedFormat"] = "Ошибка: {0}",

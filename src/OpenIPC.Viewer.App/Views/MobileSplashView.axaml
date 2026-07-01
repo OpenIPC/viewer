@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             x:Class="OpenIPC.Viewer.App.Views.MobileSplashView"
+             Background="{StaticResource Bg1Brush}"
+             FontFamily="{StaticResource FontSans}">
+
+  <!-- Mobile startup overlay (single-view lifetime). Android/iOS run the DB
+       bootstrap in the platform host before Avalonia starts, so unlike the
+       desktop StartupWindow this is purely visual — App.axaml.cs keeps it on
+       top of MainView for a minimum beat, then fades it out (the Opacity
+       transition below) and removes it from the tree. -->
+
+  <UserControl.Transitions>
+    <Transitions>
+      <DoubleTransition Property="Opacity" Duration="0:0:0.35" />
+    </Transitions>
+  </UserControl.Transitions>
+
+  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="20">
+    <controls:SplashAperture Width="96" Height="96" HorizontalAlignment="Center" />
+    <StackPanel Spacing="6">
+      <TextBlock Text="OpenIPC Viewer"
+                 FontSize="22" FontWeight="SemiBold"
+                 HorizontalAlignment="Center"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+      <TextBlock Text="{Binding [Startup.Title], Source={x:Static svc:Localizer.Instance}}"
+                 FontSize="12" Opacity="0.6"
+                 HorizontalAlignment="Center"
+                 Foreground="{StaticResource TextPrimaryBrush}" />
+    </StackPanel>
+  </StackPanel>
+
+</UserControl>

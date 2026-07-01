@@ -28,8 +28,14 @@ public sealed record UserSettings(
     // "system" follows CurrentUICulture; "en"/"ru" force a specific locale.
     string Language = "system",
     bool WelcomeShown = false,
-    // Unlocks the "Edit raw" button in the Phase 5 Majestic panel. Off by
-    // default — a typo here can leave the camera in a non-bootable state.
+    // The animated startup splash (our in-app one, not the OS launch screen).
+    // Applies to both the desktop StartupWindow and the mobile overlay.
+    bool ShowSplash = true,
+    // Shared "risky device tools" gate: unlocks the raw Majestic config editors
+    // (HTTP + SSH) on the camera page AND the SSH file manager in the library.
+    // Off by default — a typo in the config or a deleted system file can leave
+    // the camera in a non-bootable state. The toggle itself is the consent, so
+    // the gated tools open without an extra per-use warning.
     bool RawConfigEditorEnabled = false,
     // SSH device suite (Phase 13). StrictHostKey on → a changed host key is
     // refused (TOFU); off → the new key is accepted and re-pinned (e.g. after

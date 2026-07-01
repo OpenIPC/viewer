@@ -181,6 +181,8 @@
                           Foreground="{StaticResource TextPrimaryBrush}"
                           Command="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).OpenSshTerminalCommand}"
                           CommandParameter="{Binding}" />
+                  <!-- Risky tool (Settings → Advanced): hidden until the shared
+                       "risky device tools" toggle is on. -->
                   <Button Content="{Binding [Library.RowFiles], Source={x:Static svc:Localizer.Instance}}"
                           Padding="10,6"
                           Background="Transparent"
@@ -188,6 +190,7 @@
                           BorderThickness="1"
                           CornerRadius="6"
                           Foreground="{StaticResource TextPrimaryBrush}"
+                          IsVisible="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).IsFileManagerEnabled}"
                           Command="{Binding $parent[ItemsControl].((vm:CameraLibraryPageViewModel)DataContext).OpenFileManagerCommand}"
                           CommandParameter="{Binding}" />
                   <Button Content="{Binding [Library.RowDevice], Source={x:Static svc:Localizer.Instance}}"

@@ -89,6 +89,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         _statusRegistry = statusRegistry;
         _logger = logger;
         WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
+        // Toggling "risky device tools" in Settings shows/hides the Files button
+        // without reopening the page. The update can arrive off the UI thread.
+        _userSettings.Changed += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => OnPropertyChanged(nameof(IsFileManagerEnabled)));
         // Live status: a grid session's verdict (incl. Attention) flows here so a
         // library row reflects it, not just its own probe.
         _statusRegistry.Changed += OnStatusRegistryChanged;
@@ -445,20 +449,16 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         await _dialogs.OpenSshTerminalAsync(vm).ConfigureAwait(true);
     }
 
+    // The file manager browses/edits the camera's live root filesystem over
+    // SSH — deleting or overwriting the wrong file can brick the device. The
+    // button only shows once the shared "risky device tools" toggle (Settings →
+    // Advanced) is on; that opt-in is the consent, so no per-open warning here.
+    public bool IsFileManagerEnabled => _userSettings.Current.RawConfigEditorEnabled;
+
     [RelayCommand]
     private async Task OpenFileManagerAsync(CameraRowViewModel? row)
     {
         if (row is null)
-            return;
-        // The file manager browses/edits the camera's live root filesystem over
-        // SSH — deleting or overwriting the wrong file can brick the device. Gate
-        // it behind an explicit warning the user must accept.
-        var ok = await _dialogs.ConfirmAsync(
-            Localizer.Instance["FileManager.RiskTitle"],
-            Localizer.Instance["FileManager.RiskMessage"],
-            Localizer.Instance["FileManager.RiskConfirm"],
-            Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
-        if (!ok)
             return;
         var vm = _fileManagerFactory.Create(row.Camera);
         await _dialogs.OpenFileManagerAsync(vm).ConfigureAwait(true);

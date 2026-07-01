@@ -231,6 +231,10 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
           </Grid>
+
+          <CheckBox IsChecked="{Binding ShowSplash}"
+                    Content="{Binding [Settings.Appearance.ShowSplash], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
         </StackPanel>
 
         <!-- Video -->
