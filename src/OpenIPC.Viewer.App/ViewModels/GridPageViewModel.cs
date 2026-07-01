@@ -34,6 +34,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private readonly AudioMonitor _audio;
     private readonly IReachabilityProbe _reachability;
     private readonly OpenIPC.Viewer.Core.Status.CameraStatusRegistry _statusRegistry;
+    private readonly OpenIPC.Viewer.Core.Snapshots.ISnapshotFrameSource _frameSource;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
     private readonly IDialogService _dialogs;
     private readonly ILoggerFactory _loggerFactory;
@@ -101,6 +102,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         AudioMonitor audio,
         IReachabilityProbe reachability,
         OpenIPC.Viewer.Core.Status.CameraStatusRegistry statusRegistry,
+        OpenIPC.Viewer.Core.Snapshots.ISnapshotFrameSource frameSource,
         OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
         IDialogService dialogs,
         ILoggerFactory loggerFactory)
@@ -114,10 +116,14 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         _audio = audio;
         _reachability = reachability;
         _statusRegistry = statusRegistry;
+        _frameSource = frameSource;
         _layouts = layouts;
         _dialogs = dialogs;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<GridPageViewModel>();
+
+        _stillsMode = _userSettings.Current.GridStillsMode;
+        _stillsIntervalSeconds = _userSettings.Current.GridStillsIntervalSeconds;
 
         WeakReferenceMessenger.Default.Register<WindowMinimizedMessage>(this);
         WeakReferenceMessenger.Default.Register<WindowRestoredMessage>(this);
@@ -316,6 +322,52 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             if (Layouts[i].Id == updated.Id) { Layouts[i] = updated; break; }
     }
 
+    // --- Stills mode (grid-wide) --------------------------------------------
+    // Every tile shows a periodic HTTP snapshot instead of a live RTSP session.
+    [ObservableProperty] private bool _stillsMode;
+    [ObservableProperty] private int _stillsIntervalSeconds;
+
+    public int[] StillsIntervalOptions { get; } = { 2, 5, 10, 30, 60 };
+
+    partial void OnStillsModeChanged(bool value) => _ = ApplyStillsChangeAsync();
+
+    partial void OnStillsIntervalSecondsChanged(int value) => _ = ApplyStillsChangeAsync();
+
+    private async Task ApplyStillsChangeAsync()
+    {
+        await PersistStillsAsync().ConfigureAwait(true);
+        await RebuildTilesAsync().ConfigureAwait(true);
+    }
+
+    private async Task PersistStillsAsync()
+    {
+        _suppressSettingsRefresh = true;
+        try
+        {
+            await _userSettings.UpdateAsync(_userSettings.Current with
+            {
+                GridStillsMode = StillsMode,
+                GridStillsIntervalSeconds = StillsIntervalSeconds,
+            }).ConfigureAwait(true);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Persisting stills settings failed"); }
+        finally { _suppressSettingsRefresh = false; }
+    }
+
+    // Full teardown + rebuild so tiles pick up the new stills mode/interval —
+    // RefreshTilesAsync reuses live tiles and wouldn't re-read the flag.
+    private async Task RebuildTilesAsync()
+    {
+        for (var i = Tiles.Count - 1; i >= 0; i--)
+        {
+            var tile = Tiles[i];
+            Tiles.RemoveAt(i);
+            try { await tile.DisposeAsync().ConfigureAwait(true); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Error disposing tile during stills rebuild"); }
+        }
+        await RefreshTilesAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
     private async Task RefreshTilesAsync(CancellationToken ct)
     {
         // One page = the visual grid (LayoutSize² cells). Within a page two caps
@@ -406,7 +458,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 try { await existing.DisposeAsync().ConfigureAwait(true); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Error releasing stale tile for {Camera}", camera.Name); }
 
-                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _loggerFactory.CreateLogger<CameraTileViewModel>());
+                var rebuilt = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _frameSource, StillsMode, StillsIntervalSeconds, _loggerFactory.CreateLogger<CameraTileViewModel>());
                 rebuilt.SetInitialQuality(quality);
                 Tiles.Insert(idx, rebuilt);
                 try { await rebuilt.ActivateAsync(ct).ConfigureAwait(true); }
@@ -414,7 +466,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
                 continue;
             }
 
-            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _loggerFactory.CreateLogger<CameraTileViewModel>());
+            var tile = new CameraTileViewModel(camera, _coordinator, _directory, _userSettings, _snapshots, _analytics, _analyticsBootstrap, _audio, _reachability, _statusRegistry, _frameSource, StillsMode, StillsIntervalSeconds, _loggerFactory.CreateLogger<CameraTileViewModel>());
             tile.SetInitialQuality(quality);
             Tiles.Add(tile);
             try { await tile.ActivateAsync(ct).ConfigureAwait(true); }

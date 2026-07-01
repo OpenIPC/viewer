@@ -56,6 +56,9 @@ public static class SharedComposition
         services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
         services.AddSingleton<IImageEditor, OpenIPC.Viewer.Video.Imaging.SkiaImageEditor>();
         services.AddSingleton<ISnapshotService, SnapshotService>();
+        // Cheap HTTP still grab (no decoder) — powers the grid "stills" mode and
+        // the timelapse archive.
+        services.AddSingleton<ISnapshotFrameSource, OpenIPC.Viewer.Devices.Snapshots.HttpSnapshotFrameSource>();
 
         // Video
         services.AddSingleton<IVideoEngine, OpenIPC.Viewer.Video.FfmpegVideoEngine>();

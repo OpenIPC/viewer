@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,7 +33,20 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     private readonly AudioMonitor _audio;
     private readonly IReachabilityProbe _reachability;
     private readonly CameraStatusRegistry _statusRegistry;
+    private readonly ISnapshotFrameSource _frameSource;
     private readonly ILogger<CameraTileViewModel> _logger;
+
+    // "Stills" mode: instead of a live RTSP session this tile shows a periodic
+    // HTTP snapshot (StillFrame), refreshed every _stillsIntervalSeconds. Set at
+    // construction from the grid setting; the tile is rebuilt when it changes.
+    private readonly bool _stillsMode;
+    private readonly int _stillsIntervalSeconds;
+    private CancellationTokenSource? _stillsCts;
+
+    [ObservableProperty] private Bitmap? _stillFrame;
+
+    // Drives the template: Image (stills) vs RtspVideoView (live).
+    public bool StillsMode => _stillsMode;
 
     // On a stream fault we TCP-probe the camera so the status policy can tell a
     // wedged-but-alive camera (Attention) from a truly unreachable one (Offline).
@@ -221,6 +236,9 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         AudioMonitor audio,
         IReachabilityProbe reachability,
         CameraStatusRegistry statusRegistry,
+        ISnapshotFrameSource frameSource,
+        bool stillsMode,
+        int stillsIntervalSeconds,
         ILogger<CameraTileViewModel> logger)
     {
         Camera = camera;
@@ -233,6 +251,9 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         _audio = audio;
         _reachability = reachability;
         _statusRegistry = statusRegistry;
+        _frameSource = frameSource;
+        _stillsMode = stillsMode;
+        _stillsIntervalSeconds = stillsIntervalSeconds;
         _logger = logger;
 
         _coordinator.Invalidated += OnCoordinatorInvalidated;
@@ -278,6 +299,13 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
     {
         if (_started) return;
         _started = true;
+
+        // Stills mode: no decoder, just poll an HTTP snapshot on an interval.
+        if (_stillsMode)
+        {
+            StartStillsLoop();
+            return;
+        }
 
         var streamUri = _quality == StreamQuality.Main
             ? Camera.RtspMainUri
@@ -472,9 +500,65 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         Session?.Resume();
     }
 
+    // --- Stills mode --------------------------------------------------------
+
+    private void StartStillsLoop()
+    {
+        _stillsCts = new CancellationTokenSource();
+        _ = RunStillsAsync(_stillsCts.Token);
+    }
+
+    private async Task RunStillsAsync(CancellationToken ct)
+    {
+        var interval = TimeSpan.FromSeconds(Math.Max(1, _stillsIntervalSeconds));
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var bytes = await _frameSource.GrabAsync(Camera, ct).ConfigureAwait(false);
+                var bmp = bytes is { Length: > 0 } ? DecodeJpeg(bytes) : null;
+                if (bmp is not null)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        var old = StillFrame;
+                        StillFrame = bmp;
+                        old?.Dispose();
+                    });
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Stills grab failed for {Name}", Camera.Name);
+            }
+
+            try { await Task.Delay(interval, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private static Bitmap? DecodeJpeg(byte[] bytes)
+    {
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            return new Bitmap(ms);
+        }
+        catch
+        {
+            return null; // a truncated / non-image body — keep the previous frame
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        _stillsCts?.Cancel();
+        _stillsCts?.Dispose();
+        _stillsCts = null;
+        StillFrame?.Dispose();
+        StillFrame = null;
         // No live session for this camera anymore — clear our signal so the
         // registry falls back to the reachability probe alone.
         _statusRegistry.ReportSession(Camera.Id, null);

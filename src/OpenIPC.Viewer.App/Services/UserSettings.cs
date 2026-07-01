@@ -80,7 +80,12 @@ public sealed record UserSettings(
     int? WindowY = null,
     double WindowWidth = 1200,
     double WindowHeight = 780,
-    bool WindowMaximized = false)
+    bool WindowMaximized = false,
+    // Grid "stills" mode: show periodic HTTP snapshots instead of a live RTSP
+    // session in every grid tile — far cheaper on CPU/bandwidth for big walls.
+    // Interval is seconds between grabs. A per-camera override lands later.
+    bool GridStillsMode = false,
+    int GridStillsIntervalSeconds = 10)
 {
     public static UserSettings Default => new();
 }
