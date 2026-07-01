@@ -44,6 +44,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [ObservableProperty] private NetworkInterfaceOption? _selectedNetworkInterface;
     [ObservableProperty] private string _language = "system";
+    [ObservableProperty] private bool _showSplash = true;
 
     // SSH section (Phase 13).
     [ObservableProperty] private bool _sshStrictHostKey = true;
@@ -204,6 +205,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
                 ?? NetworkInterfaceOptions[0];
             RecordingsDirOverride = s.RecordingsDirOverride;
             Language = s.Language;
+            ShowSplash = s.ShowSplash;
             SshStrictHostKey = s.SshStrictHostKey;
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
@@ -234,6 +236,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnSelectedNetworkInterfaceChanged(NetworkInterfaceOption? value) => Persist();
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
     partial void OnLanguageChanged(string value) => Persist();
+    partial void OnShowSplashChanged(bool value) => Persist();
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
@@ -263,6 +266,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             PreferredNetworkInterface = SelectedNetworkInterface?.Value ?? "",
             RecordingsDirOverride = RecordingsDirOverride,
             Language = Language,
+            ShowSplash = ShowSplash,
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,

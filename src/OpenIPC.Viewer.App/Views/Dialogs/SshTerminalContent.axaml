@@ -8,7 +8,27 @@
              MinWidth="280" MinHeight="320"
              Background="#0c0f14">
 
-  <Grid RowDefinitions="Auto,Auto,*">
+  <UserControl.Styles>
+    <!-- Special-keys bar (mobile only) — terminal-styled, non-focusable so a
+         tap doesn't steal focus from the IME proxy (the keyboard would hide). -->
+    <Style Selector="Button.termkey, ToggleButton.termkey">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+      <Setter Property="Background" Value="#1a1f28" />
+      <Setter Property="Foreground" Value="#cccccc" />
+      <Setter Property="BorderBrush" Value="#2a3140" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="ToggleButton.termkey:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2472c8" />
+      <Setter Property="Foreground" Value="#ffffff" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
 
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="12,8">
       <TextBlock Grid.Column="0"
@@ -35,7 +55,47 @@
                  TextWrapping="Wrap" />
     </Border>
 
-    <controls:TerminalView Grid.Row="2" Name="Term" />
+    <!-- Special keys soft keyboards don't have. Shown by code-behind on
+         Android/iOS only; scrolls sideways on very narrow phones. -->
+    <Border Grid.Row="2" Name="KeyBar"
+            IsVisible="False"
+            Background="#12161d"
+            BorderBrush="#2a3140" BorderThickness="0,1"
+            Padding="8,6">
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Classes="termkey" Name="KeyEsc" Content="Esc" />
+          <Button Classes="termkey" Name="KeyTab" Content="Tab" />
+          <ToggleButton Classes="termkey" Name="KeyCtrl" Content="Ctrl" />
+          <Button Classes="termkey" Name="KeyArrowUp" Content="↑" />
+          <Button Classes="termkey" Name="KeyArrowDown" Content="↓" />
+          <Button Classes="termkey" Name="KeyArrowLeft" Content="←" />
+          <Button Classes="termkey" Name="KeyArrowRight" Content="→" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <Panel Grid.Row="3">
+      <controls:TerminalView Name="Term" />
+      <!-- Invisible IME proxy (mobile only). TerminalView is a custom-drawn
+           Control that never advertises text input, so Android's soft keyboard
+           won't open for it. On mobile this TextBox holds focus instead: it
+           triggers the IME, and code-behind forwards everything it receives
+           into the shell, keeping a one-space sentinel in the box so backspace
+           produces a detectable change. Kept invisible+disabled on desktop,
+           where the hardware keyboard path through TerminalView works. -->
+      <TextBox Name="ImeProxy"
+               Width="4" Height="4" MinWidth="4" MinHeight="4"
+               Padding="0" BorderThickness="0"
+               Opacity="0"
+               HorizontalAlignment="Left" VerticalAlignment="Bottom"
+               IsVisible="False"
+               IsTabStop="False"
+               IsHitTestVisible="False"
+               TextInputOptions.ShowSuggestions="False"
+               TextInputOptions.IsSensitive="True"
+               TextInputOptions.AutoCapitalization="False" />
+    </Panel>
   </Grid>
 
 </UserControl>
