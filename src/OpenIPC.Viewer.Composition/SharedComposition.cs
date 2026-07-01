@@ -84,8 +84,11 @@ public static class SharedComposition
         services.AddSingleton<IAudioBackchannelClient,
             OpenIPC.Viewer.Devices.Backchannel.RtspBackchannelClient>();
 
-        // ONVIF
-        services.AddSingleton<IOnvifClient, OnvifCoreClient>();
+        // ONVIF — hand-rolled SOAP over HttpClient/XDocument (trim-safe). Replaces
+        // the WCF OnvifCoreClient, whose XmlSerializer can't build under the
+        // Android linker ("XmlType reflection error" on DeviceEntity). Same
+        // IOnvifClient contract, so the swap is DI-only.
+        services.AddSingleton<IOnvifClient, SoapOnvifClient>();
         services.AddSingleton<OnvifProbeService>();
         services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
         // Discovery v2: aggregate sources behind one pipeline. ONVIF wraps the
