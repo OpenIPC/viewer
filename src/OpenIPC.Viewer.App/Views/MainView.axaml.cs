@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Platform;
 using OpenIPC.Viewer.App.ViewModels;
 
 namespace OpenIPC.Viewer.App.Views;
@@ -44,6 +45,7 @@ public partial class MainView : UserControl
     private bool _showBottomNav;
     private Thickness _contentPadding = WidePadding;
     private MainWindowViewModel? _vm;
+    private IInsetsManager? _insets;
 
     public bool ShowSidebar => _showSidebar;
     public bool ShowBottomNav => _showBottomNav;
@@ -59,6 +61,36 @@ public partial class MainView : UserControl
         _isWideLayout = Bounds.Width >= WideBreakpoint;
         UpdateChrome();
     }
+
+    // Mobile draws edge-to-edge under the system status bar, which put page
+    // titles beneath the clock and made the Settings back-link untappable.
+    // Inset the whole view by the platform safe area instead; null on desktop,
+    // and zeroed while fullscreen video hides the system bars.
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _insets = TopLevel.GetTopLevel(this)?.InsetsManager;
+        if (_insets is not null)
+        {
+            _insets.SafeAreaChanged += OnSafeAreaChanged;
+            ApplySafeArea();
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        if (_insets is not null)
+        {
+            _insets.SafeAreaChanged -= OnSafeAreaChanged;
+            _insets = null;
+        }
+    }
+
+    private void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e) => ApplySafeArea();
+
+    private void ApplySafeArea() =>
+        Padding = _isFullscreen ? default : _insets?.SafeAreaPadding ?? default;
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
@@ -135,5 +167,6 @@ public partial class MainView : UserControl
         SetAndRaise(ShowSidebarProperty, ref _showSidebar, showSidebar);
         SetAndRaise(ShowBottomNavProperty, ref _showBottomNav, showBottomNav);
         SetAndRaise(ContentPaddingProperty, ref _contentPadding, padding);
+        ApplySafeArea();
     }
 }
