@@ -164,11 +164,21 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
             StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeOkFormat"], probeResult.Manufacturer ?? "?", probeResult.Model ?? "").TrimEnd();
             return new DiscoveryDialogResult(row.Device, probeResult.RtspMainUri, probeResult, creds);
         }
+        catch (OperationCanceledException)
+        {
+            StatusText = Localizer.Instance["Discovery.Status.Cancelled"];
+            return null;
+        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ONVIF probe failed for {Host}", row.HostPort);
-            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeFailedFormat"], ex.Message);
-            return null;
+            // The ONVIF SOAP probe can't run on every platform — the WCF
+            // XmlSerializer stack fails to build on Android (XmlType reflection
+            // error over the generated contract types). Rather than dead-end the
+            // user, degrade to the same guessed-RTSP add we use for non-ONVIF
+            // finds: the camera is added and refined/tested in the editor.
+            _logger.LogWarning(ex, "ONVIF probe failed for {Host}; falling back to guessed RTSP", row.HostPort);
+            StatusText = Localizer.Instance["Discovery.Status.ManualAdd"];
+            return new DiscoveryDialogResult(row.Device, GuessRtspUri(row.Device), null, creds);
         }
         finally
         {

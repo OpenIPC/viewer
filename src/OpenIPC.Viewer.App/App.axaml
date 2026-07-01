@@ -42,6 +42,10 @@
 
   <Application.Styles>
     <FluentTheme />
+    <!-- AvaloniaEdit control theme. Without this the TextEditor in the Majestic
+         raw-config editor (RawConfigEditorContent) has no template and renders
+         as a blank dialog. -->
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Sidebar.axaml" />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/BottomNav.axaml" />
     <StyleInclude Source="avares://OpenIPC.Viewer.App/Styles/Buttons.axaml" />

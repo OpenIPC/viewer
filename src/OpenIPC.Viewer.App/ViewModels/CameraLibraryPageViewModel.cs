@@ -450,6 +450,16 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     {
         if (row is null)
             return;
+        // The file manager browses/edits the camera's live root filesystem over
+        // SSH — deleting or overwriting the wrong file can brick the device. Gate
+        // it behind an explicit warning the user must accept.
+        var ok = await _dialogs.ConfirmAsync(
+            Localizer.Instance["FileManager.RiskTitle"],
+            Localizer.Instance["FileManager.RiskMessage"],
+            Localizer.Instance["FileManager.RiskConfirm"],
+            Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+        if (!ok)
+            return;
         var vm = _fileManagerFactory.Create(row.Camera);
         await _dialogs.OpenFileManagerAsync(vm).ConfigureAwait(true);
     }

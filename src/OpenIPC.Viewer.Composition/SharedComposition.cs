@@ -107,6 +107,10 @@ public static class SharedComposition
         // SSH transport for majestic.yaml is the fallback when HTTP is off.
         services.AddSingleton<OpenIPC.Viewer.Core.Ssh.ISshHostKeyStore,
             OpenIPC.Viewer.Infrastructure.Ssh.JsonFileHostKeyStore>();
+        // Cross-platform "trust changed host key?" prompt so a re-pinned camera
+        // (reflash / swapped device) can be accepted from the UI instead of a
+        // dead-end error. Refuses by default when no UI is available.
+        services.AddSingleton<OpenIPC.Viewer.Core.Ssh.ISshHostKeyPrompt, DialogSshHostKeyPrompt>();
         services.AddSingleton<ISshSessionFactory, OpenIPC.Viewer.Infrastructure.Ssh.SshNetSessionFactory>();
         services.AddSingleton<IMajesticSshConfigClient, MajesticSshConfigClient>();
         // Firmware-lite (reboot / time / logs) over the same SSH layer.

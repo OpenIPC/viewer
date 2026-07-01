@@ -361,7 +361,7 @@
                 CornerRadius="4"
                 MaxHeight="220">
           <ScrollViewer>
-            <TextBox Text="{Binding MajesticConfig.RawJson, Mode=OneWay}"
+            <TextBox Text="{Binding MajesticRawJsonPretty, Mode=OneWay}"
                      IsReadOnly="True"
                      AcceptsReturn="True"
                      TextWrapping="NoWrap"

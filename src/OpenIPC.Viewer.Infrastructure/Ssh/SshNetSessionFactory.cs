@@ -9,15 +9,17 @@ public sealed class SshNetSessionFactory : ISshSessionFactory
 {
     private readonly ISshHostKeyStore _hostKeys;
     private readonly IUserSettingsAccessor _settings;
+    private readonly ISshHostKeyPrompt _prompt;
     private readonly ILoggerFactory _loggerFactory;
 
-    public SshNetSessionFactory(ISshHostKeyStore hostKeys, IUserSettingsAccessor settings, ILoggerFactory loggerFactory)
+    public SshNetSessionFactory(ISshHostKeyStore hostKeys, IUserSettingsAccessor settings, ISshHostKeyPrompt prompt, ILoggerFactory loggerFactory)
     {
         _hostKeys = hostKeys;
         _settings = settings;
+        _prompt = prompt;
         _loggerFactory = loggerFactory;
     }
 
     public ISshSession Create() =>
-        new SshNetSession(_hostKeys, _settings, _loggerFactory.CreateLogger<SshNetSession>());
+        new SshNetSession(_hostKeys, _settings, _prompt, _loggerFactory.CreateLogger<SshNetSession>());
 }

@@ -118,7 +118,13 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private bool _majesticReady;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEnableAudioHint))]
+    [NotifyPropertyChangedFor(nameof(MajesticRawJsonPretty))]
     private MajesticConfig? _majesticConfig;
+
+    // Camera returns config.json minified (one line). Pretty-print it for the
+    // read-only "View raw" panel and the raw editor so it's actually readable.
+    public string? MajesticRawJsonPretty =>
+        MajesticConfig is { RawJson: var raw } ? FormatJson(raw) : null;
     [ObservableProperty] private MajesticInfo? _majesticInfo;
     [ObservableProperty] private NightMode _currentNightMode = NightMode.Unknown;
     [ObservableProperty] private string? _majesticError;
@@ -999,11 +1005,30 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     // so toggling the checkbox while on this page flips the button live.
     public bool IsRawConfigEditorEnabled => _userSettings.Current.RawConfigEditorEnabled;
 
+    private static readonly System.Text.Json.JsonSerializerOptions PrettyJsonOptions =
+        new() { WriteIndented = true };
+
+    // Indent config.json for display/editing. Falls back to the original text if
+    // it isn't valid JSON so we never hide the raw content behind a parse error.
+    private static string FormatJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return json;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, PrettyJsonOptions);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return json;
+        }
+    }
+
     [RelayCommand]
     private async Task EditRawConfigAsync()
     {
         if (!IsMajestic || MajesticConfig is null) return;
-        var initial = MajesticConfig.RawJson;
+        var initial = FormatJson(MajesticConfig.RawJson);
         var edited = await _dialogs.ShowRawConfigEditorAsync(initial).ConfigureAwait(true);
         if (edited is null) return;
         if (edited == initial) return;
