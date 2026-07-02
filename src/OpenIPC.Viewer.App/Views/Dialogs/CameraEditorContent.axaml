@@ -63,6 +63,7 @@
                 <MenuFlyout Placement="BottomEdgeAlignedRight">
                   <MenuItem Header="OpenIPC (Majestic)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="openipc" />
                   <MenuItem Header="XM / Xiongmai (NETSurveillance)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="xm" />
+                  <MenuItem Header="XM / Xiongmai (Sofia hash)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="xm-sofia" />
                   <MenuItem Header="Hikvision" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="hikvision" />
                   <MenuItem Header="Dahua / Amcrest" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="dahua" />
                   <MenuItem Header="Reolink" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="reolink" />
