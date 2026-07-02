@@ -98,5 +98,9 @@
   <StreamGeometry x:Key="IconVolumeMuted">M11,5 L6,9 H2 V15 H6 L11,19 Z M23,9 L17,15 M17,9 L23,15</StreamGeometry>
   <!-- IconMic — Lucide "mic", push-to-talk (Phase 17.6). -->
   <StreamGeometry x:Key="IconMic">M12,2 A3,3 0 0 0 9,5 V11 A3,3 0 0 0 15,11 V5 A3,3 0 0 0 12,2 Z M19,10 V11 A7,7 0 0 1 5,11 V10 M12,18 V22 M8,22 H16</StreamGeometry>
+  <!-- IconCog — Lucide "settings" (gear), tray menu. -->
+  <StreamGeometry x:Key="IconCog">M12.22,2 h-0.44 a2,2 0 0 0 -2,2 v0.18 a2,2 0 0 1 -1,1.73 l-0.43,0.25 a2,2 0 0 1 -2,0 l-0.15,-0.08 a2,2 0 0 0 -2.73,0.73 l-0.22,0.38 a2,2 0 0 0 0.73,2.73 l0.15,0.1 a2,2 0 0 1 1,1.72 v0.51 a2,2 0 0 1 -1,1.74 l-0.15,0.09 a2,2 0 0 0 -0.73,2.73 l0.22,0.38 a2,2 0 0 0 2.73,0.73 l0.15,-0.08 a2,2 0 0 1 2,0 l0.43,0.25 a2,2 0 0 1 1,1.73 V20 a2,2 0 0 0 2,2 h0.44 a2,2 0 0 0 2,-2 v-0.18 a2,2 0 0 1 1,-1.73 l0.43,-0.25 a2,2 0 0 1 2,0 l0.15,0.08 a2,2 0 0 0 2.73,-0.73 l0.22,-0.39 a2,2 0 0 0 -0.73,-2.73 l-0.15,-0.08 a2,2 0 0 1 -1,-1.74 v-0.5 a2,2 0 0 1 1,-1.74 l0.15,-0.09 a2,2 0 0 0 0.73,-2.73 l-0.22,-0.38 a2,2 0 0 0 -2.73,-0.73 l-0.15,0.08 a2,2 0 0 1 -2,0 l-0.43,-0.25 a2,2 0 0 1 -1,-1.73 V4 a2,2 0 0 0 -2,-2 Z M9,12 A3,3 0 1 0 15,12 A3,3 0 1 0 9,12 Z</StreamGeometry>
+  <!-- IconPower — Lucide "power", tray menu exit. -->
+  <StreamGeometry x:Key="IconPower">M12,2 V12 M18.36,6.64 A9,9 0 1 1 5.63,6.64</StreamGeometry>
 
 </ResourceDictionary>

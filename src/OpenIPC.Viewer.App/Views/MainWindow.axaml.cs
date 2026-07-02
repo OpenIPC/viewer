@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.App.Messages;
@@ -14,11 +15,16 @@ public sealed partial class MainWindow : Window
     private readonly UserSettingsService? _settings;
     private readonly IdleStreamMonitor? _idle;
     private WindowState _previousState = WindowState.Normal;
+    // State to restore when un-minimizing from the tray (Normal or Maximized) —
+    // _previousState itself becomes Minimized right after the transition.
+    private WindowState _preMinimizeState = WindowState.Normal;
 
     // Last known normal-state geometry, tracked live so a window that closes
     // while maximized still persists sensible un-maximize bounds.
     private PixelPoint _normalPosition;
     private Size _normalSize;
+
+    private bool _hiddenToTray;
 
     public MainWindow()
     {
@@ -126,9 +132,67 @@ public sealed partial class MainWindow : Window
             WindowMaximized = maximized,
         };
 
-        // Synchronous so the write completes before the process exits; the save
-        // is off-UI file IO (ConfigureAwait(false)) so this won't deadlock.
-        _settings.UpdateAsync(next).GetAwaiter().GetResult();
+        // Close-to-tray: hide instead of quitting. Tray "Exit" and app/OS
+        // shutdown pass through. Two hard-won rules for this branch:
+        //  - never block on the save here — the process stays alive, so the
+        //    write can finish in the background;
+        //  - never call Hide() inside this handler — Avalonia drops visibility
+        //    changes while a close is being processed, leaving the window in a
+        //    stuck state where every further close is a no-op. Post it instead.
+        if (_settings.Current.CloseToTray &&
+            e.CloseReason == WindowCloseReason.WindowClosing &&
+            App.Tray is { ExitRequested: false })
+        {
+            e.Cancel = true;
+            _ = _settings.UpdateAsync(next);
+            Dispatcher.UIThread.Post(HideToTray);
+            return;
+        }
+
+        // Real exit: the write must land before Program.Main force-exits the
+        // process. The save completes entirely off the UI thread (SaveAsync is
+        // ConfigureAwait(false) throughout — including the stream disposal,
+        // which once captured the dispatcher and deadlocked this very wait);
+        // the timeout is a backstop so a wedged save can never freeze the close.
+        try
+        {
+            _settings.UpdateAsync(next).Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException)
+        {
+            // A failed save must not block exiting.
+        }
+    }
+
+    // Hidden windows keep their live RTSP sessions unless told otherwise, so
+    // hiding reuses the minimize path: streams are released while nobody looks.
+    private void HideToTray()
+    {
+        if (_hiddenToTray) return;
+        _hiddenToTray = true;
+        Hide();
+        _idle?.SetMinimized(true);
+        WeakReferenceMessenger.Default.Send(new WindowMinimizedMessage());
+    }
+
+    // Entry point for the tray icon (click or menu): un-hide, un-minimize and
+    // bring the window to the foreground.
+    public void RestoreFromTray()
+    {
+        if (_hiddenToTray)
+        {
+            _hiddenToTray = false;
+            Show();
+            _idle?.SetMinimized(false);
+            WeakReferenceMessenger.Default.Send(new WindowRestoredMessage());
+        }
+
+        if (WindowState == WindowState.Minimized)
+            WindowState = _preMinimizeState == WindowState.Maximized
+                ? WindowState.Maximized
+                : WindowState.Normal;
+
+        Activate();
     }
 
     private void OnWindowPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
@@ -139,6 +203,7 @@ public sealed partial class MainWindow : Window
         var current = (WindowState)e.NewValue!;
         if (current == WindowState.Minimized && _previousState != WindowState.Minimized)
         {
+            _preMinimizeState = _previousState;
             _idle?.SetMinimized(true);
             WeakReferenceMessenger.Default.Send(new WindowMinimizedMessage());
         }

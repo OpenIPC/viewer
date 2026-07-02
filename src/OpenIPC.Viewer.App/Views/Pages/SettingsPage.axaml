@@ -235,6 +235,12 @@
           <CheckBox IsChecked="{Binding ShowSplash}"
                     Content="{Binding [Settings.Appearance.ShowSplash], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+          <!-- Desktop only: mobile has no tray. -->
+          <CheckBox IsChecked="{Binding CloseToTray}"
+                    IsVisible="{Binding IsDesktopPlatform}"
+                    Content="{Binding [Settings.Appearance.CloseToTray], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
         </StackPanel>
 
         <!-- Video -->

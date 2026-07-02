@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
 using OpenIPC.Viewer.App.Views;
@@ -18,6 +19,10 @@ public sealed class App : Application
     // the only way to thread IoC across the parameterless ctor that
     // AvaloniaMainActivity<App> requires on Android.
     public static IServiceProvider? Services { get; set; }
+
+    // Desktop tray icon (null on mobile and until the main window first opens).
+    // MainWindow consults ExitRequested to tell a tray "Exit" from a close.
+    public static TrayIconService? Tray { get; private set; }
 
     // How long the mobile splash overlay stays before fading. The Android boot
     // is fast, so without a minimum beat the splash would just flicker.
@@ -83,6 +88,31 @@ public sealed class App : Application
         desktop.MainWindow = main;
         main.Show();
         toClose?.Close();
+        ShowTrayIcon(desktop);
+    }
+
+    // Best-effort: some Linux desktops have no tray support, and a missing tray
+    // must never take the app down with it.
+    private static void ShowTrayIcon(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        if (Tray is not null)
+            return;
+        try
+        {
+            Tray = new TrayIconService(desktop, Services!);
+            Tray.Show();
+            desktop.Exit += (_, _) =>
+            {
+                Tray?.Dispose();
+                Tray = null;
+            };
+        }
+        catch (Exception ex)
+        {
+            Services!.GetService<ILoggerFactory>()?.CreateLogger(nameof(App))
+                .LogWarning(ex, "Tray icon unavailable on this platform");
+            Tray = null;
+        }
     }
 
     // Android/iOS: migrations already ran in the platform host, so the splash is

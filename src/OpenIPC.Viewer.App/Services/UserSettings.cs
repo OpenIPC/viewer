@@ -91,7 +91,10 @@ public sealed record UserSettings(
     // session in every grid tile — far cheaper on CPU/bandwidth for big walls.
     // Interval is seconds between grabs. A per-camera override lands later.
     bool GridStillsMode = false,
-    int GridStillsIntervalSeconds = 10)
+    int GridStillsIntervalSeconds = 10,
+    // Desktop only: closing the main window hides it to the tray icon instead
+    // of quitting (live streams are released while hidden). Off = close quits.
+    bool CloseToTray = false)
 {
     public static UserSettings Default => new();
 }

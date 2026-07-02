@@ -36,6 +36,9 @@ public partial class MainView : UserControl
 
     private static readonly Thickness WidePadding = new(24);
     private static readonly Thickness NarrowPadding = new(12);
+    // Desktop kiosk keeps a hairline inset so the grid doesn't press against
+    // the physical screen edges; mobile fullscreen video stays full-bleed.
+    private static readonly Thickness KioskPadding = new(4);
 
     private bool _isWideLayout = true;
     private bool _isFullscreen;
@@ -161,7 +164,8 @@ public partial class MainView : UserControl
     {
         var showSidebar = _isWideLayout && !_isFullscreen;
         var showBottomNav = !_isWideLayout && !_isFullscreen;
-        var padding = _isFullscreen ? new Thickness(0)
+        var padding = _isFullscreen
+            ? (_vm?.KioskMode == true ? KioskPadding : new Thickness(0))
             : _isWideLayout ? WidePadding : NarrowPadding;
 
         SetAndRaise(ShowSidebarProperty, ref _showSidebar, showSidebar);

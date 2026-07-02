@@ -43,11 +43,19 @@
         </StackPanel>
 
         <StackPanel Spacing="6">
-          <Grid ColumnDefinitions="*,Auto">
+          <Grid ColumnDefinitions="*,Auto,12,Auto">
             <TextBlock Grid.Column="0" Text="{Binding [CameraEditor.Label.RtspMain], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
             <Button Grid.Column="1"
                     Content="{Binding [CameraEditor.Button.AutoDeriveRtsp], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding AutoDeriveRtspCommand}"
+                    Background="Transparent"
+                    Foreground="{StaticResource AccentBrush}"
+                    Padding="0"
+                    FontSize="{StaticResource FontSizeSm}" />
+            <Button Grid.Column="3"
+                    Content="{Binding [CameraEditor.Button.AutoDeriveXmRtsp], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding AutoDeriveXmRtspCommand}"
+                    ToolTip.Tip="{Binding [CameraEditor.Tooltip.AutoDeriveXmRtsp], Source={x:Static svc:Localizer.Instance}}"
                     Background="Transparent"
                     Foreground="{StaticResource AccentBrush}"
                     Padding="0"
