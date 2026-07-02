@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.App.ViewModels;
@@ -57,23 +60,82 @@ public sealed class TrayIconService : IDisposable
     private NativeMenu BuildMenu()
     {
         var menu = new NativeMenu();
-        menu.Add(Item("Tray.Open", RestoreMainWindow));
-        menu.Add(Item("Tray.AddCamera", AddCamera));
+        menu.Add(Item("Tray.Open", "IconVideo", RestoreMainWindow));
+        menu.Add(Item("Tray.AddCamera", "IconCamera", AddCamera));
         menu.Add(new NativeMenuItemSeparator());
         // About lives on the settings page, so both items land there — About
         // just deep-links to its section.
-        menu.Add(Item("Tray.Settings", () => OpenSettings(about: false)));
-        menu.Add(Item("Tray.About", () => OpenSettings(about: true)));
+        menu.Add(Item("Tray.Settings", "IconCog", () => OpenSettings(about: false)));
+        menu.Add(Item("Tray.About", "IconAbout", () => OpenSettings(about: true)));
         menu.Add(new NativeMenuItemSeparator());
-        menu.Add(Item("Tray.Exit", ExitApplication));
+        menu.Add(Item("Tray.Exit", "IconPower", ExitApplication));
         return menu;
     }
 
-    private static NativeMenuItem Item(string key, Action action)
+    private NativeMenuItem Item(string key, string iconKey, Action action)
     {
-        var item = new NativeMenuItem(Localizer.Instance[key]);
+        var item = new NativeMenuItem(Localizer.Instance[key])
+        {
+            Icon = GetMenuIcon(iconKey),
+        };
         item.Click += (_, _) => action();
         return item;
+    }
+
+    // Rendered lucide bitmaps, one per geometry key. Cached because the menu is
+    // rebuilt on every language switch and the icons never change.
+    private readonly Dictionary<string, Bitmap?> _menuIcons = new();
+
+    // Renders one of the Theme.axaml lucide stroke geometries into a small
+    // bitmap for NativeMenuItem.Icon (there is no vector slot on native menu
+    // items). Mirrors the Path.lucide style; 2x pixel density keeps the ~16px
+    // menu glyph crisp on scaled displays. Best-effort: a missing resource or
+    // render failure just leaves the item without an icon.
+    private Bitmap? GetMenuIcon(string resourceKey)
+    {
+        if (_menuIcons.TryGetValue(resourceKey, out var cached))
+            return cached;
+
+        Bitmap? bitmap = null;
+        try
+        {
+            if (Application.Current?.TryGetResource(resourceKey, null, out var res) == true &&
+                res is Geometry geometry)
+            {
+                var accent = Application.Current.TryGetResource("AccentBrush", null, out var b) && b is IBrush brush
+                    ? brush
+                    : Brushes.Gray;
+
+                var path = new Avalonia.Controls.Shapes.Path
+                {
+                    Data = geometry,
+                    Stroke = accent,
+                    StrokeThickness = 1.5,
+                    StrokeLineCap = PenLineCap.Round,
+                    StrokeJoin = PenLineJoin.Round,
+                    Fill = Brushes.Transparent,
+                    Stretch = Stretch.Uniform,
+                    Width = 16,
+                    Height = 16,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                };
+                var host = new Border { Width = 20, Height = 20, Child = path };
+                host.Measure(new Size(20, 20));
+                host.Arrange(new Rect(0, 0, 20, 20));
+
+                var rtb = new RenderTargetBitmap(new PixelSize(40, 40), new Vector(192, 192));
+                rtb.Render(host);
+                bitmap = rtb;
+            }
+        }
+        catch
+        {
+            bitmap = null;
+        }
+
+        _menuIcons[resourceKey] = bitmap;
+        return bitmap;
     }
 
     private void RestoreMainWindow()
@@ -110,6 +172,9 @@ public sealed class TrayIconService : IDisposable
     public void Dispose()
     {
         Localizer.Instance.PropertyChanged -= OnLanguageChanged;
+        foreach (var icon in _menuIcons.Values)
+            icon?.Dispose();
+        _menuIcons.Clear();
         if (_tray is null)
             return;
         // Explicit disposal removes the icon immediately — relying on process
