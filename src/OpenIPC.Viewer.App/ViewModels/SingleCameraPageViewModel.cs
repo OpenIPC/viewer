@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels.Majestic;
+using OpenIPC.Viewer.Core.Analytics;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
@@ -40,9 +42,18 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     private readonly AudioMonitor _audio;
     private readonly PushToTalkController _talk;
     private readonly IReachabilityProbe _reachability;
+    private readonly IAnalyticsEngine _analytics;
+    private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly ILogger<SingleCameraPageViewModel> _logger;
     private Camera _camera;
     private DispatcherTimer? _recTimer;
+
+    private IDisposable? _detectionsSub;
+    // True when WE attached this camera's frames to the analytics engine (the
+    // fallback path — normally the grid tile's feed is still running and we
+    // only mirror its results). Guards the detach so closing this page never
+    // strips a live tile registration.
+    private bool _analyticsAttachedHere;
 
     // On a stream fault, TCP-probe the camera so we can tell a wedged-but-alive
     // camera (Attention) from one that's truly gone (Offline). Short timeout.
@@ -92,8 +103,22 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     public string StatusHeading => Localizer.Instance[
         Status == CameraStatus.Attention ? "Stream.Interrupted" : "Stream.Disconnected"];
 
-    [ObservableProperty] private SessionTelemetry? _telemetry;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SourceAspect))]
+    private SessionTelemetry? _telemetry;
     [ObservableProperty] private string? _errorMessage;
+
+    // AI detections (Phase 15) continue onto this page: boxes computed by the
+    // engine (usually still fed by the grid tile's substream) are normalized
+    // 0..1, so they land correctly on the mainstream picture here too.
+    [ObservableProperty] private IReadOnlyList<Detection> _detections = Array.Empty<Detection>();
+
+    public bool AnalyticsEnabled => _camera.AnalyticsOrDefault.Enabled;
+
+    // Source frame aspect (width/height) so DetectionOverlay maps boxes into
+    // the letterboxed video rect; 0 until telemetry → overlay uses full bounds.
+    public double SourceAspect =>
+        Telemetry is { Width: > 0, Height: > 0 } t ? (double)t.Width / t.Height : 0;
 
     // Visible while the session is mid-connect (or backing off a reconnect). Gated
     // on Session != null so the empty pre-activate window doesn't show a spinner
@@ -215,6 +240,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         AudioMonitor audio,
         PushToTalkController talk,
         IReachabilityProbe reachability,
+        IAnalyticsEngine analytics,
+        AnalyticsBootstrap analyticsBootstrap,
         ILogger<SingleCameraPageViewModel> logger)
     {
         _camera = camera;
@@ -231,7 +258,15 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _audio = audio;
         _talk = talk;
         _reachability = reachability;
+        _analytics = analytics;
+        _analyticsBootstrap = analyticsBootstrap;
         _logger = logger;
+
+        // Mirror this camera's detection results (whoever feeds the engine —
+        // usually the still-running grid tile) onto the page overlay.
+        _detectionsSub = _analytics.Results
+            .Where(r => r.CameraId == _camera.Id)
+            .Subscribe(r => Dispatcher.UIThread.Post(() => Detections = r.Detections));
 
         // Hydrate the shared monitor from the persisted prefs and reflect any
         // later change (incl. from another page) back into the speaker UI.
@@ -633,6 +668,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
                 // only plays once unmuted; default is muted.
                 if (_audio.IsAvailable)
                     _audio.Attach(session, _camera.Id);
+
+                AttachAnalyticsFallback(session);
             }
             catch (Exception ex)
             {
@@ -815,6 +852,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
         _audioPresenceSub?.Dispose();
+        DetachAnalyticsFallback();
         // Re-detect on the fresh session — a swapped camera may not have audio.
         HasAudio = false;
         if (Session is not null)
@@ -1300,6 +1338,33 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         }
     }
 
+    // Fallback feed for the analytics engine: only when NOBODY is already
+    // feeding this camera (no grid tile — opened from the library, tile dropped
+    // by the session cap, stills mode, …). When a tile feed exists we only
+    // mirror its results; attaching over it would steal the registration and
+    // orphan the tile's detections when this page closes.
+    private void AttachAnalyticsFallback(IVideoSession session)
+    {
+        if (!_camera.AnalyticsOrDefault.Enabled || _analytics.IsAttached(_camera.Id))
+            return;
+        _ = _analyticsBootstrap.EnsureStartedAsync();
+        _analytics.Attach(
+            _camera.Id,
+            session.Frames,
+            () => _camera.AnalyticsOrDefault,
+            () => !_disposed && State == SessionState.Playing);
+        _analyticsAttachedHere = true;
+    }
+
+    private void DetachAnalyticsFallback()
+    {
+        if (!_analyticsAttachedHere)
+            return;
+        _analyticsAttachedHere = false;
+        _analytics.Detach(_camera.Id);
+        Detections = Array.Empty<Detection>();
+    }
+
     [RelayCommand]
     private void Back() =>
         WeakReferenceMessenger.Default.Send(new GoBackToLibraryMessage());
@@ -1317,6 +1382,8 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _stateSub?.Dispose();
         _telemetrySub?.Dispose();
         _audioPresenceSub?.Dispose();
+        _detectionsSub?.Dispose();
+        DetachAnalyticsFallback();
         _recordings.StateChanged -= OnRecordingsStateChanged;
         _userSettings.Changed -= OnUserSettingsChanged;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;

@@ -31,4 +31,10 @@ public interface IAnalyticsEngine : IAsyncDisposable
         Func<AnalyticsSettings> settings, Func<bool> isActive);
 
     void Detach(CameraId cameraId);
+
+    // Whether some frame source currently feeds this camera. Lets a second
+    // view (single-camera page) attach its own session ONLY as a fallback —
+    // Attach replaces the existing registration, so blindly re-attaching
+    // would steal the grid tile's feed and orphan it on detach.
+    bool IsAttached(CameraId cameraId);
 }
