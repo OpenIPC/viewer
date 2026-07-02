@@ -53,13 +53,24 @@
                     Padding="0"
                     FontSize="{StaticResource FontSizeSm}" />
             <Button Grid.Column="3"
-                    Content="{Binding [CameraEditor.Button.AutoDeriveXmRtsp], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding AutoDeriveXmRtspCommand}"
-                    ToolTip.Tip="{Binding [CameraEditor.Tooltip.AutoDeriveXmRtsp], Source={x:Static svc:Localizer.Instance}}"
+                    Content="{Binding [CameraEditor.Button.RtspTemplates], Source={x:Static svc:Localizer.Instance}}"
+                    ToolTip.Tip="{Binding [CameraEditor.Tooltip.RtspTemplates], Source={x:Static svc:Localizer.Instance}}"
                     Background="Transparent"
                     Foreground="{StaticResource AccentBrush}"
                     Padding="0"
-                    FontSize="{StaticResource FontSizeSm}" />
+                    FontSize="{StaticResource FontSizeSm}">
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="OpenIPC (Majestic)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="openipc" />
+                  <MenuItem Header="XM / Xiongmai (NETSurveillance)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="xm" />
+                  <MenuItem Header="Hikvision" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="hikvision" />
+                  <MenuItem Header="Dahua / Amcrest" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="dahua" />
+                  <MenuItem Header="Reolink" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="reolink" />
+                  <MenuItem Header="TP-Link (Tapo / VIGI)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="tplink" />
+                  <MenuItem Header="Uniview (UNV)" Command="{Binding ApplyRtspTemplateCommand}" CommandParameter="uniview" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
           </Grid>
           <TextBox Text="{Binding RtspMainText, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.RtspMain], Source={x:Static svc:Localizer.Instance}}" FontFamily="{StaticResource FontMono}" />
         </StackPanel>
