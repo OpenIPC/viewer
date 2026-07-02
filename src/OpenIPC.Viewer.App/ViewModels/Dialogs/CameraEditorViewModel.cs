@@ -159,6 +159,19 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             RtspMainText = $"rtsp://{Host.Trim()}/";
     }
 
+    // XM/Xiongmai (NETSurveillance) firmware embeds the login in the RTSP path
+    // and serves main/sub as stream=0/1. Uses the credential fields when set,
+    // falling back to the stock "admin" + empty password those cameras ship with.
+    [RelayCommand]
+    private void AutoDeriveXmRtsp()
+    {
+        if (string.IsNullOrWhiteSpace(Host)) return;
+        var host = Host.Trim();
+        var user = string.IsNullOrWhiteSpace(Username) ? "admin" : Username.Trim();
+        RtspMainText = $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=0.sdp?real_stream";
+        RtspSubText = $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=1.sdp?real_stream";
+    }
+
     [RelayCommand(CanExecute = nameof(CanTestConnection))]
     private async Task TestConnectionAsync()
     {
