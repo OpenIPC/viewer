@@ -24,6 +24,7 @@ internal static class Program
             "Starting OpenIPC.Viewer {Version}",
             typeof(Program).Assembly.GetName().Version);
 
+        int exitCode;
         try
         {
             // Migrations + event ingestion no longer block here (they used to run
@@ -31,7 +32,7 @@ internal static class Program
             // showed a frozen, window-less process). The startup splash window now
             // runs them off the UI thread with visible progress — see
             // App.OnFrameworkInitializationCompleted / StartupViewModel.
-            return BuildAvaloniaApp()
+            exitCode = BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
@@ -62,6 +63,13 @@ internal static class Program
                 logger.LogWarning("Service disposal timed out during shutdown; forcing exit");
             }
         }
+
+        // Returning from Main is not enough: any foreground thread left behind by
+        // a native interop layer keeps the closed app alive in Task Manager
+        // (observed on Windows 10). Everything is flushed and disposed by now, so
+        // terminate unconditionally.
+        Environment.Exit(exitCode);
+        return exitCode; // unreachable — Environment.Exit does not return
     }
 
     private static AppBuilder BuildAvaloniaApp() =>
