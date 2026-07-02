@@ -3,28 +3,41 @@
 Cross-platform desktop and mobile viewer for OpenIPC IP cameras.
 Built with .NET 9 / 10 and Avalonia 12.
 
-[![build](https://github.com/keyldev/openipc-viewer/actions/workflows/build.yml/badge.svg)](https://github.com/keyldev/openipc-viewer/actions/workflows/build.yml)
+[![build](https://github.com/OpenIPC/viewer/actions/workflows/build.yml/badge.svg)](https://github.com/OpenIPC/viewer/actions/workflows/build.yml)
 
-> Status: **release polish** — feature-complete for the first beta. Pending
-> packaging (installers / in-app auto-update), code signing, and the
-> `v0.1.0-beta` tag. Targets: Windows / Linux / macOS desktops + Android + iOS.
+> Status: **beta** — releases ship as standalone builds for Windows / Linux /
+> macOS / Android from the [releases page](https://github.com/OpenIPC/viewer/releases).
+> Native installers, code signing and in-app auto-update come later.
 >
-> See the [Roadmap](docs/ROADMAP.md) for phase status and what's left before
-> the betas.
+> See the [Roadmap](docs/ROADMAP.md) for phase status.
 
 ## Features
 
 - **Live RTSP** — h264 / h265, software + hardware decode (D3D11VA / VAAPI /
-  VideoToolbox / Android MediaCodec), auto-reconnect.
-- **Multi-camera grid** — up to 25 streams, custom layouts, drag-reorder.
+  VideoToolbox / Android MediaCodec), auto-reconnect, auto SD/HD switching.
+- **Multi-camera grid** — up to 25 streams, tabbed layouts, drag-reorder,
+  fullscreen kiosk mode, low-cost "stills" mode (periodic HTTP snapshots).
 - **Single-camera view** — PTZ joystick + presets, telemetry overlay,
   digital zoom (pinch / Ctrl+wheel), snapshot to disk + share.
-- **Recording** — segmented MP4 via `-c copy` (desktop ffmpeg subprocess;
-  Android in-process libavformat behind a foreground service).
-- **Camera discovery** — ONVIF probe + WS-Discovery, manual add, QR-code add.
+- **AI detection (local)** — ONNX object detection on-device (person / car /
+  animal…), boxes in the grid and single view, auto-record on detection.
+  No cloud: the model runs in-process.
+- **Audio** — one-tap listen (AAC/PCM) and push-to-talk to cameras with an
+  RTSP backchannel.
+- **Recording & archive** — segmented MP4 via `-c copy`, in-app player with
+  seek, clip export.
+- **Camera discovery** — ONVIF / mDNS / opt-in subnet sweep with OpenIPC
+  web fingerprinting, multi-add from one scan, manual add, QR-code add.
 - **Majestic integration** — read / apply config with diff preview, raw JSON
   editor, RTMP push, day / night / auto mode.
-- **Events** — motion ingestion + persisted log.
+- **Device tools** — SSH terminal, remote file manager, reboot / clock / log
+  snapshots over SSH.
+- **Health & status** — unified per-camera verdict (online / attention /
+  offline) across grid, library and a Health Center overview.
+- **Events & notifications** — motion + detection log, system notifications
+  with quiet hours.
+- **Desktop niceties** — tray icon with quick actions, optional
+  close-to-tray, light/dark themes with accent colors.
 - **Camera groups**, English / Russian UI (runtime switch), responsive layout
   (sidebar ↔ bottom tab strip).
 
@@ -51,7 +64,7 @@ Built with .NET 9 / 10 and Avalonia 12.
 ## Download
 
 Pre-built **standalone** binaries are attached to each
-[GitHub release](https://github.com/keyldev/openipc-viewer/releases). No
+[GitHub release](https://github.com/OpenIPC/viewer/releases). No
 installer is required for the beta — download, extract, run:
 
 | OS | Asset | Run |
@@ -137,7 +150,8 @@ src/
   OpenIPC.Viewer.Core/            netstandard2.1 — domain, no IO, no UI, no package deps
   OpenIPC.Viewer.Infrastructure/  net9.0         — SQLite, secrets, decoder factories
   OpenIPC.Viewer.Video/           net9.0         — FFmpeg pipeline (FFmpeg.AutoGen + SkiaSharp)
-  OpenIPC.Viewer.Devices/         net9.0         — ONVIF, Majestic HTTP
+  OpenIPC.Viewer.Analytics/       net9.0         — ONNX object detection (Microsoft.ML.OnnxRuntime)
+  OpenIPC.Viewer.Devices/         net9.0         — ONVIF, Majestic HTTP, SSH, discovery sources
   OpenIPC.Viewer.App/             net9.0         — Avalonia views and viewmodels (cross-platform)
   OpenIPC.Viewer.Composition/     net9.0         — shared DI registrations (used by every head)
   OpenIPC.Viewer.Desktop/         net9.0         — Win/Lin/Mac host, classic-window lifetime
