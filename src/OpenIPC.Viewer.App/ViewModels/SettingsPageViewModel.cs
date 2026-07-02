@@ -45,6 +45,11 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private NetworkInterfaceOption? _selectedNetworkInterface;
     [ObservableProperty] private string _language = "system";
     [ObservableProperty] private bool _showSplash = true;
+    [ObservableProperty] private bool _closeToTray;
+
+    // Gates the desktop-only toggles (tray) off the shared settings page.
+    public bool IsDesktopPlatform { get; } =
+        !OperatingSystem.IsAndroid() && !OperatingSystem.IsIOS();
 
     // SSH section (Phase 13).
     [ObservableProperty] private bool _sshStrictHostKey = true;
@@ -115,6 +120,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private void BackToList() => SelectedSectionIndex = -1;
+
+    // Deep-link target for the tray "About" item — keeps the section index in
+    // one place (it shifts between editions with different section sets).
+    public void SelectAboutSection() => SelectedSectionIndex = 6;
 
     public bool IsRecordingsDirOverridden => !string.IsNullOrWhiteSpace(RecordingsDirOverride);
 
@@ -206,6 +215,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             RecordingsDirOverride = s.RecordingsDirOverride;
             Language = s.Language;
             ShowSplash = s.ShowSplash;
+            CloseToTray = s.CloseToTray;
             SshStrictHostKey = s.SshStrictHostKey;
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
@@ -237,6 +247,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnRecordingsDirOverrideChanged(string value) => Persist();
     partial void OnLanguageChanged(string value) => Persist();
     partial void OnShowSplashChanged(bool value) => Persist();
+    partial void OnCloseToTrayChanged(bool value) => Persist();
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
@@ -267,6 +278,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             RecordingsDirOverride = RecordingsDirOverride,
             Language = Language,
             ShowSplash = ShowSplash,
+            CloseToTray = CloseToTray,
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,

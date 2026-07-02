@@ -14,11 +14,16 @@ public sealed partial class MainWindow : Window
     private readonly UserSettingsService? _settings;
     private readonly IdleStreamMonitor? _idle;
     private WindowState _previousState = WindowState.Normal;
+    // State to restore when un-minimizing from the tray (Normal or Maximized) —
+    // _previousState itself becomes Minimized right after the transition.
+    private WindowState _preMinimizeState = WindowState.Normal;
 
     // Last known normal-state geometry, tracked live so a window that closes
     // while maximized still persists sensible un-maximize bounds.
     private PixelPoint _normalPosition;
     private Size _normalSize;
+
+    private bool _hiddenToTray;
 
     public MainWindow()
     {
@@ -129,6 +134,48 @@ public sealed partial class MainWindow : Window
         // Synchronous so the write completes before the process exits; the save
         // is off-UI file IO (ConfigureAwait(false)) so this won't deadlock.
         _settings.UpdateAsync(next).GetAwaiter().GetResult();
+
+        // Close-to-tray: a user-initiated close hides the window instead of
+        // quitting. Tray "Exit" and app/OS shutdown pass through — geometry was
+        // already persisted above either way.
+        if (_settings.Current.CloseToTray &&
+            e.CloseReason == WindowCloseReason.WindowClosing &&
+            App.Tray is { ExitRequested: false })
+        {
+            e.Cancel = true;
+            HideToTray();
+        }
+    }
+
+    // Hidden windows keep their live RTSP sessions unless told otherwise, so
+    // hiding reuses the minimize path: streams are released while nobody looks.
+    private void HideToTray()
+    {
+        if (_hiddenToTray) return;
+        _hiddenToTray = true;
+        Hide();
+        _idle?.SetMinimized(true);
+        WeakReferenceMessenger.Default.Send(new WindowMinimizedMessage());
+    }
+
+    // Entry point for the tray icon (click or menu): un-hide, un-minimize and
+    // bring the window to the foreground.
+    public void RestoreFromTray()
+    {
+        if (_hiddenToTray)
+        {
+            _hiddenToTray = false;
+            Show();
+            _idle?.SetMinimized(false);
+            WeakReferenceMessenger.Default.Send(new WindowRestoredMessage());
+        }
+
+        if (WindowState == WindowState.Minimized)
+            WindowState = _preMinimizeState == WindowState.Maximized
+                ? WindowState.Maximized
+                : WindowState.Normal;
+
+        Activate();
     }
 
     private void OnWindowPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
@@ -139,6 +186,7 @@ public sealed partial class MainWindow : Window
         var current = (WindowState)e.NewValue!;
         if (current == WindowState.Minimized && _previousState != WindowState.Minimized)
         {
+            _preMinimizeState = _previousState;
             _idle?.SetMinimized(true);
             WeakReferenceMessenger.Default.Send(new WindowMinimizedMessage());
         }
