@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.App.Messages;
@@ -131,19 +132,35 @@ public sealed partial class MainWindow : Window
             WindowMaximized = maximized,
         };
 
-        // Synchronous so the write completes before the process exits; the save
-        // is off-UI file IO (ConfigureAwait(false)) so this won't deadlock.
-        _settings.UpdateAsync(next).GetAwaiter().GetResult();
-
-        // Close-to-tray: a user-initiated close hides the window instead of
-        // quitting. Tray "Exit" and app/OS shutdown pass through — geometry was
-        // already persisted above either way.
+        // Close-to-tray: hide instead of quitting. Tray "Exit" and app/OS
+        // shutdown pass through. Two hard-won rules for this branch:
+        //  - never block on the save here — the process stays alive, so the
+        //    write can finish in the background;
+        //  - never call Hide() inside this handler — Avalonia drops visibility
+        //    changes while a close is being processed, leaving the window in a
+        //    stuck state where every further close is a no-op. Post it instead.
         if (_settings.Current.CloseToTray &&
             e.CloseReason == WindowCloseReason.WindowClosing &&
             App.Tray is { ExitRequested: false })
         {
             e.Cancel = true;
-            HideToTray();
+            _ = _settings.UpdateAsync(next);
+            Dispatcher.UIThread.Post(HideToTray);
+            return;
+        }
+
+        // Real exit: the write must land before Program.Main force-exits the
+        // process. The save completes entirely off the UI thread (SaveAsync is
+        // ConfigureAwait(false) throughout — including the stream disposal,
+        // which once captured the dispatcher and deadlocked this very wait);
+        // the timeout is a backstop so a wedged save can never freeze the close.
+        try
+        {
+            _settings.UpdateAsync(next).Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException)
+        {
+            // A failed save must not block exiting.
         }
     }
 

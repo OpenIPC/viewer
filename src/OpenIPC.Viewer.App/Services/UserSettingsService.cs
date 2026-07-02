@@ -95,7 +95,13 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     private async Task SaveAsync(CancellationToken ct)
     {
         var tmp = _path + ".tmp";
-        await using (var stream = File.Create(tmp))
+        var stream = File.Create(tmp);
+        // A bare `await using` has no ConfigureAwait — when this method is
+        // entered on the UI thread (free-gate UpdateAsync runs synchronously up
+        // to here), the DisposeAsync continuation would be posted back to the
+        // blocked dispatcher and deadlock a caller that synchronously waits on
+        // the task (MainWindow.OnClosing did exactly that).
+        await using (stream.ConfigureAwait(false))
             await JsonSerializer.SerializeAsync(stream, Current, JsonOpts, ct).ConfigureAwait(false);
         File.Move(tmp, _path, overwrite: true);
     }
