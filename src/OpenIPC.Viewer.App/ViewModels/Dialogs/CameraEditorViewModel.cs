@@ -159,17 +159,43 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             RtspMainText = $"rtsp://{Host.Trim()}/";
     }
 
-    // XM/Xiongmai (NETSurveillance) firmware embeds the login in the RTSP path
-    // and serves main/sub as stream=0/1. Uses the credential fields when set,
-    // falling back to the stock "admin" + empty password those cameras ship with.
+    // Vendor RTSP URI templates (camera-editor "Templates" flyout). Fills both
+    // main/sub from the host field. Credentials ride the RTSP auth handshake
+    // (the Username/Password fields), so they are NOT embedded in the URI —
+    // except XM/Xiongmai (NETSurveillance), whose firmware wants the login in
+    // the path itself; there the fields are used, falling back to the stock
+    // "admin" + empty password those cameras ship with.
     [RelayCommand]
-    private void AutoDeriveXmRtsp()
+    private void ApplyRtspTemplate(string vendor)
     {
         if (string.IsNullOrWhiteSpace(Host)) return;
         var host = Host.Trim();
         var user = string.IsNullOrWhiteSpace(Username) ? "admin" : Username.Trim();
-        RtspMainText = $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=0.sdp?real_stream";
-        RtspSubText = $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=1.sdp?real_stream";
+        (RtspMainText, RtspSubText) = vendor switch
+        {
+            "openipc" => (
+                $"rtsp://{host}:554/stream0",
+                $"rtsp://{host}:554/stream1"),
+            "xm" => (
+                $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=0.sdp?real_stream",
+                $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=1.sdp?real_stream"),
+            "hikvision" => (
+                $"rtsp://{host}:554/Streaming/Channels/101",
+                $"rtsp://{host}:554/Streaming/Channels/102"),
+            "dahua" => (
+                $"rtsp://{host}:554/cam/realmonitor?channel=1&subtype=0",
+                $"rtsp://{host}:554/cam/realmonitor?channel=1&subtype=1"),
+            "reolink" => (
+                $"rtsp://{host}:554/h264Preview_01_main",
+                $"rtsp://{host}:554/h264Preview_01_sub"),
+            "tplink" => (
+                $"rtsp://{host}:554/stream1",
+                $"rtsp://{host}:554/stream2"),
+            "uniview" => (
+                $"rtsp://{host}:554/media/video1",
+                $"rtsp://{host}:554/media/video2"),
+            _ => (RtspMainText, RtspSubText),
+        };
     }
 
     [RelayCommand(CanExecute = nameof(CanTestConnection))]
