@@ -322,39 +322,53 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     [RelayCommand]
     private async Task DiscoverCameraAsync()
     {
-        var discoveryVm = _discoveryFactory.Create();
-        var found = await _dialogs.ShowDiscoveryDialogAsync(discoveryVm).ConfigureAwait(true);
-        if (found is null)
-            return;
+        // Multi-add loop: after each camera is saved (or its editor cancelled)
+        // the discovery dialog reopens with the SAME scan results and creds
+        // (DiscoverySessionCache), so several cameras go in from one scan.
+        // Only cancelling the discovery dialog itself exits.
+        var knownHosts = new System.Collections.Generic.HashSet<string>(
+            System.Linq.Enumerable.Select(_allCameras, c => c.Host),
+            StringComparer.OrdinalIgnoreCase);
 
-        // Pre-fill the editor from the probe result so the user sees / can tweak
-        // everything before saving (RTSP URI especially — phase-04 risks §"ONVIF
-        // returns wrong RTSP URI behind NAT" applies).
-        var editor = _editorFactory.CreateForNew();
-        editor.Name = found.Device.Model ?? found.Device.Name ?? found.Device.Host;
-        editor.Host = found.Device.Host;
-        editor.OnvifPortText = (found.Device.OnvifServiceUri?.Port ?? 80).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        editor.RtspMainText = found.RtspMainUri.ToString();
-        editor.Username = found.Credentials?.Username ?? "";
-        editor.Password = found.Credentials?.Password ?? "";
-
-        var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
-        if (result?.NewRequest is not { } req)
-            return;
-
-        try
+        while (true)
         {
-            var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
-            // Persist HasPtz / ProfileToken / manufacturer info from the probe so
-            // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
-            // Non-ONVIF devices (sweep/mDNS) have no probe — nothing to persist.
-            if (found.Probe is { } probe)
-                await _directory.SaveOnvifMetadataAsync(id, probe, CancellationToken.None).ConfigureAwait(true);
-            await LoadAsync(CancellationToken.None).ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to add discovered camera {Host}", req.Host);
+            var discoveryVm = _discoveryFactory.Create(knownHosts);
+            var found = await _dialogs.ShowDiscoveryDialogAsync(discoveryVm).ConfigureAwait(true);
+            // Stop background fingerprints of the instance that just closed.
+            discoveryVm.Cancel();
+            if (found is null)
+                return;
+
+            // Pre-fill the editor from the probe result so the user sees / can tweak
+            // everything before saving (RTSP URI especially — phase-04 risks §"ONVIF
+            // returns wrong RTSP URI behind NAT" applies).
+            var editor = _editorFactory.CreateForNew();
+            editor.Name = found.Device.Model ?? found.Device.Name ?? found.Device.Host;
+            editor.Host = found.Device.Host;
+            editor.OnvifPortText = (found.Device.OnvifServiceUri?.Port ?? 80).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            editor.RtspMainText = found.RtspMainUri.ToString();
+            editor.Username = found.Credentials?.Username ?? "";
+            editor.Password = found.Credentials?.Password ?? "";
+
+            var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
+            if (result?.NewRequest is not { } req)
+                continue; // editor cancelled — back to the scan list
+
+            try
+            {
+                var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+                // Persist HasPtz / ProfileToken / manufacturer info from the probe so
+                // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
+                // Non-ONVIF devices (sweep/mDNS) have no probe — nothing to persist.
+                if (found.Probe is { } probe)
+                    await _directory.SaveOnvifMetadataAsync(id, probe, CancellationToken.None).ConfigureAwait(true);
+                await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+                knownHosts.Add(req.Host);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to add discovered camera {Host}", req.Host);
+            }
         }
     }
 

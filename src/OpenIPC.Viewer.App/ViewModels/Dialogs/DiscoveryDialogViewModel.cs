@@ -23,11 +23,19 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
 {
     private readonly IDiscoveryAggregator _aggregator;
     private readonly OnvifProbeService _probe;
+    private readonly OpenIPC.Viewer.Core.Majestic.IMajesticClient _majestic;
+    private readonly DiscoverySessionCache _cache;
+    private readonly IReadOnlySet<string> _knownHosts;
     private readonly ILogger<DiscoveryDialogViewModel> _logger;
 
     private CancellationTokenSource? _scanCts;
+    // Cancels in-flight Majestic fingerprints when the dialog goes away.
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly Dictionary<string, DiscoveredDeviceRowVm> _rowsByHost =
         new(StringComparer.OrdinalIgnoreCase);
+    // Hosts we already fingerprinted (or are fingerprinting) — one ping per host.
+    private readonly HashSet<string> _fingerprinted = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _fingerprintGate = new(6);
 
     public ObservableCollection<DiscoveredDeviceRowVm> Cameras { get; } = new();
 
@@ -42,6 +50,10 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
 
     [ObservableProperty] private string _username = "";
     [ObservableProperty] private string _password = "";
+
+    // "Use these credentials for all cameras" (multi-add). Off → the next
+    // dialog instance starts with blank login fields.
+    [ObservableProperty] private bool _reuseCredentials = true;
 
     // 0..1 scan progress (mean across sources). Drives the progress bar; hidden
     // when not scanning.
@@ -66,18 +78,47 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     public DiscoveryDialogViewModel(
         IDiscoveryAggregator aggregator,
         OnvifProbeService probe,
+        OpenIPC.Viewer.Core.Majestic.IMajesticClient majestic,
+        DiscoverySessionCache cache,
+        IReadOnlySet<string> knownHosts,
         ILogger<DiscoveryDialogViewModel> logger)
     {
         _aggregator = aggregator;
         _probe = probe;
+        _majestic = majestic;
+        _cache = cache;
+        _knownHosts = knownHosts;
         _logger = logger;
+
+        // Rehydrate the previous scan so the user can add several cameras
+        // one-by-one without rescanning between dialog opens. Credentials only
+        // carry over while "use for all cameras" is on — a mixed-credential
+        // park starts each camera with blank fields.
+        _reuseCredentials = cache.ReuseCredentials;
+        if (_reuseCredentials)
+        {
+            _username = cache.Username;
+            _password = cache.Password;
+        }
+        _deepScan = cache.DeepScan;
+        foreach (var device in cache.Snapshot())
+            Upsert(device);
+        if (Cameras.Count > 0)
+            StatusText = string.Format(Localizer.Instance["Discovery.Status.FoundFormat"], Cameras.Count);
     }
+
+    partial void OnUsernameChanged(string value) => _cache.Username = value;
+    partial void OnPasswordChanged(string value) => _cache.Password = value;
+    partial void OnDeepScanChanged(bool value) => _cache.DeepScan = value;
+    partial void OnReuseCredentialsChanged(bool value) => _cache.ReuseCredentials = value;
 
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync()
     {
         Cameras.Clear();
         _rowsByHost.Clear();
+        _fingerprinted.Clear();
+        _cache.Clear();
         Selected = null;
         ScanProgress = 0;
         StatusText = Localizer.Instance["Discovery.Status.Scanning"];
@@ -125,10 +166,63 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         }
         else
         {
-            row = new DiscoveredDeviceRowVm(device);
+            row = new DiscoveredDeviceRowVm(device)
+            {
+                IsAlreadyAdded = _knownHosts.Contains(device.Host),
+            };
             _rowsByHost[device.Host] = row;
             Cameras.Add(row);
         }
+
+        _cache.Put(row.Device);
+        ScheduleFingerprint(row.Device);
+    }
+
+    // Newer OpenIPC firmwares always run the Majestic web UI, so an HTTP ping
+    // identifies them even when they answer neither ONVIF nor mDNS with a
+    // model. One bounded background ping per host; on a hit the row upgrades
+    // in place (Majestic protocol + "OpenIPC" label + High confidence).
+    private void ScheduleFingerprint(DiscoveredDevice device)
+    {
+        if (device.Protocols.HasFlag(DiscoveryProtocol.Majestic) && device.Model is not null)
+            return;
+        if (!_fingerprinted.Add(device.Host))
+            return;
+
+        var ct = _lifetimeCts.Token;
+        _ = Task.Run(async () =>
+        {
+            await _fingerprintGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var hit = device.Protocols.HasFlag(DiscoveryProtocol.Majestic);
+                var ports = device.Ports.Where(p => p is 80 or 8080).DefaultIfEmpty(80);
+                foreach (var port in ports)
+                {
+                    if (hit) break;
+                    hit = await _majestic.PingAsync(
+                        new OpenIPC.Viewer.Core.Majestic.MajesticEndpoint(device.Host, port, null), ct).ConfigureAwait(false);
+                }
+                if (!hit) return;
+
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (!_rowsByHost.TryGetValue(device.Host, out var row)) return;
+                    row.Device = row.Device.MergeWith(new DiscoveredDevice(
+                        device.Host, DiscoveryProtocol.Majestic, Array.Empty<int>(), Model: "OpenIPC"));
+                    _cache.Put(row.Device);
+                });
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Majestic fingerprint failed for {Host}", device.Host);
+            }
+            finally
+            {
+                _fingerprintGate.Release();
+            }
+        }, ct);
     }
 
     private bool CanScan() => !ScanInProgress && !AddInProgress;
@@ -199,6 +293,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     public void Cancel()
     {
         _scanCts?.Cancel();
+        _lifetimeCts.Cancel();
     }
 }
 
@@ -211,6 +306,10 @@ public sealed partial class DiscoveredDeviceRowVm : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ProtocolsText))]
     [NotifyPropertyChangedFor(nameof(ConfidenceText))]
     private DiscoveredDevice _device;
+
+    // A camera with this host already exists in the library — shown as a badge
+    // so the multi-add flow makes it obvious what's left to add.
+    [ObservableProperty] private bool _isAlreadyAdded;
 
     public DiscoveredDeviceRowVm(DiscoveredDevice device) => _device = device;
 

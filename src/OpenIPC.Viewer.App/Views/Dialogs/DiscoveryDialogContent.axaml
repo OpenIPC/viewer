@@ -62,9 +62,19 @@
           <DataTemplate DataType="vm:DiscoveredDeviceRowVm">
             <Grid ColumnDefinitions="*,Auto" Margin="8">
               <StackPanel Grid.Column="0" Spacing="2">
-                <TextBlock Text="{Binding DisplayName}"
-                           FontWeight="Medium"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding DisplayName}"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                  <Border IsVisible="{Binding IsAlreadyAdded}"
+                          Background="{StaticResource Bg3Brush}"
+                          CornerRadius="4" Padding="6,1"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding [Discovery.AlreadyAdded], Source={x:Static svc:Localizer.Instance}}"
+                               FontSize="{StaticResource FontSizeSm}"
+                               Foreground="{StaticResource SuccessBrush}" />
+                  </Border>
+                </StackPanel>
                 <TextBlock Text="{Binding Subtitle}"
                            FontSize="{StaticResource FontSizeSm}"
                            Foreground="{StaticResource TextSecondaryBrush}" />
@@ -89,17 +99,23 @@
       </ListBox>
     </Border>
 
-    <Grid Grid.Row="3" ColumnDefinitions="*,12,*" Margin="0,16,0,0"
-          IsVisible="{Binding IsRowSelected}">
-      <StackPanel Grid.Column="0" Spacing="6">
-        <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-        <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
-      </StackPanel>
-      <StackPanel Grid.Column="2" Spacing="6">
-        <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-        <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
-      </StackPanel>
-    </Grid>
+    <StackPanel Grid.Row="3" Spacing="8" Margin="0,16,0,0"
+                IsVisible="{Binding IsRowSelected}">
+      <Grid ColumnDefinitions="*,12,*">
+        <StackPanel Grid.Column="0" Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="6">
+          <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+          <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
+        </StackPanel>
+      </Grid>
+      <CheckBox IsChecked="{Binding ReuseCredentials, Mode=TwoWay}"
+                Content="{Binding [Discovery.ReuseCreds], Source={x:Static svc:Localizer.Instance}}"
+                FontSize="{StaticResource FontSizeSm}"
+                Foreground="{StaticResource TextSecondaryBrush}" />
+    </StackPanel>
 
     <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
       <Button Grid.Column="1"
