@@ -5,7 +5,7 @@
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.CameraEditorWindow"
         x:DataType="vm:CameraEditorViewModel"
         Title="{Binding Title}"
-        Width="520" Height="640"
+        Width="560" Height="680"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
         Background="{StaticResource Bg1Brush}">

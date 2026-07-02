@@ -179,6 +179,9 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
             "xm" => (
                 $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=0.sdp?real_stream",
                 $"rtsp://{host}:554/user={user}&password={Password}&channel=1&stream=1.sdp?real_stream"),
+            "xm-sofia" => (
+                $"rtsp://{host}:554/user={user}&password={SofiaHash(Password)}&channel=1&stream=0.sdp?real_stream",
+                $"rtsp://{host}:554/user={user}&password={SofiaHash(Password)}&channel=1&stream=1.sdp?real_stream"),
             "hikvision" => (
                 $"rtsp://{host}:554/Streaming/Channels/101",
                 $"rtsp://{host}:554/Streaming/Channels/102"),
@@ -196,6 +199,23 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
                 $"rtsp://{host}:554/media/video2"),
             _ => (RtspMainText, RtspSubText),
         };
+    }
+
+    // XM/Xiongmai "Sofia" password digest (NETSurveillance/DVRIP): pairs of MD5
+    // bytes summed mod 62, mapped to [0-9A-Za-z], 8 chars. Newer XM firmwares
+    // reject the plaintext password in the RTSP URL and want this instead
+    // (empty password hashes to the well-known "tlJwpbo6"). MD5 here is a
+    // protocol requirement, not our choice of cryptography.
+    private static string SofiaHash(string password)
+    {
+        var md5 = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(password));
+        var chars = new char[8];
+        for (var i = 0; i < 8; i++)
+        {
+            var n = (md5[2 * i] + md5[2 * i + 1]) % 62;
+            chars[i] = (char)(n < 10 ? '0' + n : n < 36 ? 'A' + n - 10 : 'a' + n - 36);
+        }
+        return new string(chars);
     }
 
     [RelayCommand(CanExecute = nameof(CanTestConnection))]
