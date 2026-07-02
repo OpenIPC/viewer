@@ -57,6 +57,20 @@
         </controls:RtspVideoView.GestureRecognizers>
       </controls:RtspVideoView>
 
+      <!-- AI detection boxes (Phase 15.5) — detection started on the grid tile
+           continues here; boxes are normalized so the substream-fed results
+           map onto the mainstream picture. Mirrors the video's zoom transform
+           so boxes stay glued to objects under digital zoom. -->
+      <controls:DetectionOverlay Detections="{Binding Detections}"
+                                 ShowBoxes="{Binding AnalyticsEnabled}"
+                                 SourceAspect="{Binding SourceAspect}"
+                                 RenderTransformOrigin="0.5,0.5"
+                                 IsHitTestVisible="False">
+        <controls:DetectionOverlay.RenderTransform>
+          <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}" />
+        </controls:DetectionOverlay.RenderTransform>
+      </controls:DetectionOverlay>
+
       <!-- Top-left LIVE badge -->
       <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12"
               Background="{StaticResource DangerBrush}"

@@ -119,6 +119,8 @@ public sealed class ObjectDetectionEngine : IAnalyticsEngine
             reg.Dispose();
     }
 
+    public bool IsAttached(CameraId cameraId) => _cameras.ContainsKey(cameraId);
+
     private void OnFrame(CameraId cameraId, CameraRegistration reg, in VideoFrame frame)
     {
         var settings = reg.Settings();

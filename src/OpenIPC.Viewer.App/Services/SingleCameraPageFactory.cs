@@ -26,6 +26,8 @@ public sealed class SingleCameraPageFactory
     private readonly OpenIPC.Viewer.Core.Platform.IAudioInput _audioInput;
     private readonly IAudioBackchannelClient _backchannel;
     private readonly IReachabilityProbe _reachability;
+    private readonly OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine _analytics;
+    private readonly AnalyticsBootstrap _analyticsBootstrap;
     private readonly ILoggerFactory _loggerFactory;
 
     public SingleCameraPageFactory(
@@ -43,6 +45,8 @@ public sealed class SingleCameraPageFactory
         OpenIPC.Viewer.Core.Platform.IAudioInput audioInput,
         IAudioBackchannelClient backchannel,
         IReachabilityProbe reachability,
+        OpenIPC.Viewer.Core.Analytics.IAnalyticsEngine analytics,
+        AnalyticsBootstrap analyticsBootstrap,
         ILoggerFactory loggerFactory)
     {
         _coordinator = coordinator;
@@ -59,6 +63,8 @@ public sealed class SingleCameraPageFactory
         _audioInput = audioInput;
         _backchannel = backchannel;
         _reachability = reachability;
+        _analytics = analytics;
+        _analyticsBootstrap = analyticsBootstrap;
         _loggerFactory = loggerFactory;
     }
 
@@ -66,5 +72,7 @@ public sealed class SingleCameraPageFactory
         new(camera, _coordinator, _directory, _onvif, _majestic, _schema, _majesticSsh, _recordings, _userSettings, _dialogs, _snapshots, _audio,
             new PushToTalkController(_audioInput, _backchannel),
             _reachability,
+            _analytics,
+            _analyticsBootstrap,
             _loggerFactory.CreateLogger<SingleCameraPageViewModel>());
 }
