@@ -143,7 +143,12 @@ public sealed class SubnetSweepDiscoverySource : IDiscoverySource
             }
         }
 
-        return protocols == DiscoveryProtocol.None ? null : new DiscoveredDevice(host, protocols, ports);
+        if (protocols == DiscoveryProtocol.None)
+            return null;
+        // A positive fingerprint names the device — the dialog shows the label
+        // instead of "(unknown model)".
+        var model = protocols.HasFlag(DiscoveryProtocol.Majestic) ? "OpenIPC" : null;
+        return new DiscoveredDevice(host, protocols, ports, Model: model);
     }
 
     private static bool TryGetPrefix(string ip, out string prefix, out int lastOctet)

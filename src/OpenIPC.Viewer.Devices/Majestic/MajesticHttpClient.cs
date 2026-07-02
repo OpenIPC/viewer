@@ -43,10 +43,29 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
             // "<!DOCTYPE html>"), which fails the JSON sniff and hides an
             // otherwise working Majestic. config.json is the canonical endpoint
             // and always returns the live config object.
-            using var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/config.json", ct).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return false;
-            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            return LooksLikeMajesticConfig(body);
+            using (var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/config.json", ct).ConfigureAwait(false))
+            {
+                // Newer firmwares guard the API behind auth — a 401 challenge on
+                // this exact path still means "a Majestic is answering here".
+                if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    return true;
+                if (resp.IsSuccessStatusCode)
+                {
+                    var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    if (LooksLikeMajesticConfig(body))
+                        return true;
+                }
+            }
+
+            // Fallback for firmwares where the JSON API moved or is disabled but
+            // the web UI is up: the index page names OpenIPC/Majestic in its HTML.
+            using (var resp = await SendAsync(endpoint, HttpMethod.Get, "", ct).ConfigureAwait(false))
+            {
+                if (!resp.IsSuccessStatusCode) return false;
+                var html = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                return html.Contains("openipc", StringComparison.OrdinalIgnoreCase)
+                    || html.Contains("majestic", StringComparison.OrdinalIgnoreCase);
+            }
         }
         catch (Exception ex)
         {

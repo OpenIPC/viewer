@@ -62,9 +62,19 @@
           <DataTemplate DataType="vm:DiscoveredDeviceRowVm">
             <Grid ColumnDefinitions="*,Auto" Margin="8">
               <StackPanel Grid.Column="0" Spacing="2">
-                <TextBlock Text="{Binding DisplayName}"
-                           FontWeight="Medium"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding DisplayName}"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                  <Border IsVisible="{Binding IsAlreadyAdded}"
+                          Background="{StaticResource Bg3Brush}"
+                          CornerRadius="4" Padding="6,1"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding [Discovery.AlreadyAdded], Source={x:Static svc:Localizer.Instance}}"
+                               FontSize="{StaticResource FontSizeSm}"
+                               Foreground="{StaticResource SuccessBrush}" />
+                  </Border>
+                </StackPanel>
                 <TextBlock Text="{Binding Subtitle}"
                            FontSize="{StaticResource FontSizeSm}"
                            Foreground="{StaticResource TextSecondaryBrush}" />
