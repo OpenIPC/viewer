@@ -19,6 +19,11 @@ public sealed class DiscoverySessionCache
     public string Password { get; set; } = "";
     public bool DeepScan { get; set; }
 
+    // "Use these credentials for all cameras" — on (default) carries the typed
+    // login into the next add; off makes every camera start with blank fields
+    // (mixed-credential parks).
+    public bool ReuseCredentials { get; set; } = true;
+
     public IReadOnlyList<DiscoveredDevice> Snapshot()
     {
         lock (_sync)

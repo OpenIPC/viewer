@@ -51,6 +51,10 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     [ObservableProperty] private string _username = "";
     [ObservableProperty] private string _password = "";
 
+    // "Use these credentials for all cameras" (multi-add). Off → the next
+    // dialog instance starts with blank login fields.
+    [ObservableProperty] private bool _reuseCredentials = true;
+
     // 0..1 scan progress (mean across sources). Drives the progress bar; hidden
     // when not scanning.
     [ObservableProperty] private double _scanProgress;
@@ -87,9 +91,15 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         _logger = logger;
 
         // Rehydrate the previous scan so the user can add several cameras
-        // one-by-one without rescanning between dialog opens.
-        _username = cache.Username;
-        _password = cache.Password;
+        // one-by-one without rescanning between dialog opens. Credentials only
+        // carry over while "use for all cameras" is on — a mixed-credential
+        // park starts each camera with blank fields.
+        _reuseCredentials = cache.ReuseCredentials;
+        if (_reuseCredentials)
+        {
+            _username = cache.Username;
+            _password = cache.Password;
+        }
         _deepScan = cache.DeepScan;
         foreach (var device in cache.Snapshot())
             Upsert(device);
@@ -100,6 +110,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     partial void OnUsernameChanged(string value) => _cache.Username = value;
     partial void OnPasswordChanged(string value) => _cache.Password = value;
     partial void OnDeepScanChanged(bool value) => _cache.DeepScan = value;
+    partial void OnReuseCredentialsChanged(bool value) => _cache.ReuseCredentials = value;
 
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync()
