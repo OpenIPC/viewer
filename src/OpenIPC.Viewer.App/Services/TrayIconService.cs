@@ -88,9 +88,11 @@ public sealed class TrayIconService : IDisposable
 
     // Renders one of the Theme.axaml lucide stroke geometries into a small
     // bitmap for NativeMenuItem.Icon (there is no vector slot on native menu
-    // items). Mirrors the Path.lucide style; 2x pixel density keeps the ~16px
-    // menu glyph crisp on scaled displays. Best-effort: a missing resource or
-    // render failure just leaves the item without an icon.
+    // items). Mirrors the Path.lucide style. The bitmap MUST be 16×16 at 96
+    // DPI: the menu presents it at pixel size, so a hi-DPI (2x) bitmap comes
+    // out double-sized and gets cropped to its top-left corner in the ~16px
+    // icon slot. Best-effort: a missing resource or render failure just
+    // leaves the item without an icon.
     private Bitmap? GetMenuIcon(string resourceKey)
     {
         if (_menuIcons.TryGetValue(resourceKey, out var cached))
@@ -115,16 +117,16 @@ public sealed class TrayIconService : IDisposable
                     StrokeJoin = PenLineJoin.Round,
                     Fill = Brushes.Transparent,
                     Stretch = Stretch.Uniform,
-                    Width = 16,
-                    Height = 16,
+                    Width = 14,
+                    Height = 14,
                     HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
                     VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
                 };
-                var host = new Border { Width = 20, Height = 20, Child = path };
-                host.Measure(new Size(20, 20));
-                host.Arrange(new Rect(0, 0, 20, 20));
+                var host = new Border { Width = 16, Height = 16, Child = path };
+                host.Measure(new Size(16, 16));
+                host.Arrange(new Rect(0, 0, 16, 16));
 
-                var rtb = new RenderTargetBitmap(new PixelSize(40, 40), new Vector(192, 192));
+                var rtb = new RenderTargetBitmap(new PixelSize(16, 16), new Vector(96, 96));
                 rtb.Render(host);
                 bitmap = rtb;
             }
