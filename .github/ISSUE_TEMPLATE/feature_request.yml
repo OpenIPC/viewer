@@ -2,75 +2,19 @@ name: Feature request
 description: Suggest an idea or improvement
 labels: ["enhancement"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        The project is built in phases with a deliberate scope per phase. Ideas
-        are welcome — but note that something fitting a later phase may be parked
-        until then. Search existing issues first.
-
   - type: textarea
-    id: problem
+    id: idea
     attributes:
-      label: Problem / motivation
-      description: What are you trying to do, and what's missing or awkward today?
-      placeholder: "When I have 12 cameras, I can't ... because ..."
+      label: The idea
+      description: What's missing or awkward today, and what would you like to happen? A couple of sentences is enough.
+      placeholder: "When I have 12 cameras, I can't ... It would be great if ..."
     validations:
       required: true
-
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposed solution
-      description: What would you like to happen?
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Other approaches or workarounds you've thought about.
-    validations:
-      required: false
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      options:
-        - Live video / playback
-        - Multi-camera grid
-        - PTZ / presets
-        - Recording
-        - Majestic config
-        - Discovery / adding cameras
-        - Events
-        - Settings / UI
-        - Packaging / distribution
-        - Other
-    validations:
-      required: false
-
-  - type: dropdown
-    id: platforms
-    attributes:
-      label: Platforms
-      multiple: true
-      options:
-        - Windows
-        - Linux
-        - macOS
-        - Android
-        - iOS
-        - All
-    validations:
-      required: false
 
   - type: textarea
     id: context
     attributes:
       label: Additional context
-      description: Mockups, links, references to similar apps, etc.
+      description: Optional — platforms it matters on, mockups, links, similar apps, workarounds you've tried.
     validations:
       required: false

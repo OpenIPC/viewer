@@ -2,22 +2,15 @@ name: Bug report
 description: Something doesn't work as expected
 labels: ["bug"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for filing a report. Linux / macOS / Android / iOS paths build in
-        CI but aren't device-tested every commit, so concrete reports help a lot.
-        Please search existing issues first to avoid duplicates.
-
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: A clear description of the bug — what you did, what you expected, what actually happened.
+      description: What you did, what you expected, what actually happened.
       placeholder: |
         1. Added a camera via Discovery
         2. Opened it in single-camera view
-        3. Expected live video; got a "Disconnected" overlay with "..."
+        3. Expected live video; got a "Disconnected" overlay
     validations:
       required: true
 
@@ -38,68 +31,21 @@ body:
     id: version
     attributes:
       label: App version
-      description: Release tag (e.g. v0.1.0-beta) or commit SHA of the build you ran.
-      placeholder: v0.1.0-beta
-    validations:
-      required: true
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      description: Which part of the app does this affect?
-      options:
-        - Live video / playback
-        - Multi-camera grid
-        - PTZ / presets
-        - Recording
-        - Majestic config
-        - Discovery / adding cameras
-        - Events
-        - Settings / UI
-        - Other / not sure
-    validations:
-      required: true
-
-  - type: input
-    id: camera
-    attributes:
-      label: Camera model & firmware
-      description: OpenIPC/Majestic build, or the make/model + firmware of another ONVIF camera. Put "unknown" if you can't tell.
-      placeholder: "OpenIPC + Majestic <version>, sensor <imx307>, or e.g. Hikvision DS-2CD..."
-    validations:
-      required: false
-
-  - type: dropdown
-    id: how-added
-    attributes:
-      label: How was the camera added?
-      options:
-        - Discovery (network scan)
-        - Manual (IP + RTSP)
-        - QR code
-        - Not applicable
-    validations:
-      required: false
-
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs
-      description: |
-        Attach the day's log file (no auto-redaction — review for credentials first).
-        Located at:
-        - Windows: `%LOCALAPPDATA%\OpenIPC.Viewer\logs\`
-        - Linux: `~/.local/share/openipc-viewer/logs/`
-        - macOS: `~/Library/Application Support/OpenIPC.Viewer/logs/`
-      render: text
+      description: Release tag or commit SHA, if known.
+      placeholder: v0.3.2
     validations:
       required: false
 
   - type: textarea
     id: context
     attributes:
-      label: Additional context
-      description: Screenshots, network setup (NAT, VPN), RTSP transport (TCP/UDP), anything else relevant.
+      label: Logs & additional context
+      description: |
+        Optional but very helpful: the day's log file (review for credentials first),
+        camera model/firmware, screenshots, network setup (NAT, VPN).
+        Logs live at:
+        - Windows: `%LOCALAPPDATA%\OpenIPC.Viewer\logs\`
+        - Linux: `~/.local/share/openipc-viewer/logs/`
+        - macOS: `~/Library/Application Support/OpenIPC.Viewer/logs/`
     validations:
       required: false
