@@ -417,6 +417,11 @@
                     Content="{Binding [Settings.Advanced.RawConfigEditor], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
 
+          <CheckBox IsChecked="{Binding SingleInstance}"
+                    IsVisible="{Binding IsDesktopPlatform}"
+                    Content="{Binding [Settings.Advanced.SingleInstance], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
           <StackPanel Spacing="6">
             <Button Classes="outlined"
                     Content="{Binding [Settings.Advanced.OpenAppData], Source={x:Static svc:Localizer.Instance}}"

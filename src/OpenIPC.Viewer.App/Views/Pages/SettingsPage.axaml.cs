@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using OpenIPC.Viewer.App.ViewModels;
 
 namespace OpenIPC.Viewer.App.Views.Pages;
@@ -14,6 +15,7 @@ public sealed partial class SettingsPage : UserControl
     private const double WideThreshold = 700;
 
     private SettingsPageViewModel? _vm;
+    private bool _relayoutQueued;
 
     public SettingsPage()
     {
@@ -57,6 +59,20 @@ public sealed partial class SettingsPage : UserControl
             _vm.IsWide = nextWide;  // triggers ShowList/ShowDetail change → ApplyLayout
         else
             ApplyLayout();
+
+        // During an interactive resize Avalonia can render with a stale
+        // arrange pass and (rarely, seen on Windows) miss the final one,
+        // leaving the detail pane clipped at the window edge. Queue a single
+        // low-priority re-apply + re-measure so a definitive layout pass runs
+        // after the resize storm settles. Coalesced: one pending post at most.
+        if (_relayoutQueued) return;
+        _relayoutQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _relayoutQueued = false;
+            ApplyLayout();
+            RootGrid.InvalidateMeasure();
+        }, DispatcherPriority.Background);
     }
 
     private void ApplyLayout()

@@ -255,6 +255,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Settings.Advanced.VerboseLogging"] = "Verbose logging (debug level)",
         ["Settings.Advanced.RawConfigEditor"] = "Allow risky device tools (raw config editing, file manager)",
+        ["Settings.Advanced.SingleInstance"] = "Single instance only (a repeat launch focuses the running window)",
         ["Settings.Advanced.OpenAppData"] = "Open app data folder",
 
         ["Settings.About.Repository"] = "GitHub repository →",
@@ -728,6 +729,7 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Settings.Advanced.VerboseLogging"] = "Подробные логи (debug)",
         ["Settings.Advanced.RawConfigEditor"] = "Разрешить рискованные инструменты (raw-конфиг, файловый менеджер)",
+        ["Settings.Advanced.SingleInstance"] = "Запрещать запуск второй копии (повторный запуск откроет это окно)",
         ["Settings.Advanced.OpenAppData"] = "Открыть папку данных",
 
         ["Settings.About.Repository"] = "Репозиторий на GitHub →",

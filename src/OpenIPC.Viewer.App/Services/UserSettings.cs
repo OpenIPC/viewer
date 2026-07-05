@@ -94,7 +94,11 @@ public sealed record UserSettings(
     int GridStillsIntervalSeconds = 10,
     // Desktop only: closing the main window hides it to the tray icon instead
     // of quitting (live streams are released while hidden). Off = close quits.
-    bool CloseToTray = false)
+    bool CloseToTray = false,
+    // Desktop only: refuse to start a second copy of the app — a repeat launch
+    // brings the already-running window to the foreground instead (see
+    // Desktop/SingleInstanceGuard). Off = any number of copies may run.
+    bool SingleInstance = false)
 {
     public static UserSettings Default => new();
 }
