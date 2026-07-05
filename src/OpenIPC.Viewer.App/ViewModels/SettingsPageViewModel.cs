@@ -46,6 +46,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private string _language = "system";
     [ObservableProperty] private bool _showSplash = true;
     [ObservableProperty] private bool _closeToTray;
+    [ObservableProperty] private bool _singleInstance;
 
     // Gates the desktop-only toggles (tray) off the shared settings page.
     public bool IsDesktopPlatform { get; } =
@@ -216,6 +217,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             Language = s.Language;
             ShowSplash = s.ShowSplash;
             CloseToTray = s.CloseToTray;
+            SingleInstance = s.SingleInstance;
             SshStrictHostKey = s.SshStrictHostKey;
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
@@ -248,6 +250,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnLanguageChanged(string value) => Persist();
     partial void OnShowSplashChanged(bool value) => Persist();
     partial void OnCloseToTrayChanged(bool value) => Persist();
+    partial void OnSingleInstanceChanged(bool value) => Persist();
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
@@ -279,6 +282,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             Language = Language,
             ShowSplash = ShowSplash,
             CloseToTray = CloseToTray,
+            SingleInstance = SingleInstance,
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,

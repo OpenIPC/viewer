@@ -16,6 +16,15 @@ internal static class Program
         System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.ConsoleTraceListener());
 #endif
 
+        // Opt-in single-instance mode: when another copy already runs and the
+        // user enabled the guard, hand focus to it and bail out before any
+        // services (logs, db) spin up.
+        if (!SingleInstanceGuard.TryBecomePrimary() && SingleInstanceGuard.IsEnabledInSettings())
+        {
+            SingleInstanceGuard.ActivatePrimary();
+            return 0;
+        }
+
         var services = Composition.Build();
         App.App.Services = services;
 
