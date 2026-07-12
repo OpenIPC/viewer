@@ -214,6 +214,25 @@ jobs:
       - name: Publish APK (android-x64)
         run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
+      # Hard gate against shipping a corrupt APK. Both v0.3.4 and v0.3.6 went out
+      # with a bad CRC-32 on lib/<abi>/libassembly-store.so (a floating-toolchain
+      # packaging regression), so Android rejected them as "package corrupt" on
+      # every device. `unzip -t` walks every entry and fails on a CRC mismatch,
+      # so a malformed APK breaks the build here instead of reaching users.
+      # Also rename the x64 APK: both ABIs publish as org.openipc.viewer-Signed.apk,
+      # and the download-artifact merge in the release job would otherwise keep
+      # only one of them. arm64 stays canonical (what phones need); x64 gets a
+      # distinct name so both survive as separate release assets.
+      - name: Verify APK integrity + disambiguate x64
+        run: |
+          arm=$(ls publish/android-arm64/*-Signed.apk)
+          x64=$(ls publish/android-x64/*-Signed.apk)
+          for apk in "$arm" "$x64"; do
+            echo "Integrity check: $apk"
+            unzip -t "$apk" > /dev/null
+          done
+          mv "$x64" publish/android-x64/org.openipc.viewer-x64-Signed.apk
+
       - name: Upload artifact (arm64)
         uses: actions/upload-artifact@v4
         with:

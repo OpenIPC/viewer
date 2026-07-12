@@ -20,6 +20,16 @@
          mismatch). We don't need AOT yet, so keep it off until we revisit it as a
          page-alignment-safe polish step. -->
     <RunAOTCompilation>false</RunAOTCompilation>
+    <!-- Assembly store OFF. With it on (the .NET 10 Android default) the current
+         workload packs all managed assemblies into lib/<abi>/libassembly-store.so
+         with a ZIP CRC-32 that doesn't match the stored bytes, so Android rejects
+         the whole APK as "package corrupt" on every device (fresh install AND
+         update). Confirmed by CRC-testing shipped APKs: v0.3.2 clean, v0.3.4 and
+         v0.3.6 both corrupt on libassembly-store.so, with zero packaging changes
+         between them — a floating-toolchain regression. Off = assemblies packed
+         individually, which sidesteps the broken store. The CI build now also
+         hard-verifies APK integrity (unzip -t) so a corrupt APK can't ship again. -->
+    <AndroidUseAssemblyStore>false</AndroidUseAssemblyStore>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <!--
       FFmpeg native libs are produced by tools/build-ffmpeg-android.sh from
