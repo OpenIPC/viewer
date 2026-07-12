@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Reactive.Subjects;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen.Abstractions;
@@ -33,6 +34,13 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
     private Thread? _thread;
     private string? _outputPath;
     private volatile bool _stopRequested;
+
+    // Rooted so the unmanaged function pointer stays valid for the demuxer's
+    // life. Lets StopAsync/Dispose actually abort a blocking av_read_frame /
+    // avformat_open_input on a stalled camera — without it a hung read leaves
+    // the writer thread stuck before av_write_trailer, so the .mp4 is never
+    // flushed and lands on disk at 0 bytes (the corrupted-recording report).
+    private AVIOInterruptCB_callback? _interruptDelegate;
 
     public DateTime StartedAt { get; } = DateTime.UtcNow;
     public string? CurrentSegmentPath => _outputPath;
@@ -126,6 +134,17 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
             // --- Input ---
             BuildInputOpts(&inputOpts);
             inputCtx = ffmpeg.avformat_alloc_context();
+            // Wire the interrupt callback before open so a cancelled token
+            // aborts even the connect/handshake, not just the read loop.
+            _interruptDelegate = OnInterrupt;
+            inputCtx->interrupt_callback = new AVIOInterruptCB
+            {
+                callback = new AVIOInterruptCB_callback_func
+                {
+                    Pointer = Marshal.GetFunctionPointerForDelegate(_interruptDelegate),
+                },
+                opaque = null,
+            };
             var url = BuildRtspUri(_options.RtspUri, _options.Credentials);
             var ret = ffmpeg.avformat_open_input(&inputCtx, url, null, &inputOpts);
             FfmpegError.ThrowIfError(ret, "avformat_open_input");
@@ -183,6 +202,14 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                 ret = ffmpeg.av_read_frame(inputCtx, packet);
                 if (ret < 0)
                 {
+                    // Our interrupt callback fired (graceful stop) — not an error.
+                    // Fall through to av_write_trailer below so the file is still
+                    // finalized instead of left half-written.
+                    if (ct.IsCancellationRequested)
+                    {
+                        stopReason = RecordingStopReason.User;
+                        break;
+                    }
                     if (ret == ffmpeg.AVERROR_EOF)
                     {
                         _logger.LogInformation("Recording input EOF");
@@ -251,10 +278,21 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
         }
     }
 
+    // Returns 1 to tell libavformat to abort the current blocking call. Bound to
+    // the session CTS so StopAsync (which cancels it) unblocks a stalled read or
+    // a connect to an unreachable camera.
+    private unsafe int OnInterrupt(void* opaque) => _cts.IsCancellationRequested ? 1 : 0;
+
     private static unsafe void BuildInputOpts(AVDictionary** opts)
     {
         ffmpeg.av_dict_set(opts, "rtsp_transport", "tcp", 0);
+        // "timeout" is the current RTSP socket-timeout key; "stimeout" was renamed
+        // and is ignored on the n7.1 build we bundle. Set both so a dead stream
+        // errors out instead of blocking forever (belt-and-braces with the
+        // interrupt callback). rw_timeout covers the non-RTSP protocols.
+        ffmpeg.av_dict_set(opts, "timeout", "5000000", 0);
         ffmpeg.av_dict_set(opts, "stimeout", "5000000", 0);
+        ffmpeg.av_dict_set(opts, "rw_timeout", "5000000", 0);
         ffmpeg.av_dict_set(opts, "max_delay", "200000", 0);
     }
 
