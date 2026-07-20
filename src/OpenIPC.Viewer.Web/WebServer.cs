@@ -130,7 +130,10 @@ public static class WebServer
             var headers = context.Response.Headers;
             headers["X-Content-Type-Options"] = "nosniff";
             headers["X-Frame-Options"] = "DENY";
-            headers["Referrer-Policy"] = "no-referrer";
+            // Not "no-referrer" — that makes Chrome send "Origin: null" on same-site
+            // form POSTs, which then trips our own Origin check. This still withholds
+            // the referrer cross-origin while keeping the Origin header intact.
+            headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
             await next(context);
         });
 

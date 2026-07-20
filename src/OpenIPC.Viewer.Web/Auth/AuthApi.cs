@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace OpenIPC.Viewer.Web.Auth;
 
@@ -33,6 +34,10 @@ public static class AuthApi
         {
             if (IsMutation(ctx.Request.Method) && !OriginAllowed(ctx.Request))
             {
+                ctx.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("OpenIPC.Web.Auth")
+                    .LogWarning("bad_origin rejected: Origin={Origin} Host={Host} Path={Path}",
+                        ctx.Request.Headers.Origin.ToString(), ctx.Request.Host.Value, ctx.Request.Path.Value);
                 await WriteError(ctx, StatusCodes.Status403Forbidden, "bad_origin");
                 return;
             }
@@ -123,7 +128,10 @@ public static class AuthApi
     private static bool OriginAllowed(HttpRequest request)
     {
         var origin = request.Headers.Origin.ToString();
-        if (string.IsNullOrEmpty(origin))
+        // Missing or opaque ("null") origin: a sandboxed/privacy context or a
+        // native client. SameSite=Strict on the session cookie already blocks a
+        // real cross-site attacker, so don't false-reject these.
+        if (string.IsNullOrEmpty(origin) || string.Equals(origin, "null", StringComparison.OrdinalIgnoreCase))
             return true;
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
             return false;
