@@ -1,24 +1,25 @@
 @page "/app/login"
 @inject WebLocalizer L
 
-<div class="wrap" style="max-width:340px">
-    <h1 style="margin-bottom:.25rem">OpenIPC Viewer</h1>
-    <p class="muted" style="margin-top:0">@L["Login.Subtitle"]</p>
-
-    <form method="post" action="/app/auth/login">
-        <div style="display:flex;flex-direction:column;gap:.6rem">
-            <input name="user" placeholder="@L["Login.Username"]" autocomplete="username" autofocus />
-            <input name="password" type="password" placeholder="@L["Login.Password"]" autocomplete="current-password" />
-            <button class="primary" type="submit">@L["Login.SignIn"]</button>
-        </div>
-    </form>
-
-    @if (Error is not null)
-    {
-        <p class="err">@L["Login.Error"]</p>
-    }
-
-    <p class="muted" style="margin-top:1.5rem;font-size:.85rem">
+<div class="login">
+    <div class="brand" style="display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;margin-bottom:20px;justify-content:center">
+        <span style="width:18px;height:18px;border-radius:5px;background:var(--accent);display:inline-block"></span> OpenIPC Viewer
+    </div>
+    <div class="card">
+        <p class="muted" style="margin:0 0 16px;text-align:center">@L["Login.Subtitle"]</p>
+        <form method="post" action="/app/auth/login">
+            <div style="display:flex;flex-direction:column;gap:.7rem">
+                <input name="user" placeholder="@L["Login.Username"]" autocomplete="username" autofocus />
+                <input name="password" type="password" placeholder="@L["Login.Password"]" autocomplete="current-password" />
+                <button class="primary" type="submit">@L["Login.SignIn"]</button>
+            </div>
+        </form>
+        @if (Error is not null)
+        {
+            <p class="err" style="margin-bottom:0">@L["Login.Error"]</p>
+        }
+    </div>
+    <p class="muted" style="margin-top:1.25rem;font-size:.8rem;text-align:center">
         <a href="/app/lang/en">EN</a> · <a href="/app/lang/ru">RU</a>
     </p>
 </div>

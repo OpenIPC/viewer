@@ -10,11 +10,9 @@
 @inject NavigationManager Nav
 @inject WebLocalizer L
 
-<header class="top">
-    <span class="brand">OpenIPC Viewer</span>
-    <span class="muted"><a href="/app/cameras">@L["Nav.Cameras"]</a></span>
-</header>
-
+<div class="shell">
+<NavSidebar Active="cameras" User="@_user" />
+<main>
 <div class="wrap" style="max-width:560px">
     <h1>@(IsEdit ? L["Editor.EditTitle"] : L["Editor.AddTitle"])</h1>
     @if (Error is not null)
@@ -60,6 +58,8 @@
         </div>
     </form>
 </div>
+</main>
+</div>
 
 @code {
     [Parameter]
@@ -76,15 +76,18 @@
 
     private CameraDto? _cam;
     private List<(int Id, string Name)> _groups = new();
+    private string _user = "";
 
     protected override async Task OnInitializedAsync()
     {
         var token = Http is not null ? AuthApi.CookieToken(Http) : null;
-        if (token is null || Sessions.Validate(token) is null)
+        var identity = token is null ? null : Sessions.Validate(token);
+        if (identity is null)
         {
             Nav.NavigateTo("/app/login", forceLoad: false);
             return;
         }
+        _user = identity.Name;
 
         var ct = Http!.RequestAborted;
         _groups = (await GroupRepo.GetAllAsync(ct)).Select(g => (g.Id.Value, g.Name)).ToList();

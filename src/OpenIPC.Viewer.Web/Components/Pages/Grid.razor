@@ -7,16 +7,9 @@
 @inject NavigationManager Nav
 @inject WebLocalizer L
 
-<header class="top">
-    <span class="brand">OpenIPC Viewer</span>
-    <span class="muted" style="display:flex;align-items:center;gap:1rem">
-        <a href="/app/cameras">@L["Nav.Cameras"]</a>
-        <span>@_user</span>
-        <span style="font-size:.8rem"><a href="/app/lang/en">EN</a> · <a href="/app/lang/ru">RU</a></span>
-        <form method="post" action="/app/auth/logout" style="margin:0"><button type="submit">@L["Nav.SignOut"]</button></form>
-    </span>
-</header>
-
+<div class="shell">
+<NavSidebar Active="grid" User="@_user" />
+<main>
 <div class="wrap">
     <div class="tabs">
         <a class="@(Cells == 1 ? "active" : "")" href="/app/grid/1">1</a>
@@ -26,7 +19,7 @@
 
     @if (_ids is null)
     {
-        <p class="muted">Loading…</p>
+        <p class="muted">@L["Common.Loading"]</p>
     }
     else
     {
@@ -47,6 +40,8 @@
             }
         </div>
     }
+</div>
+</main>
 </div>
 
 @if (_ids is { Count: > 0 })

@@ -1,0 +1,32 @@
+@inject WebLocalizer L
+
+<nav class="sidebar">
+    <div class="brand"><span class="dot"></span> OpenIPC</div>
+
+    <a class="navitem @(Active == "grid" ? "active" : "")" href="/app/grid/4">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>@L["Nav.Grid"]
+    </a>
+    <a class="navitem @(Active == "cameras" ? "active" : "")" href="/app/cameras">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" />
+        </svg>@L["Nav.Cameras"]
+    </a>
+
+    <div class="spacer"></div>
+
+    <div class="foot">
+        <span class="who">@User</span>
+        <span><a href="/app/lang/en">EN</a> · <a href="/app/lang/ru">RU</a></span>
+        <form method="post" action="/app/auth/logout" style="margin:0">
+            <button type="submit" style="width:100%">@L["Nav.SignOut"]</button>
+        </form>
+    </div>
+</nav>
+
+@code {
+    [Parameter] public string Active { get; set; } = "";
+    [Parameter] public string User { get; set; } = "";
+}

@@ -8,18 +8,9 @@
 @inject NavigationManager Nav
 @inject WebLocalizer L
 
-<header class="top">
-    <span class="brand">OpenIPC Viewer</span>
-    <span class="muted" style="display:flex;align-items:center;gap:1rem">
-        <a href="/app/grid/4">@L["Nav.Grid"]</a>
-        <span>@_user</span>
-        <span style="font-size:.8rem"><a href="/app/lang/en">EN</a> · <a href="/app/lang/ru">RU</a></span>
-        <form method="post" action="/app/auth/logout" style="margin:0">
-            <button type="submit">@L["Nav.SignOut"]</button>
-        </form>
-    </span>
-</header>
-
+<div class="shell">
+<NavSidebar Active="cameras" User="@_user" />
+<main>
 <div class="wrap">
     <h1 style="display:flex;align-items:center;gap:1rem">
         @L["Cameras.Title"] <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span>
@@ -61,6 +52,8 @@
             </tbody>
         </table>
     }
+</div>
+</main>
 </div>
 
 @code {
