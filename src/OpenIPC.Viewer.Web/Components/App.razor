@@ -32,8 +32,72 @@
         .badge.on { color: #3fb950; }
         .muted { color: #8b949e; }
         .err { color: #f85149; }
+        .tabs a { display:inline-block; margin-right:.5rem; padding:.3rem .7rem; border:1px solid #30363d; border-radius:6px; text-decoration:none; }
+        .tabs a.active { background:#238636; border-color:#238636; color:#fff; }
+        .videos { display:grid; gap:8px; margin-top:1rem; }
+        .videos.n1 { grid-template-columns: 1fr; }
+        .videos.n4 { grid-template-columns: repeat(2, 1fr); }
+        .videos.n9 { grid-template-columns: repeat(3, 1fr); }
+        .cell { position:relative; background:#000; border-radius:6px; overflow:hidden; aspect-ratio:16/9; }
+        .cell video { width:100%; height:100%; object-fit:contain; background:#000; }
+        .cell .label { position:absolute; left:6px; bottom:6px; font-size:.75rem; background:rgba(0,0,0,.55); padding:.1rem .4rem; border-radius:4px; color:#fff; }
+        .cell .empty { display:flex; align-items:center; justify-content:center; height:100%; color:#8b949e; }
     </style>
     <HeadOutlet />
+    <script>
+        // Shared MSE live-tile starter: opens the camera's fMP4/WS stream and
+        // plays it in a <video>. Codec is read from the avcC init box so any
+        // H.264 profile works. Used by both the single Live page and the grid.
+        window.openipcLive = (function () {
+            function start(video, id, onStatus) {
+                const say = onStatus || function () { };
+                if (!('MediaSource' in window)) { say('no MediaSource'); return; }
+                const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                const ws = new WebSocket(`${proto}://${location.host}/api/v1/cameras/${id}/live`);
+                ws.binaryType = 'arraybuffer';
+                const ms = new MediaSource();
+                video.src = URL.createObjectURL(ms);
+                let sb = null, queue = [], pending = [], codec = null, msOpen = false;
+                ms.addEventListener('sourceopen', () => { msOpen = true; setup(); });
+                say('connecting');
+                ws.onopen = () => say('live');
+                ws.onclose = () => say('ended');
+                ws.onerror = () => say('error');
+                ws.onmessage = e => {
+                    const b = new Uint8Array(e.data);
+                    if (!sb) { pending.push(b); if (codec === null) codec = findCodec(pending); setup(); return; }
+                    queue.push(b); pump();
+                };
+                function setup() {
+                    if (sb || !msOpen || !codec) return;
+                    const mime = `video/mp4; codecs="${codec}"`;
+                    if (!MediaSource.isTypeSupported(mime)) { say('unsupported ' + codec); return; }
+                    sb = ms.addSourceBuffer(mime); sb.mode = 'segments';
+                    sb.addEventListener('updateend', pump);
+                    for (const x of pending) queue.push(x); pending = []; pump();
+                }
+                function pump() {
+                    if (!sb || sb.updating || !queue.length) return;
+                    try { sb.appendBuffer(queue.shift()); } catch (err) { say('buffer error'); }
+                    trim();
+                }
+                function trim() {
+                    try { if (sb && !sb.updating && sb.buffered.length && video.currentTime > 30) sb.remove(0, video.currentTime - 15); } catch { }
+                }
+                function findCodec(chunks) {
+                    let t = 0; for (const c of chunks) t += c.length;
+                    const d = new Uint8Array(t); let o = 0; for (const c of chunks) { d.set(c, o); o += c.length; }
+                    for (let i = 0; i + 8 < d.length; i++)
+                        if (d[i] === 0x61 && d[i + 1] === 0x76 && d[i + 2] === 0x63 && d[i + 3] === 0x43)
+                            return 'avc1.' + hx(d[i + 5]) + hx(d[i + 6]) + hx(d[i + 7]);
+                    return null;
+                }
+                function hx(n) { return n.toString(16).padStart(2, '0').toUpperCase(); }
+                return { stop() { try { ws.close(); } catch { } } };
+            }
+            return { start };
+        })();
+    </script>
 </head>
 <body>
     <Routes />
