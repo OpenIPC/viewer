@@ -5,11 +5,10 @@ using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
-using OpenIPC.Viewer.Web.Auth;
+using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -70,14 +69,12 @@ public static class CameraApi
             }
             catch (InvalidOperationException)
             {
-                return Results.Json(new { error = "not_found" }, statusCode: StatusCodes.Status404NotFound);
+                return NotFound();
             }
 
             Audit(ctx, "camera.update", cameraId);
             var updated = await dir.GetAsync(cameraId, ct);
-            return updated is null
-                ? Results.Json(new { error = "not_found" }, statusCode: StatusCodes.Status404NotFound)
-                : Results.Json(CameraDto.From(updated, null));
+            return updated is null ? NotFound() : Results.Json(CameraDto.From(updated, null));
         });
 
         app.MapDelete("/api/v1/cameras/{id}", async (string id, HttpContext ctx, CancellationToken ct) =>
@@ -90,7 +87,7 @@ public static class CameraApi
 
             var existing = await dir.GetAsync(cameraId, ct);
             if (existing is null)
-                return Results.Json(new { error = "not_found" }, statusCode: StatusCodes.Status404NotFound);
+                return NotFound();
 
             await dir.RemoveAsync(cameraId, ct);
             Audit(ctx, "camera.delete", cameraId);
@@ -123,20 +120,5 @@ public static class CameraApi
         }
         cameraId = default;
         return false;
-    }
-
-    private static IResult BackendUnavailable() =>
-        Results.Json(new { error = "backend_unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
-
-    private static IResult ValidationError(List<string> errors) =>
-        Results.Json(new { error = "validation", details = errors }, statusCode: StatusCodes.Status400BadRequest);
-
-    // One audit line per mutation: who did what to which camera, from where.
-    private static void Audit(HttpContext ctx, string action, CameraId id)
-    {
-        var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web.Audit");
-        logger.LogInformation(
-            "audit {Action} camera={CameraId} user={User} ip={Ip}",
-            action, id, ctx.GetIdentity()?.Name ?? "?", ctx.Connection.RemoteIpAddress);
     }
 }

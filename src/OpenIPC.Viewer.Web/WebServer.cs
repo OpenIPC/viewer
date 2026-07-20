@@ -140,6 +140,7 @@ public static class WebServer
 
         app.MapAuthEndpoints();
         app.MapCameraEndpoints();
+        app.MapGroupEndpoints();
 
         app.MapGet("/", () => Results.Content(PlaceholderPage, "text/html; charset=utf-8"));
     }
