@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
@@ -52,9 +53,13 @@ public static class LiveApi
             var credentials = await dir.GetCredentialsAsync(camera.Id, ct);
             var rtspUrl = BuildRtspUrl(camera.RtspMainUri, credentials);
 
+            // The browser reconnects with ?transcode=1 when it can't play the
+            // source codec over MSE (e.g. H.265). Then we re-encode to H.264.
+            var transcode = ctx.Request.Query.ContainsKey("transcode");
+
             var socket = await ctx.WebSockets.AcceptWebSocketAsync();
             var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web.Live");
-            await PumpAsync(socket, rtspUrl, logger, ct);
+            await PumpAsync(socket, rtspUrl, transcode, logger, ct);
         });
     }
 
@@ -71,12 +76,12 @@ public static class LiveApi
         }.Uri.ToString();
     }
 
-    private static async Task PumpAsync(WebSocket socket, string rtspUrl, ILogger logger, CancellationToken ct)
+    private static async Task PumpAsync(WebSocket socket, string rtspUrl, bool transcode, ILogger logger, CancellationToken ct)
     {
         Process? proc = null;
         try
         {
-            proc = StartFfmpeg(rtspUrl);
+            proc = StartFfmpeg(rtspUrl, transcode);
             _ = DrainStderrAsync(proc, logger);
 
             var stdout = proc.StandardOutput.BaseStream;
@@ -107,7 +112,7 @@ public static class LiveApi
         }
     }
 
-    private static Process StartFfmpeg(string rtspUrl)
+    private static Process StartFfmpeg(string rtspUrl, bool transcode)
     {
         var psi = new ProcessStartInfo(ResolveFfmpeg())
         {
@@ -116,21 +121,23 @@ public static class LiveApi
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in new[]
+
+        var args = new List<string> { "-rtsp_transport", "tcp", "-fflags", "nobuffer", "-i", rtspUrl, "-an" };
+        if (transcode)
         {
-            "-rtsp_transport", "tcp",
-            "-fflags", "nobuffer",
-            "-i", rtspUrl,
-            "-an",
-            "-c:v", "copy",
-            "-f", "mp4",
-            "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
-            "-flush_packets", "1",
-            "pipe:1",
-        })
-        {
-            psi.ArgumentList.Add(arg);
+            // Software H.264 (libopenh264 — the LGPL build has no libx264). Output
+            // is Constrained Baseline, which every MSE browser accepts. CPU cost is
+            // real; this path only runs for codecs the browser can't play directly.
+            args.AddRange(new[] { "-c:v", "libopenh264", "-b:v", "2M", "-g", "30", "-pix_fmt", "yuv420p" });
         }
+        else
+        {
+            args.AddRange(new[] { "-c:v", "copy" });
+        }
+        args.AddRange(new[] { "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-flush_packets", "1", "pipe:1" });
+
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
         return Process.Start(psi) ?? throw new InvalidOperationException("Failed to launch ffmpeg");
     }
 
