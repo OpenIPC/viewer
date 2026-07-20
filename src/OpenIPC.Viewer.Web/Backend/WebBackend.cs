@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Infrastructure.Persistence;
+using OpenIPC.Viewer.Web.Api;
 
 namespace OpenIPC.Viewer.Web.Backend;
 
@@ -24,6 +25,8 @@ public static class WebBackend
         // which the platform host (Desktop) registers alongside this call; the
         // optional settings/layout deps default to null when absent.
         services.AddSingleton<CameraDirectoryService>();
+        // Fan-out for live video: one shared ffmpeg session per (camera, mode).
+        services.AddSingleton<LiveStreamHub>();
         return services;
     }
 }

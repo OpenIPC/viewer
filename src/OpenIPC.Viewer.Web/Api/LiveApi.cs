@@ -1,24 +1,18 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
 
 namespace OpenIPC.Viewer.Web.Api;
 
-// Live video over WebSocket (Phase 20 §20.4, spike). ffmpeg remuxes the camera's
-// RTSP H.264 into fragmented MP4 (no re-encode) straight to stdout, and we pump
-// those bytes to the browser, which plays them via Media Source Extensions.
-// H.265 cameras won't play in most browsers over MSE — a MJPEG fallback and/or
-// transcode is future work.
+// Live video over WebSocket (Phase 20 §20.4). The heavy lifting (ffmpeg remux/
+// transcode, box parsing, fan-out) is in LiveStreamHub; this endpoint resolves
+// the camera, taps the shared stream, and pumps its bytes to the socket.
 public static class LiveApi
 {
     public static void MapLiveEndpoints(this WebApplication app)
@@ -32,7 +26,8 @@ public static class LiveApi
             }
 
             var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
-            if (dir is null)
+            var hub = ctx.RequestServices.GetService<LiveStreamHub>();
+            if (dir is null || hub is null)
             {
                 ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
                 return;
@@ -52,15 +47,37 @@ public static class LiveApi
 
             var credentials = await dir.GetCredentialsAsync(camera.Id, ct);
             var rtspUrl = BuildRtspUrl(camera.RtspMainUri, credentials);
-
             // The browser reconnects with ?transcode=1 when it can't play the
             // source codec over MSE (e.g. H.265). Then we re-encode to H.264.
             var transcode = ctx.Request.Query.ContainsKey("transcode");
 
             var socket = await ctx.WebSockets.AcceptWebSocketAsync();
-            var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web.Live");
-            await PumpAsync(socket, rtspUrl, transcode, logger, ct);
+            using var subscription = hub.Subscribe(id, transcode, rtspUrl);
+            await PumpAsync(socket, subscription, ct);
         });
+    }
+
+    private static async Task PumpAsync(WebSocket socket, LiveSubscription subscription, CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var chunk in subscription.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                if (socket.State != WebSocketState.Open)
+                    break;
+                await socket.SendAsync(chunk, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { /* socket closed by the viewer — normal */ }
+        finally
+        {
+            if (socket.State == WebSocketState.Open)
+            {
+                try { await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "stream ended", CancellationToken.None); }
+                catch { /* best effort */ }
+            }
+        }
     }
 
     // Injects credentials into the RTSP URL for ffmpeg (they live in the secrets
@@ -75,114 +92,4 @@ public static class LiveApi
             Password = credentials.Password,
         }.Uri.ToString();
     }
-
-    private static async Task PumpAsync(WebSocket socket, string rtspUrl, bool transcode, ILogger logger, CancellationToken ct)
-    {
-        Process? proc = null;
-        try
-        {
-            proc = StartFfmpeg(rtspUrl, transcode);
-            _ = DrainStderrAsync(proc, logger);
-
-            var stdout = proc.StandardOutput.BaseStream;
-            var buffer = new byte[32 * 1024];
-            int read;
-            while (socket.State == WebSocketState.Open &&
-                   (read = await stdout.ReadAsync(buffer, ct)) > 0)
-            {
-                await socket.SendAsync(
-                    buffer.AsMemory(0, read), WebSocketMessageType.Binary, endOfMessage: true, ct);
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            // A closed socket makes SendAsync throw — that's the normal "viewer
-            // navigated away" path, so keep it at debug.
-            logger.LogDebug(ex, "live pump ended for {Rtsp}", Redact(rtspUrl));
-        }
-        finally
-        {
-            KillQuietly(proc);
-            if (socket.State == WebSocketState.Open)
-            {
-                try { await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "stream ended", CancellationToken.None); }
-                catch { /* best effort */ }
-            }
-        }
-    }
-
-    private static Process StartFfmpeg(string rtspUrl, bool transcode)
-    {
-        var psi = new ProcessStartInfo(ResolveFfmpeg())
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-
-        var args = new List<string> { "-rtsp_transport", "tcp", "-fflags", "nobuffer", "-i", rtspUrl, "-an" };
-        if (transcode)
-        {
-            // Software H.264 (libopenh264 — the LGPL build has no libx264). Output
-            // is Constrained Baseline, which every MSE browser accepts. CPU cost is
-            // real; this path only runs for codecs the browser can't play directly.
-            args.AddRange(new[] { "-c:v", "libopenh264", "-b:v", "2M", "-g", "30", "-pix_fmt", "yuv420p" });
-        }
-        else
-        {
-            args.AddRange(new[] { "-c:v", "copy" });
-        }
-        args.AddRange(new[] { "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-flush_packets", "1", "pipe:1" });
-
-        foreach (var arg in args)
-            psi.ArgumentList.Add(arg);
-        return Process.Start(psi) ?? throw new InvalidOperationException("Failed to launch ffmpeg");
-    }
-
-    private static async Task DrainStderrAsync(Process proc, ILogger logger)
-    {
-        try
-        {
-            string? line;
-            while ((line = await proc.StandardError.ReadLineAsync()) is not null)
-                logger.LogTrace("ffmpeg: {Line}", line);
-        }
-        catch { /* process gone */ }
-    }
-
-    private static void KillQuietly(Process? proc)
-    {
-        try
-        {
-            if (proc is { HasExited: false })
-                proc.Kill(entireProcessTree: true);
-        }
-        catch { /* already gone */ }
-        proc?.Dispose();
-    }
-
-    // Same bundled-then-PATH resolution as FfmpegSubprocessRecorder.
-    private static string ResolveFfmpeg()
-    {
-        string? rid = null;
-        var exe = "ffmpeg";
-        if (OperatingSystem.IsWindows()) { rid = "win-x64"; exe = "ffmpeg.exe"; }
-        else if (OperatingSystem.IsLinux()) { rid = "linux-x64"; }
-        else if (OperatingSystem.IsMacOS()) { rid = "osx-x64"; }
-
-        if (rid is not null)
-        {
-            var bundled = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", exe);
-            if (File.Exists(bundled))
-                return bundled;
-        }
-        return "ffmpeg";
-    }
-
-    private static string Redact(string rtspUrl) =>
-        Uri.TryCreate(rtspUrl, UriKind.Absolute, out var u) && !string.IsNullOrEmpty(u.UserInfo)
-            ? rtspUrl.Replace(u.UserInfo + "@", "***@", StringComparison.Ordinal)
-            : rtspUrl;
 }
