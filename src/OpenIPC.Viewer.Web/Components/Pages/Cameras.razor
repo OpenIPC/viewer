@@ -6,37 +6,39 @@
 @inject ICameraRepository CameraRepo
 @inject IGroupRepository GroupRepo
 @inject NavigationManager Nav
+@inject WebLocalizer L
 
 <header class="top">
     <span class="brand">OpenIPC Viewer</span>
     <span class="muted" style="display:flex;align-items:center;gap:1rem">
-        <a href="/app/grid/4">Grid</a>
+        <a href="/app/grid/4">@L["Nav.Grid"]</a>
         <span>@_user</span>
+        <span style="font-size:.8rem"><a href="/app/lang/en">EN</a> · <a href="/app/lang/ru">RU</a></span>
         <form method="post" action="/app/auth/logout" style="margin:0">
-            <button type="submit">Sign out</button>
+            <button type="submit">@L["Nav.SignOut"]</button>
         </form>
     </span>
 </header>
 
 <div class="wrap">
     <h1 style="display:flex;align-items:center;gap:1rem">
-        Cameras <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span>
-        <a href="/app/cameras/new" style="font-size:.9rem">＋ Add camera</a>
+        @L["Cameras.Title"] <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span>
+        <a href="/app/cameras/new" style="font-size:.9rem">@L["Cameras.Add"]</a>
     </h1>
 
     @if (_cameras is null)
     {
-        <p class="muted">Loading…</p>
+        <p class="muted">@L["Common.Loading"]</p>
     }
     else if (_cameras.Count == 0)
     {
-        <p class="muted">No cameras yet.</p>
+        <p class="muted">@L["Cameras.Empty"]</p>
     }
     else
     {
         <table>
             <thead>
-                <tr><th>Name</th><th>Host</th><th>Group</th><th>Grid</th><th></th></tr>
+                <tr><th>@L["Cameras.Th.Name"]</th><th>@L["Cameras.Th.Host"]</th><th>@L["Cameras.Th.Group"]</th><th>@L["Cameras.Th.Grid"]</th><th></th></tr>
             </thead>
             <tbody>
                 @foreach (var c in _cameras)
@@ -45,13 +47,13 @@
                         <td>@c.Name</td>
                         <td class="muted">@c.Host</td>
                         <td class="muted">@(c.GroupName ?? "—")</td>
-                        <td>@if (c.IncludedInGrid) { <span class="badge on">yes</span> } else { <span class="badge">no</span> }</td>
+                        <td>@if (c.IncludedInGrid) { <span class="badge on">@L["Common.Yes"]</span> } else { <span class="badge">@L["Common.No"]</span> }</td>
                         <td style="white-space:nowrap;display:flex;gap:.6rem;align-items:center">
-                            <a href="/app/cameras/@c.Id/live">▶ Live</a>
-                            <a href="/app/cameras/@c.Id/edit">Edit</a>
+                            <a href="/app/cameras/@c.Id/live">@L["Cameras.Live"]</a>
+                            <a href="/app/cameras/@c.Id/edit">@L["Cameras.Edit"]</a>
                             <form method="post" action="/app/cameras/@c.Id/delete" style="margin:0"
-                                  onsubmit="return confirm('Delete @c.Name?')">
-                                <button type="submit" style="border-color:#5a2a2a;color:#f85149">Delete</button>
+                                  onsubmit="return confirm('@L["Cameras.DeleteConfirm"]')">
+                                <button type="submit" style="border-color:#5a2a2a;color:#f85149">@L["Cameras.Delete"]</button>
                             </form>
                         </td>
                     </tr>

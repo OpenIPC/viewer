@@ -1,0 +1,111 @@
+using System.Collections.Generic;
+
+namespace OpenIPC.Viewer.Web.Localization;
+
+// EN/RU strings for the web UI. Deliberately a small, self-contained set — the
+// desktop Localizer lives in the Avalonia App layer, which the headless server
+// must not reference. (A future shared-in-Core localizer could unify them.)
+internal static class WebStrings
+{
+    public static readonly IReadOnlyDictionary<string, string> En = new Dictionary<string, string>
+    {
+        ["Login.Subtitle"] = "Sign in to the web console",
+        ["Login.Username"] = "Username",
+        ["Login.Password"] = "Password",
+        ["Login.SignIn"] = "Sign in",
+        ["Login.Error"] = "Invalid username or password.",
+
+        ["Nav.Cameras"] = "Cameras",
+        ["Nav.Grid"] = "Grid",
+        ["Nav.SignOut"] = "Sign out",
+
+        ["Cameras.Title"] = "Cameras",
+        ["Cameras.Add"] = "＋ Add camera",
+        ["Cameras.Empty"] = "No cameras yet.",
+        ["Common.Loading"] = "Loading…",
+        ["Cameras.Th.Name"] = "Name",
+        ["Cameras.Th.Host"] = "Host",
+        ["Cameras.Th.Group"] = "Group",
+        ["Cameras.Th.Grid"] = "Grid",
+        ["Cameras.Live"] = "▶ Live",
+        ["Cameras.Edit"] = "Edit",
+        ["Cameras.Delete"] = "Delete",
+        ["Cameras.DeleteConfirm"] = "Delete this camera?",
+        ["Common.Yes"] = "yes",
+        ["Common.No"] = "no",
+
+        ["Editor.AddTitle"] = "Add camera",
+        ["Editor.EditTitle"] = "Edit camera",
+        ["Editor.Error"] = "Please check the fields — name, host and a valid RTSP URL are required.",
+        ["Editor.Name"] = "Name",
+        ["Editor.Host"] = "Host",
+        ["Editor.RtspMain"] = "RTSP main URL",
+        ["Editor.RtspSub"] = "RTSP sub URL (optional)",
+        ["Editor.HttpPort"] = "HTTP port",
+        ["Editor.OnvifPort"] = "ONVIF port",
+        ["Editor.Group"] = "Group",
+        ["Editor.NoGroup"] = "(no group)",
+        ["Editor.Quality"] = "Stream quality",
+        ["Editor.Username"] = "Username",
+        ["Editor.Password"] = "Password",
+        ["Editor.KeepBlank"] = "leave blank to keep",
+        ["Editor.Optional"] = "optional",
+        ["Editor.Save"] = "Save",
+        ["Editor.Add"] = "Add camera",
+        ["Editor.Cancel"] = "Cancel",
+
+        ["Live.Back"] = "← Cameras",
+        ["Live.Title"] = "Live",
+    };
+
+    public static readonly IReadOnlyDictionary<string, string> Ru = new Dictionary<string, string>
+    {
+        ["Login.Subtitle"] = "Вход в веб-консоль",
+        ["Login.Username"] = "Логин",
+        ["Login.Password"] = "Пароль",
+        ["Login.SignIn"] = "Войти",
+        ["Login.Error"] = "Неверный логин или пароль.",
+
+        ["Nav.Cameras"] = "Камеры",
+        ["Nav.Grid"] = "Сетка",
+        ["Nav.SignOut"] = "Выход",
+
+        ["Cameras.Title"] = "Камеры",
+        ["Cameras.Add"] = "＋ Добавить камеру",
+        ["Cameras.Empty"] = "Камер пока нет.",
+        ["Common.Loading"] = "Загрузка…",
+        ["Cameras.Th.Name"] = "Имя",
+        ["Cameras.Th.Host"] = "Хост",
+        ["Cameras.Th.Group"] = "Группа",
+        ["Cameras.Th.Grid"] = "Сетка",
+        ["Cameras.Live"] = "▶ Эфир",
+        ["Cameras.Edit"] = "Изменить",
+        ["Cameras.Delete"] = "Удалить",
+        ["Cameras.DeleteConfirm"] = "Удалить камеру?",
+        ["Common.Yes"] = "да",
+        ["Common.No"] = "нет",
+
+        ["Editor.AddTitle"] = "Добавить камеру",
+        ["Editor.EditTitle"] = "Изменить камеру",
+        ["Editor.Error"] = "Проверьте поля — нужны имя, хост и корректный RTSP URL.",
+        ["Editor.Name"] = "Имя",
+        ["Editor.Host"] = "Хост",
+        ["Editor.RtspMain"] = "RTSP main URL",
+        ["Editor.RtspSub"] = "RTSP sub URL (необязательно)",
+        ["Editor.HttpPort"] = "HTTP-порт",
+        ["Editor.OnvifPort"] = "ONVIF-порт",
+        ["Editor.Group"] = "Группа",
+        ["Editor.NoGroup"] = "(без группы)",
+        ["Editor.Quality"] = "Качество потока",
+        ["Editor.Username"] = "Логин",
+        ["Editor.Password"] = "Пароль",
+        ["Editor.KeepBlank"] = "пусто = не менять",
+        ["Editor.Optional"] = "необязательно",
+        ["Editor.Save"] = "Сохранить",
+        ["Editor.Add"] = "Добавить камеру",
+        ["Editor.Cancel"] = "Отмена",
+
+        ["Live.Back"] = "← Камеры",
+        ["Live.Title"] = "Эфир",
+    };
+}

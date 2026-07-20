@@ -8,39 +8,40 @@
 @inject ICameraRepository CameraRepo
 @inject IGroupRepository GroupRepo
 @inject NavigationManager Nav
+@inject WebLocalizer L
 
 <header class="top">
     <span class="brand">OpenIPC Viewer</span>
-    <span class="muted"><a href="/app/cameras">Cameras</a></span>
+    <span class="muted"><a href="/app/cameras">@L["Nav.Cameras"]</a></span>
 </header>
 
 <div class="wrap" style="max-width:560px">
-    <h1>@(IsEdit ? "Edit camera" : "Add camera")</h1>
+    <h1>@(IsEdit ? L["Editor.EditTitle"] : L["Editor.AddTitle"])</h1>
     @if (Error is not null)
     {
-        <p class="err">Please check the fields — name, host and a valid RTSP URL are required.</p>
+        <p class="err">@L["Editor.Error"]</p>
     }
 
     <form method="post" action="@Action">
         <div style="display:flex;flex-direction:column;gap:.7rem">
-            <label>Name<input name="name" value="@_cam?.Name" placeholder="Front door" /></label>
-            <label>Host<input name="host" value="@_cam?.Host" placeholder="192.168.1.10" /></label>
-            <label>RTSP main URL<input name="rtspMain" value="@_cam?.RtspMain" placeholder="rtsp://192.168.1.10/stream0" /></label>
-            <label>RTSP sub URL (optional)<input name="rtspSub" value="@_cam?.RtspSub" placeholder="rtsp://192.168.1.10/stream1" /></label>
+            <label>@L["Editor.Name"]<input name="name" value="@_cam?.Name" placeholder="Front door" /></label>
+            <label>@L["Editor.Host"]<input name="host" value="@_cam?.Host" placeholder="192.168.1.10" /></label>
+            <label>@L["Editor.RtspMain"]<input name="rtspMain" value="@_cam?.RtspMain" placeholder="rtsp://192.168.1.10/stream0" /></label>
+            <label>@L["Editor.RtspSub"]<input name="rtspSub" value="@_cam?.RtspSub" placeholder="rtsp://192.168.1.10/stream1" /></label>
             <div style="display:flex;gap:.7rem">
-                <label style="flex:1">HTTP port<input name="httpPort" type="number" value="@(_cam?.HttpPort ?? 80)" /></label>
-                <label style="flex:1">ONVIF port<input name="onvifPort" type="number" value="@_cam?.OnvifPort" placeholder="optional" /></label>
+                <label style="flex:1">@L["Editor.HttpPort"]<input name="httpPort" type="number" value="@(_cam?.HttpPort ?? 80)" /></label>
+                <label style="flex:1">@L["Editor.OnvifPort"]<input name="onvifPort" type="number" value="@_cam?.OnvifPort" placeholder="@L["Editor.Optional"]" /></label>
             </div>
-            <label>Group
+            <label>@L["Editor.Group"]
                 <select name="groupId">
-                    <option value="">(no group)</option>
+                    <option value="">@L["Editor.NoGroup"]</option>
                     @foreach (var g in _groups)
                     {
                         <option value="@g.Id" selected="@(_cam?.GroupId == g.Id)">@g.Name</option>
                     }
                 </select>
             </label>
-            <label>Stream quality
+            <label>@L["Editor.Quality"]
                 <select name="streamQuality">
                     @foreach (var q in new[] { "Auto", "AlwaysHd", "AlwaysSd" })
                     {
@@ -49,12 +50,12 @@
                 </select>
             </label>
             <div style="display:flex;gap:.7rem">
-                <label style="flex:1">Username<input name="username" autocomplete="off" placeholder="@(IsEdit ? "leave blank to keep" : "admin")" /></label>
-                <label style="flex:1">Password<input name="password" type="password" autocomplete="off" placeholder="@(IsEdit ? "leave blank to keep" : "")" /></label>
+                <label style="flex:1">@L["Editor.Username"]<input name="username" autocomplete="off" placeholder="@(IsEdit ? L["Editor.KeepBlank"] : "admin")" /></label>
+                <label style="flex:1">@L["Editor.Password"]<input name="password" type="password" autocomplete="off" placeholder="@(IsEdit ? L["Editor.KeepBlank"] : "")" /></label>
             </div>
             <div style="margin-top:.5rem">
-                <button class="primary" type="submit">@(IsEdit ? "Save" : "Add camera")</button>
-                <a href="/app/cameras" style="margin-left:.5rem">Cancel</a>
+                <button class="primary" type="submit">@(IsEdit ? L["Editor.Save"] : L["Editor.Add"])</button>
+                <a href="/app/cameras" style="margin-left:.5rem">@L["Editor.Cancel"]</a>
             </div>
         </div>
     </form>

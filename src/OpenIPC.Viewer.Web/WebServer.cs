@@ -11,6 +11,7 @@ using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Web.Api;
 using OpenIPC.Viewer.Web.Auth;
 using OpenIPC.Viewer.Web.Components;
+using OpenIPC.Viewer.Web.Localization;
 
 namespace OpenIPC.Viewer.Web;
 
@@ -44,6 +45,8 @@ public static class WebServer
         var builder = WebApplication.CreateBuilder();
         ConfigureAuthServices(builder, authOptions ?? new WebAuthOptions());
         builder.Services.AddRazorComponents();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<WebLocalizer>();
         configureBackend?.Invoke(builder.Services);
 
         var app = builder.Build();

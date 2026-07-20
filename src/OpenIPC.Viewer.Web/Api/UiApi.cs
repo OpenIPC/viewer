@@ -1,7 +1,9 @@
+using System;
 using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using OpenIPC.Viewer.Web.Auth;
+using OpenIPC.Viewer.Web.Localization;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -35,5 +37,21 @@ public static class UiApi
             AuthApi.ClearSessionCookie(ctx);
             return Results.Redirect("/app/login");
         }).DisableAntiforgery();
+
+        // UI language switch: persist the choice in a cookie, return to the page.
+        app.MapGet("/app/lang/{code}", (string code, HttpContext ctx) =>
+        {
+            if (code is "ru" or "en")
+            {
+                ctx.Response.Cookies.Append(WebLocalizer.LanguageCookie, code, new CookieOptions
+                {
+                    Path = "/",
+                    SameSite = SameSiteMode.Lax,
+                    MaxAge = TimeSpan.FromDays(365),
+                });
+            }
+            var back = ctx.Request.Headers.Referer.ToString();
+            return Results.Redirect(string.IsNullOrEmpty(back) ? "/app/cameras" : back);
+        });
     }
 }

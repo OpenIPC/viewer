@@ -1,8 +1,9 @@
 @page "/app/cameras/{Id}/live"
+@inject WebLocalizer L
 
 <div class="wrap">
-    <p><a href="/app/cameras">← Cameras</a></p>
-    <h1>Live</h1>
+    <p><a href="/app/cameras">@L["Live.Back"]</a></p>
+    <h1>@L["Live.Title"]</h1>
     <video id="v" controls autoplay muted playsinline style="width:100%;max-width:1280px;background:#000;border-radius:8px"></video>
     <p id="status" class="muted"></p>
 </div>
