@@ -170,6 +170,7 @@ public static class WebServer
         app.MapGroupEndpoints();
         app.MapLiveEndpoints();
         app.MapUiEndpoints();
+        app.MapCameraFormEndpoints();
         app.MapRazorComponents<App>();
 
         app.MapGet("/", () => Results.Redirect("/app"));

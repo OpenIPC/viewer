@@ -19,7 +19,10 @@
 </header>
 
 <div class="wrap">
-    <h1>Cameras <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span></h1>
+    <h1 style="display:flex;align-items:center;gap:1rem">
+        Cameras <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span>
+        <a href="/app/cameras/new" style="font-size:.9rem">＋ Add camera</a>
+    </h1>
 
     @if (_cameras is null)
     {
@@ -43,7 +46,14 @@
                         <td class="muted">@c.Host</td>
                         <td class="muted">@(c.GroupName ?? "—")</td>
                         <td>@if (c.IncludedInGrid) { <span class="badge on">yes</span> } else { <span class="badge">no</span> }</td>
-                        <td><a href="/app/cameras/@c.Id/live">▶ Live</a></td>
+                        <td style="white-space:nowrap;display:flex;gap:.6rem;align-items:center">
+                            <a href="/app/cameras/@c.Id/live">▶ Live</a>
+                            <a href="/app/cameras/@c.Id/edit">Edit</a>
+                            <form method="post" action="/app/cameras/@c.Id/delete" style="margin:0"
+                                  onsubmit="return confirm('Delete @c.Name?')">
+                                <button type="submit" style="border-color:#5a2a2a;color:#f85149">Delete</button>
+                            </form>
+                        </td>
                     </tr>
                 }
             </tbody>
