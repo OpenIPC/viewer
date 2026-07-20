@@ -1,7 +1,9 @@
+using System.Net;
 using System.Reflection;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -46,7 +48,7 @@ public static class WebServer
 
         var app = builder.Build();
         app.Urls.Add(options.Url);
-        MapEndpoints(app);
+        MapEndpoints(app, options);
 
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web");
         await MigrateAsync(app, logger, ct);
@@ -101,8 +103,26 @@ public static class WebServer
         });
     }
 
-    private static void MapEndpoints(WebApplication app)
+    private static void MapEndpoints(WebApplication app, WebServerOptions options)
     {
+        // Honour a reverse-proxy's X-Forwarded-* so request.Host/Scheme reflect
+        // the public origin — otherwise the Origin/CSRF check compares against
+        // the internal host and rejects every proxied mutation. Only loopback
+        // (default) plus explicitly trusted proxy IPs are believed; a directly
+        // exposed server ignores spoofed headers. Must run first.
+        var forwarded = new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor
+                | ForwardedHeaders.XForwardedProto
+                | ForwardedHeaders.XForwardedHost,
+        };
+        foreach (var proxy in options.TrustedProxies)
+        {
+            if (IPAddress.TryParse(proxy, out var addr))
+                forwarded.KnownProxies.Add(addr);
+        }
+        app.UseForwardedHeaders(forwarded);
+
         // A minimal security-header floor on every response.
         app.Use(async (HttpContext context, RequestDelegate next) =>
         {

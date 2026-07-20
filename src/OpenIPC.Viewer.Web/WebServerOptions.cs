@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace OpenIPC.Viewer.Web;
 
 // Bind knobs for the embedded web server. Defaults are deliberately safe:
@@ -18,4 +21,9 @@ public sealed record WebServerOptions
     public string BindHost => BindLan ? "0.0.0.0" : "127.0.0.1";
 
     public string Url => $"http://{BindHost}:{Port}";
+
+    // Reverse-proxy IPs whose X-Forwarded-* headers are trusted (in addition to
+    // loopback, which is always trusted). Set this when the proxy runs on a
+    // different host than the server. Empty = only a same-host proxy is trusted.
+    public IReadOnlyList<string> TrustedProxies { get; init; } = Array.Empty<string>();
 }
