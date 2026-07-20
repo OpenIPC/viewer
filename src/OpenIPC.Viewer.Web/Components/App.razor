@@ -1,0 +1,41 @@
+@* Root document for the server-rendered UI (static SSR — no WASM, no SignalR). *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenIPC Viewer</title>
+    <base href="/" />
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9;
+            line-height: 1.5;
+        }
+        a { color: #58a6ff; }
+        .wrap { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+        header.top {
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #21262d; padding: .75rem 1.5rem; background: #161b22;
+        }
+        header.top .brand { font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; font-weight: 500; font-size: .85rem; }
+        input, button {
+            font: inherit; padding: .5rem .6rem; border-radius: 6px;
+            border: 1px solid #30363d; background: #0d1117; color: #c9d1d9;
+        }
+        button.primary { background: #238636; border-color: #238636; color: #fff; cursor: pointer; }
+        .badge { font-size: .75rem; padding: .1rem .45rem; border-radius: 4px; background: #21262d; }
+        .badge.on { color: #3fb950; }
+        .muted { color: #8b949e; }
+        .err { color: #f85149; }
+    </style>
+    <HeadOutlet />
+</head>
+<body>
+    <Routes />
+</body>
+</html>

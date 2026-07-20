@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Web.Api;
 using OpenIPC.Viewer.Web.Auth;
+using OpenIPC.Viewer.Web.Components;
 
 namespace OpenIPC.Viewer.Web;
 
@@ -38,8 +39,9 @@ public static class WebServer
         Action<IServiceCollection>? configureBackend = null,
         CancellationToken ct = default)
     {
-        var builder = WebApplication.CreateSlimBuilder();
+        var builder = WebApplication.CreateBuilder();
         ConfigureAuthServices(builder, authOptions ?? new WebAuthOptions());
+        builder.Services.AddRazorComponents();
         configureBackend?.Invoke(builder.Services);
 
         var app = builder.Build();
@@ -114,6 +116,7 @@ public static class WebServer
         app.UseRateLimiter();
         // Origin check on mutations + bearer-token guard over protected API paths.
         app.UseWebAuth();
+        app.UseAntiforgery();
 
         // Liveness probe — touches no backend, so it answers even before the
         // data layer exists. Public (no auth) for --server-only smoke checks and,
@@ -141,16 +144,9 @@ public static class WebServer
         app.MapAuthEndpoints();
         app.MapCameraEndpoints();
         app.MapGroupEndpoints();
+        app.MapUiEndpoints();
+        app.MapRazorComponents<App>();
 
-        app.MapGet("/", () => Results.Content(PlaceholderPage, "text/html; charset=utf-8"));
+        app.MapGet("/", () => Results.Redirect("/app"));
     }
-
-    private const string PlaceholderPage =
-        "<!doctype html><meta charset=\"utf-8\"><title>OpenIPC Viewer</title>" +
-        "<body style=\"font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:2rem;line-height:1.5\">" +
-        "<h1 style=\"margin:0 0 .5rem\">OpenIPC Viewer — web server</h1>" +
-        "<p>Phase 20 · slice A. The camera monitor and API arrive in later slices.</p>" +
-        "<p>Health: <a style=\"color:#58a6ff\" href=\"/healthz\">/healthz</a> · " +
-        "<a style=\"color:#58a6ff\" href=\"/api/v1/version\">/api/v1/version</a></p>" +
-        "</body>";
 }

@@ -1,0 +1,24 @@
+@page "/app/login"
+
+<div class="wrap" style="max-width:340px">
+    <h1 style="margin-bottom:.25rem">OpenIPC Viewer</h1>
+    <p class="muted" style="margin-top:0">Sign in to the web console</p>
+
+    <form method="post" action="/app/auth/login">
+        <div style="display:flex;flex-direction:column;gap:.6rem">
+            <input name="user" placeholder="Username" autocomplete="username" autofocus />
+            <input name="password" type="password" placeholder="Password" autocomplete="current-password" />
+            <button class="primary" type="submit">Sign in</button>
+        </div>
+    </form>
+
+    @if (Error is not null)
+    {
+        <p class="err">Invalid username or password.</p>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+}

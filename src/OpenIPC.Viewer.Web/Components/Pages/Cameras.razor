@@ -1,0 +1,82 @@
+@page "/app/cameras"
+@using OpenIPC.Viewer.Core.Persistence
+@using OpenIPC.Viewer.Web.Api
+@using OpenIPC.Viewer.Web.Auth
+@inject SessionStore Sessions
+@inject ICameraRepository CameraRepo
+@inject IGroupRepository GroupRepo
+@inject NavigationManager Nav
+
+<header class="top">
+    <span class="brand">OpenIPC Viewer</span>
+    <span class="muted" style="display:flex;align-items:center;gap:1rem">
+        <span>@_user</span>
+        <form method="post" action="/app/auth/logout" style="margin:0">
+            <button type="submit">Sign out</button>
+        </form>
+    </span>
+</header>
+
+<div class="wrap">
+    <h1>Cameras <span class="muted" style="font-size:1rem">(@(_cameras?.Count ?? 0))</span></h1>
+
+    @if (_cameras is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_cameras.Count == 0)
+    {
+        <p class="muted">No cameras yet.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Host</th><th>Group</th><th>RTSP</th><th>Grid</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _cameras)
+                {
+                    <tr>
+                        <td>@c.Name</td>
+                        <td class="muted">@c.Host</td>
+                        <td class="muted">@(c.GroupName ?? "—")</td>
+                        <td class="muted" style="font-family:ui-monospace,monospace;font-size:.85rem">@c.RtspMain</td>
+                        <td>@if (c.IncludedInGrid) { <span class="badge on">yes</span> } else { <span class="badge">no</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    public HttpContext? Http { get; set; }
+
+    private IReadOnlyList<CameraDto>? _cameras;
+    private string _user = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = Http is not null ? AuthApi.CookieToken(Http) : null;
+        var identity = token is null ? null : Sessions.Validate(token);
+        if (identity is null)
+        {
+            Nav.NavigateTo("/app/login", forceLoad: false);
+            return;
+        }
+
+        _user = identity.Name;
+        var ct = Http!.RequestAborted;
+
+        var groups = await GroupRepo.GetAllAsync(ct);
+        var groupNames = groups.ToDictionary(g => g.Id.Value, g => g.Name);
+
+        var cameras = await CameraRepo.GetAllAsync(ct);
+        _cameras = cameras
+            .Select(c => CameraDto.From(
+                c, c.GroupId is { } gid && groupNames.TryGetValue(gid.Value, out var n) ? n : null))
+            .ToList();
+    }
+}

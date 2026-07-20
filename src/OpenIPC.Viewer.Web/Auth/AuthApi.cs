@@ -17,6 +17,11 @@ public static class AuthApi
     // Stashes the authenticated identity for the endpoint to read.
     public const string IdentityItemKey = "openipc.web.identity";
 
+    // Browser navigations can't set an Authorization header, so the same session
+    // token also rides in an HttpOnly cookie for the server-rendered UI. API
+    // clients keep using the bearer header; either is accepted.
+    public const string SessionCookieName = "openipc_session";
+
     public static WebIdentity? GetIdentity(this HttpContext ctx) =>
         ctx.Items.TryGetValue(IdentityItemKey, out var value) ? value as WebIdentity : null;
 
@@ -35,7 +40,7 @@ public static class AuthApi
             if (RequiresAuth(ctx.Request.Path))
             {
                 var store = ctx.RequestServices.GetRequiredService<SessionStore>();
-                var identity = BearerToken(ctx) is { } token ? store.Validate(token) : null;
+                var identity = TokenFrom(ctx) is { } token ? store.Validate(token) : null;
                 if (identity is null)
                 {
                     await WriteError(ctx, StatusCodes.Status401Unauthorized, "unauthorized");
@@ -129,6 +134,28 @@ public static class AuthApi
             ? header[scheme.Length..].Trim()
             : null;
     }
+
+    // The session token from either transport: bearer header (API) or the
+    // HttpOnly cookie (server-rendered UI navigations).
+    public static string? TokenFrom(HttpContext ctx) =>
+        BearerToken(ctx) ?? CookieToken(ctx);
+
+    public static string? CookieToken(HttpContext ctx) =>
+        ctx.Request.Cookies.TryGetValue(SessionCookieName, out var value) && !string.IsNullOrEmpty(value)
+            ? value
+            : null;
+
+    public static void SetSessionCookie(HttpContext ctx, string token) =>
+        ctx.Response.Cookies.Append(SessionCookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+            Secure = ctx.Request.IsHttps,   // set once TLS is terminated (reverse-proxy)
+            Path = "/",
+        });
+
+    public static void ClearSessionCookie(HttpContext ctx) =>
+        ctx.Response.Cookies.Delete(SessionCookieName);
 
     private static Task WriteError(HttpContext ctx, int statusCode, string error)
     {
