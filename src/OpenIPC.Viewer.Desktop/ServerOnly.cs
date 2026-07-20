@@ -43,14 +43,21 @@ internal static class ServerOnly
         var dbPath = Path.Combine(AppPaths.AppDataDir.FullName, "openipc-viewer.db");
         try
         {
-            WebServer.RunAsync(options, authOptions, services => services.AddWebBackend(dbPath))
-                .GetAwaiter().GetResult();
+            WebServer.RunAsync(options, authOptions, ConfigureBackend).GetAwaiter().GetResult();
             return 0;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"server-only failed: {ex}");
             return 1;
+        }
+
+        void ConfigureBackend(IServiceCollection services)
+        {
+            // Platform trio (IFileSystem / ISecretsStore / …) then the lean
+            // web backend (persistence + CameraDirectoryService).
+            Composition.AddPlatformServices(services);
+            services.AddWebBackend(dbPath);
         }
     }
 

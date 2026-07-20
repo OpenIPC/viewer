@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 
 namespace OpenIPC.Viewer.Web.Backend;
@@ -18,6 +19,11 @@ public static class WebBackend
         services.AddSingleton<IMigrationRunner, MigrationRunner>();
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
+        // CRUD goes through the directory service so credentials land in the
+        // secrets store (never the DB row / API). It resolves ISecretsStore,
+        // which the platform host (Desktop) registers alongside this call; the
+        // optional settings/layout deps default to null when absent.
+        services.AddSingleton<CameraDirectoryService>();
         return services;
     }
 }
