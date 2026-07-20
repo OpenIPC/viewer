@@ -28,6 +28,12 @@ public sealed class LiveStreamHub
 
     public LiveStreamHub(ILoggerFactory loggerFactory) => _loggerFactory = loggerFactory;
 
+    // Number of distinct shared ffmpeg sessions currently running.
+    public int ActiveStreamCount
+    {
+        get { lock (_gate) return _streams.Count; }
+    }
+
     public LiveSubscription Subscribe(string cameraId, bool transcode, string rtspUrl)
     {
         lock (_gate)

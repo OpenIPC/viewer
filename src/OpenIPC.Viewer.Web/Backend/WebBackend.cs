@@ -20,6 +20,9 @@ public static class WebBackend
         services.AddSingleton<IMigrationRunner, MigrationRunner>();
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
+        services.AddSingleton<ILayoutRepository, SqliteLayoutRepository>();
+        // Browser-safe config export/import (never serializes camera passwords).
+        services.AddSingleton<IConfigBackupService, SqliteConfigBackupService>();
         // CRUD goes through the directory service so credentials land in the
         // secrets store (never the DB row / API). It resolves ISecretsStore,
         // which the platform host (Desktop) registers alongside this call; the

@@ -174,6 +174,7 @@ public static class WebServer
         app.MapLiveEndpoints();
         app.MapUiEndpoints();
         app.MapCameraFormEndpoints();
+        app.MapSystemEndpoints();
         app.MapRazorComponents<App>();
 
         app.MapGet("/", () => Results.Redirect("/app"));

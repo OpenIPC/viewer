@@ -1,0 +1,84 @@
+@page "/app/system"
+@using OpenIPC.Viewer.Web
+@using OpenIPC.Viewer.Web.Api
+@using OpenIPC.Viewer.Web.Auth
+@using OpenIPC.Viewer.Core.Persistence
+@inject SessionStore Sessions
+@inject ICameraRepository CameraRepo
+@inject IGroupRepository GroupRepo
+@inject LiveStreamHub Hub
+@inject NavigationManager Nav
+@inject WebLocalizer L
+
+<div class="shell">
+<NavSidebar Active="system" User="@_user" />
+<main>
+<div class="wrap" style="max-width:720px">
+    <h1>@L["System.Title"]</h1>
+
+    @if (Added is not null)
+    {
+        <p style="color:var(--success)">@L["System.Imported"] +@Added / ~@Updated</p>
+    }
+    else if (Error is not null)
+    {
+        <p class="err">@L["System.ImportError"]</p>
+    }
+
+    <table style="max-width:420px;margin-bottom:28px">
+        <tbody>
+            <tr><td class="muted">@L["System.Version"]</td><td class="mono">@WebServer.Version</td></tr>
+            <tr><td class="muted">@L["System.Cameras"]</td><td>@_cameras</td></tr>
+            <tr><td class="muted">@L["System.Groups"]</td><td>@_groups</td></tr>
+            <tr><td class="muted">@L["System.Sessions"]</td><td>@Sessions.ActiveCount</td></tr>
+            <tr><td class="muted">@L["System.Streams"]</td><td>@Hub.ActiveStreamCount</td></tr>
+        </tbody>
+    </table>
+
+    <h2 style="font-size:16px;font-weight:600">@L["System.Backup"]</h2>
+    <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;margin:12px 0">
+        <a href="/app/config/export"
+           style="display:inline-block;padding:8px 12px;border:1px solid var(--border-med);border-radius:var(--r-sm);color:var(--text-1)">
+            @L["System.Export"]
+        </a>
+        <form method="post" action="/app/config/import" enctype="multipart/form-data" style="display:flex;gap:.6rem;align-items:center">
+            <input type="file" name="file" accept="application/json,.json" />
+            <button class="primary" type="submit">@L["System.ImportBtn"]</button>
+        </form>
+    </div>
+    <p class="muted" style="font-size:12px">@L["System.BackupNote"]</p>
+
+    <h2 style="font-size:16px;font-weight:600;margin-top:28px">@L["System.SessionsTitle"]</h2>
+    <form method="post" action="/app/sessions/revoke-all" style="margin-top:8px"
+          onsubmit="return confirm('@L["System.RevokeConfirm"]')">
+        <button type="submit" style="border-color:#5a2a2a;color:var(--danger)">@L["System.RevokeAll"]</button>
+    </form>
+</div>
+</main>
+</div>
+
+@code {
+    [CascadingParameter] public HttpContext? Http { get; set; }
+    [SupplyParameterFromQuery(Name = "added")] public int? Added { get; set; }
+    [SupplyParameterFromQuery(Name = "updated")] public int? Updated { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private string _user = "";
+    private int _cameras, _groups;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = Http is not null ? AuthApi.CookieToken(Http) : null;
+        var identity = token is null ? null : Sessions.Validate(token);
+        if (identity is null)
+        {
+            Nav.NavigateTo("/app/login", forceLoad: false);
+            return;
+        }
+
+        _user = identity.Name;
+        var ct = Http!.RequestAborted;
+        _cameras = (await CameraRepo.GetAllAsync(ct)).Count;
+        _groups = (await GroupRepo.GetAllAsync(ct)).Count;
+    }
+}
