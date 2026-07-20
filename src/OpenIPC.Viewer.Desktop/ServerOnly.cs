@@ -1,8 +1,12 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using OpenIPC.Viewer.App;
 using OpenIPC.Viewer.Web;
 using OpenIPC.Viewer.Web.Auth;
+using OpenIPC.Viewer.Web.Backend;
 
 namespace OpenIPC.Viewer.Desktop;
 
@@ -34,9 +38,13 @@ internal static class ServerOnly
         {
             AdminPassword = Environment.GetEnvironmentVariable(AdminPasswordEnv),
         };
+        // Same on-disk database as the desktop app — the web server reads/writes
+        // the very same cameras.
+        var dbPath = Path.Combine(AppPaths.AppDataDir.FullName, "openipc-viewer.db");
         try
         {
-            WebServer.RunAsync(options, authOptions).GetAwaiter().GetResult();
+            WebServer.RunAsync(options, authOptions, services => services.AddWebBackend(dbPath))
+                .GetAwaiter().GetResult();
             return 0;
         }
         catch (Exception ex)

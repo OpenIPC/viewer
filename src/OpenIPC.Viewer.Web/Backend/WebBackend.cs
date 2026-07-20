@@ -1,0 +1,23 @@
+using Microsoft.Extensions.DependencyInjection;
+using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Infrastructure.Persistence;
+
+namespace OpenIPC.Viewer.Web.Backend;
+
+// The lean, UI-free backend the web API composes: SQLite persistence only.
+//
+// Deliberately does NOT go through SharedComposition — that registers the
+// Avalonia App layer (ViewModels, dialog factories) the headless server has no
+// use for and shouldn't drag in. Video/ONVIF/Majestic join here in later slices
+// as their endpoints arrive, each a small explicit registration.
+public static class WebBackend
+{
+    public static IServiceCollection AddWebBackend(this IServiceCollection services, string databasePath)
+    {
+        services.AddSingleton<IDbConnectionFactory>(_ => new SqliteConnectionFactory(databasePath));
+        services.AddSingleton<IMigrationRunner, MigrationRunner>();
+        services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
+        services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
+        return services;
+    }
+}

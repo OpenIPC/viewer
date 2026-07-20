@@ -11,4 +11,11 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- Core contracts + the SQLite persistence implementation. NOT the App
+       (Avalonia) layer — the headless server composes only the UI-free backend. -->
+  <ItemGroup>
+    <ProjectReference Include="..\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

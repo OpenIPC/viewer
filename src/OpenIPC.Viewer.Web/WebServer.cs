@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Web.Api;
 using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web;
@@ -31,16 +33,21 @@ public static class WebServer
     // default host lifetime) or the supplied token is cancelled — the latter is
     // how the in-process desktop host (a later slice) will stop it.
     public static async Task RunAsync(
-        WebServerOptions options, WebAuthOptions? authOptions = null, CancellationToken ct = default)
+        WebServerOptions options,
+        WebAuthOptions? authOptions = null,
+        Action<IServiceCollection>? configureBackend = null,
+        CancellationToken ct = default)
     {
         var builder = WebApplication.CreateSlimBuilder();
         ConfigureAuthServices(builder, authOptions ?? new WebAuthOptions());
+        configureBackend?.Invoke(builder.Services);
 
         var app = builder.Build();
         app.Urls.Add(options.Url);
         MapEndpoints(app);
 
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web");
+        await MigrateAsync(app, logger, ct);
         logger.LogInformation(
             "OpenIPC Viewer web server listening on {Url} ({Scope})",
             options.Url, options.BindLan ? "LAN" : "localhost only");
@@ -55,6 +62,18 @@ public static class WebServer
             ct.Register(() => _ = app.StopAsync());
 
         await app.RunAsync();
+    }
+
+    // Runs schema migrations when a backend is composed. No-op when the host was
+    // started without one (e.g. auth-only runs / tests).
+    private static async Task MigrateAsync(WebApplication app, ILogger logger, CancellationToken ct)
+    {
+        var migrator = app.Services.GetService<IMigrationRunner>();
+        if (migrator is null)
+            return;
+
+        logger.LogInformation("Running database migrations…");
+        await migrator.MigrateAsync(ct);
     }
 
     private static void ConfigureAuthServices(WebApplicationBuilder builder, WebAuthOptions authOptions)
@@ -120,6 +139,7 @@ public static class WebServer
         });
 
         app.MapAuthEndpoints();
+        app.MapCameraEndpoints();
 
         app.MapGet("/", () => Results.Content(PlaceholderPage, "text/html; charset=utf-8"));
     }

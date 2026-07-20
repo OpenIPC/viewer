@@ -21,5 +21,6 @@
       <Build Solution="Debug|*" Project="false" />
     </Project>
     <Project Path="tests/OpenIPC.Viewer.Video.Tests/OpenIPC.Viewer.Video.Tests.csproj" />
+    <Project Path="tests/OpenIPC.Viewer.Web.Tests/OpenIPC.Viewer.Web.Tests.csproj" />
   </Folder>
 </Solution>
