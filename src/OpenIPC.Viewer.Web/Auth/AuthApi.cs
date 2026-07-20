@@ -116,15 +116,25 @@ public static class AuthApi
         HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
 
     // Same-origin only when an Origin header is present. Native clients (curl,
-    // the desktop app) send no Origin and are allowed — CSRF is a browser threat.
+    // the desktop app) send no Origin and are allowed — CSRF is a browser threat,
+    // and SameSite=Strict on the session cookie is the primary defense anyway.
+    // We compare hostnames (port-agnostic, matching SameSite semantics) and treat
+    // loopback aliases as equal, so localhost/127.0.0.1 mixes don't false-reject.
     private static bool OriginAllowed(HttpRequest request)
     {
         var origin = request.Headers.Origin.ToString();
         if (string.IsNullOrEmpty(origin))
             return true;
-        return Uri.TryCreate(origin, UriKind.Absolute, out var uri)
-            && string.Equals(uri.Authority, request.Host.Value, StringComparison.OrdinalIgnoreCase);
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+            return false;
+        return HostsEquivalent(originUri.Host, request.Host.Host);
     }
+
+    private static bool HostsEquivalent(string a, string b) =>
+        string.Equals(a, b, StringComparison.OrdinalIgnoreCase) || (IsLoopback(a) && IsLoopback(b));
+
+    private static bool IsLoopback(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host is "127.0.0.1" or "::1" or "[::1]";
 
     private static string? BearerToken(HttpContext ctx)
     {
