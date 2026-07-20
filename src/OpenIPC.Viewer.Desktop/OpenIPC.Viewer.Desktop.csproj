@@ -31,6 +31,7 @@
     <ProjectReference Include="..\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.Video\OpenIPC.Viewer.Video.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.Devices\OpenIPC.Viewer.Devices.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Web\OpenIPC.Viewer.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

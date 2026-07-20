@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- ASP.NET Core (Kestrel + minimal API) via the shared framework, so no
+       package reference / CPM entry is needed. This project is a library: the
+       Desktop head hosts it (in-process or headless server-only mode). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
