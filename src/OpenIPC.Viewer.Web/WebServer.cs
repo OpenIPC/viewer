@@ -1,8 +1,11 @@
 using System.Reflection;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web;
 
@@ -27,9 +30,11 @@ public static class WebServer
     // Runs the server until the process is stopped (Ctrl-C / SIGTERM via the
     // default host lifetime) or the supplied token is cancelled — the latter is
     // how the in-process desktop host (a later slice) will stop it.
-    public static async Task RunAsync(WebServerOptions options, CancellationToken ct = default)
+    public static async Task RunAsync(
+        WebServerOptions options, WebAuthOptions? authOptions = null, CancellationToken ct = default)
     {
         var builder = WebApplication.CreateSlimBuilder();
+        ConfigureAuthServices(builder, authOptions ?? new WebAuthOptions());
 
         var app = builder.Build();
         app.Urls.Add(options.Url);
@@ -52,11 +57,32 @@ public static class WebServer
         await app.RunAsync();
     }
 
+    private static void ConfigureAuthServices(WebApplicationBuilder builder, WebAuthOptions authOptions)
+    {
+        builder.Services.AddSingleton(authOptions);
+        builder.Services.AddSingleton<SessionStore>();
+        builder.Services.AddSingleton<IWebAuthProvider, PasswordAuthProvider>();
+
+        // Per-IP fixed window on the login endpoint — blunts credential stuffing
+        // without touching the rest of the API.
+        builder.Services.AddRateLimiter(limiter =>
+        {
+            limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            limiter.AddPolicy(AuthApi.LoginRateLimitPolicy, http =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        Window = TimeSpan.FromMinutes(1),
+                        PermitLimit = 5,
+                        QueueLimit = 0,
+                    }));
+        });
+    }
+
     private static void MapEndpoints(WebApplication app)
     {
-        // A minimal security-header floor on every response. The auth slice
-        // (§20.2) builds a full CSP / CSRF / rate-limit story on top; setting
-        // these now costs nothing and keeps responses honest from day one.
+        // A minimal security-header floor on every response.
         app.Use(async (HttpContext context, RequestDelegate next) =>
         {
             var headers = context.Response.Headers;
@@ -66,9 +92,13 @@ public static class WebServer
             await next(context);
         });
 
+        app.UseRateLimiter();
+        // Origin check on mutations + bearer-token guard over protected API paths.
+        app.UseWebAuth();
+
         // Liveness probe — touches no backend, so it answers even before the
-        // data layer exists. Used by --server-only smoke checks and, later,
-        // container/service health.
+        // data layer exists. Public (no auth) for --server-only smoke checks and,
+        // later, container/service health.
         app.MapGet("/healthz", () => Results.Json(new
         {
             status = "ok",
@@ -80,6 +110,16 @@ public static class WebServer
             product = "OpenIPC Viewer",
             version = Version,
         }));
+
+        // First protected endpoint — proves the auth pipeline end-to-end until
+        // the real camera API lands. Requires a valid bearer token.
+        app.MapGet("/api/v1/ping", (HttpContext ctx) =>
+        {
+            var identity = ctx.GetIdentity();
+            return Results.Json(new { pong = true, user = identity?.Name });
+        });
+
+        app.MapAuthEndpoints();
 
         app.MapGet("/", () => Results.Content(PlaceholderPage, "text/html; charset=utf-8"));
     }

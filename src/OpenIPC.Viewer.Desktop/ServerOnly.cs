@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using OpenIPC.Viewer.Web;
+using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Desktop;
 
@@ -15,9 +16,13 @@ namespace OpenIPC.Viewer.Desktop;
 //   --port <n>           listen port (default WebServerOptions.DefaultPort)
 //   --lan                bind 0.0.0.0 (reachable from the LAN); default is
 //                        localhost-only
+//
+// The admin password is read from the OPENIPC_WEB_ADMIN_PASSWORD environment
+// variable; when unset, a random one is generated and logged on startup.
 internal static class ServerOnly
 {
     public const string Flag = "--server-only";
+    private const string AdminPasswordEnv = "OPENIPC_WEB_ADMIN_PASSWORD";
 
     public static bool IsRequested(string[] args) =>
         args.Any(a => string.Equals(a, Flag, StringComparison.OrdinalIgnoreCase));
@@ -25,9 +30,13 @@ internal static class ServerOnly
     public static int Run(string[] args)
     {
         var options = ParseOptions(args);
+        var authOptions = new WebAuthOptions
+        {
+            AdminPassword = Environment.GetEnvironmentVariable(AdminPasswordEnv),
+        };
         try
         {
-            WebServer.RunAsync(options).GetAwaiter().GetResult();
+            WebServer.RunAsync(options, authOptions).GetAwaiter().GetResult();
             return 0;
         }
         catch (Exception ex)
