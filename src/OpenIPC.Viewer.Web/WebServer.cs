@@ -122,6 +122,7 @@ public static class WebServer
                 forwarded.KnownProxies.Add(addr);
         }
         app.UseForwardedHeaders(forwarded);
+        app.UseWebSockets();
 
         // A minimal security-header floor on every response.
         app.Use(async (HttpContext context, RequestDelegate next) =>
@@ -164,6 +165,7 @@ public static class WebServer
         app.MapAuthEndpoints();
         app.MapCameraEndpoints();
         app.MapGroupEndpoints();
+        app.MapLiveEndpoints();
         app.MapUiEndpoints();
         app.MapRazorComponents<App>();
 

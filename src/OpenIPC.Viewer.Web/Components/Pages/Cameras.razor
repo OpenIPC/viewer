@@ -32,7 +32,7 @@
     {
         <table>
             <thead>
-                <tr><th>Name</th><th>Host</th><th>Group</th><th>RTSP</th><th>Grid</th></tr>
+                <tr><th>Name</th><th>Host</th><th>Group</th><th>Grid</th><th></th></tr>
             </thead>
             <tbody>
                 @foreach (var c in _cameras)
@@ -41,8 +41,8 @@
                         <td>@c.Name</td>
                         <td class="muted">@c.Host</td>
                         <td class="muted">@(c.GroupName ?? "—")</td>
-                        <td class="muted" style="font-family:ui-monospace,monospace;font-size:.85rem">@c.RtspMain</td>
                         <td>@if (c.IncludedInGrid) { <span class="badge on">yes</span> } else { <span class="badge">no</span> }</td>
+                        <td><a href="/app/cameras/@c.Id/live">▶ Live</a></td>
                     </tr>
                 }
             </tbody>
