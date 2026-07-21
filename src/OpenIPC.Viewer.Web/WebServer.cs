@@ -181,6 +181,7 @@ public static class WebServer
         app.MapAuthEndpoints();
         app.MapCameraEndpoints();
         app.MapGroupEndpoints();
+        app.MapLayoutEndpoints();
         app.MapLiveEndpoints();
         app.MapUiEndpoints();
         app.MapCameraFormEndpoints();

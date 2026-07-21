@@ -74,6 +74,16 @@ export const EN: Dict = {
 
   'Grid.Title': 'Grid',
   'Grid.Empty': 'No cameras to show. Add cameras or include them in the grid.',
+  'Grid.NewLayout': '＋ Layout',
+  'Grid.NewLayoutName': 'New layout name',
+  'Grid.Edit': 'Edit layout',
+  'Grid.Rename': 'Rename',
+  'Grid.DeleteLayout': 'Delete layout',
+  'Grid.DeleteLayoutConfirm': 'Delete this layout?',
+  'Grid.Size': 'Size',
+  'Grid.EmptyCell': '(empty)',
+  'Grid.NoLayouts': 'No layouts yet — create one.',
+  'Grid.Single': 'Single camera',
 
   'Groups.Title': 'Groups',
   'Groups.Add': '＋ Add group',
@@ -154,6 +164,16 @@ export const RU: Dict = {
 
   'Grid.Title': 'Сетка',
   'Grid.Empty': 'Нет камер для показа. Добавьте камеры или включите их в сетку.',
+  'Grid.NewLayout': '＋ Раскладка',
+  'Grid.NewLayoutName': 'Название новой раскладки',
+  'Grid.Edit': 'Изменить раскладку',
+  'Grid.Rename': 'Переименовать',
+  'Grid.DeleteLayout': 'Удалить раскладку',
+  'Grid.DeleteLayoutConfirm': 'Удалить эту раскладку?',
+  'Grid.Size': 'Размер',
+  'Grid.EmptyCell': '(пусто)',
+  'Grid.NoLayouts': 'Раскладок пока нет — создайте.',
+  'Grid.Single': 'Одна камера',
 
   'Groups.Title': 'Группы',
   'Groups.Add': '＋ Добавить группу',

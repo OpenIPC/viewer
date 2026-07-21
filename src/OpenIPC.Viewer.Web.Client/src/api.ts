@@ -28,6 +28,14 @@ export type CameraDto = {
 
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
+export type LayoutDto = {
+  id: number
+  name: string
+  gridSize: number
+  sortOrder: number
+  tiles: string[] // ordered camera ids (position = index)
+}
+
 export type CameraWrite = {
   name: string
   host: string
@@ -95,4 +103,13 @@ export const api = {
   createGroup: (name: string) => req<GroupDto>('POST', '/api/v1/groups', { name }),
   renameGroup: (id: number, name: string) => req<GroupDto>('PUT', `/api/v1/groups/${id}`, { name }),
   deleteGroup: (id: number) => req<void>('DELETE', `/api/v1/groups/${id}`),
+
+  layouts: () => req<LayoutDto[]>('GET', '/api/v1/layouts'),
+  createLayout: (name: string, gridSize: number) =>
+    req<LayoutDto>('POST', '/api/v1/layouts', { name, gridSize }),
+  updateLayout: (id: number, body: { name?: string; gridSize?: number }) =>
+    req<LayoutDto>('PUT', `/api/v1/layouts/${id}`, body),
+  deleteLayout: (id: number) => req<void>('DELETE', `/api/v1/layouts/${id}`),
+  setLayoutTiles: (id: number, cameras: string[]) =>
+    req<LayoutDto>('PUT', `/api/v1/layouts/${id}/tiles`, { cameras }),
 }
