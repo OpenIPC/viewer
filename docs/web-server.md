@@ -184,3 +184,33 @@ dotnet publish src/OpenIPC.Viewer.Desktop -c Release -r linux-x64 \
 ```
 
 Swap `linux-x64` for `win-x64` / `osx-arm64` as needed.
+
+---
+
+## How it's built — where does the React app go?
+
+There is **no separate front-end to deploy**. The browser UI is a React + Vite
+single-page app whose *compiled output is embedded inside the server binary* at
+build time, so at runtime there is no Node, no `dist/` to copy, and no static-file
+server to run — just the one executable.
+
+```
+src/OpenIPC.Viewer.Web.Client   React + TypeScript + Vite  (source)
+          │  dotnet build / publish runs an MSBuild target →
+          ▼  npm run build   (Vite emits index.html + hashed assets)
+   OpenIPC.Viewer.Web/wwwroot   build output
+          │  embedded as resources into the assembly →
+          ▼
+   OpenIPC.Viewer.Web.dll       the compiled SPA lives *inside* this DLL
+          │  at runtime Kestrel serves it from memory →
+          ▼
+   GET /            → embedded index.html
+   GET /assets/*    → embedded JS / CSS
+   GET /grid, …     → SPA client routes (fallback to index.html)
+```
+
+Node is therefore a **build-time-only** dependency (CI installs it; a source build
+needs it). A downloaded release archive already has the React app baked into the
+binary. This embed-in-the-DLL approach also means the web UI travels with the
+server assembly no matter which host loads it, rather than depending on a
+framework-specific static-assets pipeline.
