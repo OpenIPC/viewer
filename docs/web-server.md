@@ -4,10 +4,16 @@
 
 The desktop app ships a headless **web server** mode: the *same binary*, launched
 with `--server-only`, serves a browser console for your OpenIPC cameras over your
-LAN. No cloud, no accounts, no extra services — one admin password and a port.
+LAN. No cloud, no extra services — one admin password and a port.
 
-* **Live grid** (1 / 4 / 9), per-camera live view, fullscreen tiles.
+* **Live grid** (1 / 4 / 9 / 16 / 25) with saved layouts and paging, per-camera
+  live view, fullscreen tiles. Video keeps playing while you move between pages.
 * **Camera management** — add / edit / delete, groups, import/export config backup.
+* **Find cameras on the network** — ONVIF, mDNS and an opt-in subnet sweep, then
+  add what you found without leaving the browser.
+* **PTZ** — pan/tilt/zoom and presets for cameras that support it.
+* **Users and permissions** — accounts with permission flags and, if you like, a
+  per-user subset of cameras.
 * **H.264 over WebSocket** (fMP4 + MSE); H.265 is transcoded on the fly. One
   ffmpeg session is shared across all viewers of a camera.
 * Works from any browser on the network — phone, tablet, another PC.
@@ -59,14 +65,19 @@ there is no TLS at this layer; for anything beyond your trusted LAN, put it
 
 | Env var                       | Meaning                                          |
 |-------------------------------|--------------------------------------------------|
-| `OPENIPC_WEB_ADMIN_PASSWORD`  | Admin password. Unset → random, logged on start. |
+| `OPENIPC_WEB_ADMIN_PASSWORD`  | Built-in admin password. Unset → random, logged on start. |
 
 ---
 
 ## Adding cameras
 
-Three ways, all landing in the same database:
+Four ways, all landing in the same database:
 
+* **Find them on the network** — *Discovery → Scan*. Passive sources (ONVIF
+  WS-Discovery, mDNS) always run; *Deep scan* additionally sweeps the local
+  subnet, which finds cameras that announce nothing but looks like a port scan
+  to anyone watching the network. Pick a device, enter its login, *Probe* to read
+  the real RTSP URL and capabilities off the camera, then *Add*.
 * **In the web UI** — *Cameras → ＋ Add camera*.
 * **Import a backup** — *System → Import* a JSON file exported from the desktop app
   or another instance (*System → Export config* produces one; camera passwords are
@@ -81,6 +92,31 @@ Three ways, all landing in the same database:
   | macOS   | `~/Library/Application Support/OpenIPC.Viewer/openipc-viewer.db`      |
 
   Camera credentials live in the OS secret store, not in this file.
+
+---
+
+## Users and permissions
+
+Out of the box there is one account: the built-in administrator from
+`OPENIPC_WEB_ADMIN_PASSWORD`. *Users → ＋ Add user* creates more, each with:
+
+| Permission     | Grants                                                        |
+|----------------|---------------------------------------------------------------|
+| `watch live`   | see the camera list and live video                            |
+| `PTZ`          | move the camera and manage its presets                        |
+| `export`       | reserved for archive export                                   |
+| `manage`       | everything that changes the installation — cameras, groups, layouts, discovery, backups, sessions, users |
+
+and, optionally, a **subset of cameras**: leave *All cameras* on for full access,
+or tick the ones a user may see. Cameras outside the subset are invisible —
+absent from the list, from the grid, and from the API.
+
+The roster lives next to the database as `web-users.json` (passwords are stored
+as PBKDF2 hashes, never in the clear). The built-in administrator keeps working
+even after you add users — it is the way back in if the last `manage` account is
+lost, so keep its password safe.
+
+> Permission changes take effect the next time that user signs in.
 
 ---
 
@@ -169,8 +205,13 @@ variable so the service picks it up.
 
 * **Localhost by default.** Network exposure (`--lan`) is opt-in and warned about.
 * **No built-in TLS** — use a reverse proxy for HTTPS (above).
-* **One admin account.** Login is rate-limited (5/min/IP); sessions are opaque
-  tokens in an `HttpOnly`, `SameSite=Strict` cookie with a 12-hour sliding expiry.
+* **Accounts and permissions.** Login is rate-limited (5/min/IP); sessions are
+  opaque tokens in an `HttpOnly`, `SameSite=Strict` cookie with a 12-hour sliding
+  expiry. Every request is authorized on the server — the UI hides what you may
+  not do, but hiding is not the boundary.
+* **The web server is a separate door to the same cameras.** Its accounts are its
+  own; desktop-side access control does not apply to it. Give it its own roster
+  (above) if the machine is shared.
 * **Config export** never contains camera passwords.
 * Health check: `GET /healthz` (no auth) returns `{"status":"ok","version":"…"}`.
 
