@@ -79,13 +79,37 @@ label input, label select { color:var(--text-1); }
 .videos.n4 { grid-template-columns:repeat(2,1fr); }
 .videos.n9 { grid-template-columns:repeat(3,1fr); }
 .cell { position:relative; background:#000; border:1px solid var(--border-weak);
-  border-radius:var(--r-md); overflow:hidden; aspect-ratio:16/9; }
-.cell video { width:100%; height:100%; object-fit:contain; background:#000; }
+  border-radius:var(--r-md); overflow:hidden; aspect-ratio:16/9; transition:border-color .15s; }
+.cell:hover { border-color:var(--border-med); }
+.cell video { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
 .cell .label { position:absolute; left:8px; bottom:8px; font-size:12px;
-  background:rgba(0,0,0,.6); padding:2px 8px; border-radius:var(--r-sm); color:#fff; }
-.cell .status { position:absolute; right:8px; top:8px; font-size:11px;
-  background:rgba(0,0,0,.6); padding:2px 8px; border-radius:var(--r-sm); color:var(--text-2); }
+  background:rgba(0,0,0,.55); padding:3px 9px; border-radius:var(--r-sm); color:#fff;
+  max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cell.empty-slot { border-style:dashed; background:var(--bg1); }
 .cell .empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-3); }
+
+/* Live-status pill (top-left) — a colored dot + terse label. */
+.cell .status { position:absolute; left:8px; top:8px; display:flex; align-items:center; gap:6px;
+  font-size:11px; background:rgba(0,0,0,.55); padding:3px 8px; border-radius:999px; color:var(--text-1); }
+.cell .status .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+.dot.live { background:var(--success); }
+.dot.connecting { background:var(--warning); animation:pulse 1.2s ease-in-out infinite; }
+.dot.error { background:var(--danger); }
+.dot.offline { background:var(--text-3); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* Centered spinner while the first frame hasn't arrived. */
+.cell .loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.cell .spinner { width:26px; height:26px; border:2px solid rgba(255,255,255,.15);
+  border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Fullscreen affordance, revealed on hover. */
+.cell .expand { position:absolute; right:8px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:15px; line-height:1; }
+.cell:hover .expand { opacity:1; }
+.cell .expand:hover { background:var(--accent); }
 
 /* Login: centered card, no sidebar. */
 .login { max-width:340px; margin:12vh auto 0; padding:24px; }
