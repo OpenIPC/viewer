@@ -1,79 +1,19 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import { api, type CameraDto, type LayoutDto } from '../api'
 import { useI18n } from '../i18n'
-import { useLiveTile } from '../hooks/useLiveTile'
+import { EmptyCell, LiveTile } from '../components/LiveTile'
 import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
 // Grid size is the side N of an NxN grid (matches the backend/desktop model);
 // cells = N*N. The UI labels each option by its cell count (1, 4, 9, 16, 25).
 const SIDES = [1, 2, 3, 4, 5]
 
-// Collapse the raw useLiveTile status string into a small set of visual states:
-// a dot colour + a terse label, plus whether to show the "still connecting"
-// spinner (no frame yet).
-type Kind = 'live' | 'connecting' | 'error' | 'offline'
-function statusKind(status: string): { kind: Kind; label: string } {
-  if (status === 'live' || status.includes('transcoded')) return { kind: 'live', label: 'live' }
-  if (status === 'connecting' || status.startsWith('transcod')) return { kind: 'connecting', label: 'connecting' }
-  if (status === 'ended') return { kind: 'offline', label: 'offline' }
-  return { kind: 'error', label: status }
-}
-
-// A single live tile. Memoized and keyed by camera id in the grid so that
-// changing the layout (size OR which saved layout is active) NEVER remounts a
-// tile whose camera stays on screen — React matches it by key and only moves the
-// DOM node. That is the whole app-like point: the <video>/WebSocket/ffmpeg
-// session for a surviving camera is not torn down and restarted on a switch.
-const Tile = memo(function Tile({ camera }: { camera: CameraDto }) {
-  const [video, setVideo] = useState<HTMLVideoElement | null>(null)
-  const cellRef = useRef<HTMLDivElement>(null)
-  const status = useLiveTile(video, camera.id)
-  const { kind, label } = statusKind(status)
-
-  const toggleFullscreen = () => {
-    const el = cellRef.current
-    if (!el) return
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void el.requestFullscreen?.()
-  }
-
-  return (
-    <div className="cell" ref={cellRef} onDoubleClick={toggleFullscreen}>
-      <video ref={setVideo} autoPlay muted playsInline />
-      {kind === 'connecting' && (
-        <div className="loading">
-          <span className="spinner" />
-        </div>
-      )}
-      <span className="status">
-        <span className={'dot ' + kind} />
-        {label}
-      </span>
-      <span className="label">{camera.name}</span>
-      <button className="expand" title="Fullscreen" onClick={toggleFullscreen}>
-        ⤢
-      </button>
-    </div>
-  )
-})
-
-function EmptyCell() {
-  return (
-    <div className="cell empty-slot">
-      <div className="empty">—</div>
-    </div>
-  )
-}
 
 // The Live grid, driven by saved layouts (name + grid size + ordered camera
 // tiles). Switching between layouts keeps shared cameras playing. An edit mode
 // assigns a camera to each cell and changes the grid size.
 export function Grid() {
   const { t } = useI18n()
-  const [params, setParams] = useSearchParams()
-  const only = params.get('only')
-
   const [cameras, setCameras] = useState<CameraDto[] | null>(null)
   const [layouts, setLayouts] = useState<LayoutDto[] | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
@@ -112,28 +52,6 @@ export function Grid() {
     setLayouts(ls)
     setActiveId((prev) => (prev != null && ls.some((l) => l.id === prev) ? prev : (ls[0]?.id ?? null)))
     return ls
-  }
-
-  // ---- single-camera mode (arriving from Cameras "▶ Live") ---------------
-  if (only) {
-    const cam = cameras?.find((c) => c.id === only)
-    return (
-      <div className="wrap" style={{ maxWidth: 'none' }}>
-        <div className="toolbar">
-          <h1 style={{ margin: 0, flex: 1 }}>{t('Grid.Single')}</h1>
-          <button onClick={() => setParams({}, { replace: true })}>← {t('Grid.Title')}</button>
-        </div>
-        {cameras === null ? (
-          <div className="spin">{t('Common.Loading')}</div>
-        ) : !cam ? (
-          <p className="muted">{t('Grid.Empty')}</p>
-        ) : (
-          <div className="videos n1">
-            <Tile key={cam.id} camera={cam} />
-          </div>
-        )}
-      </div>
-    )
   }
 
   // ---- edit-mode actions --------------------------------------------------
@@ -266,7 +184,7 @@ export function Grid() {
         <div className={`videos n${active.gridSize * active.gridSize}`}>
           {Array.from({ length: active.gridSize * active.gridSize }, (_, i) => {
             const cam = active.tiles[i] ? camById.get(active.tiles[i]) : undefined
-            return cam ? <Tile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
+            return cam ? <LiveTile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
           })}
         </div>
       )}

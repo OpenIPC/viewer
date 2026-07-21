@@ -3,6 +3,7 @@ import { useAuth } from './auth'
 import { Shell } from './components/Shell'
 import { Login } from './pages/Login'
 import { Cameras } from './pages/Cameras'
+import { Camera } from './pages/Camera'
 import { Grid } from './pages/Grid'
 import { Groups } from './pages/Groups'
 import { System } from './pages/System'
@@ -21,6 +22,7 @@ export function App() {
       <Route element={user ? <Shell /> : <Navigate to="/login" replace />}>
         <Route index element={<Navigate to="/cameras" replace />} />
         <Route path="/cameras" element={<Cameras />} />
+        <Route path="/camera/:id" element={<Camera />} />
         <Route path="/grid" element={<Grid />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/system" element={<System />} />

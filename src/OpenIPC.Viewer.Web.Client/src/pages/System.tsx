@@ -12,8 +12,8 @@ type Status = { version: string; cameras: number; groups: number; sessions: numb
 // (they already exist and are Origin-guarded); import is a same-origin multipart
 // fetch, revoke clears the cookie server-side and we then drop local auth state.
 export function System() {
-  const { t } = useI18n()
-  const { logout } = useAuth()
+  const { t, setLang } = useI18n()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [status, setStatus] = useState<Status | null>(null)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
@@ -62,7 +62,7 @@ export function System() {
         <p style={{ color: notice.ok ? 'var(--success)' : 'var(--danger)' }}>{notice.text}</p>
       )}
 
-      <table style={{ maxWidth: 420, marginBottom: 28 }}>
+      <table className="details" style={{ maxWidth: 420, marginBottom: 28 }}>
         <tbody>
           <tr>
             <td className="muted">{t('System.Version')}</td>
@@ -86,6 +86,30 @@ export function System() {
           </tr>
         </tbody>
       </table>
+
+      {/* Account controls also live here because the mobile bottom-tab nav has no
+          room for the sidebar footer (user / language / sign out). */}
+      <h2 style={{ fontSize: 16, fontWeight: 600 }}>{t('System.Account')}</h2>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 12, margin: '12px 0 28px' }}>
+        <span className="muted">{user?.user}</span>
+        <span>
+          <a onClick={() => setLang('en')} style={{ cursor: 'pointer' }}>
+            EN
+          </a>{' '}
+          ·{' '}
+          <a onClick={() => setLang('ru')} style={{ cursor: 'pointer' }}>
+            RU
+          </a>
+        </span>
+        <button
+          onClick={async () => {
+            await logout()
+            navigate('/login', { replace: true })
+          }}
+        >
+          {t('Nav.SignOut')}
+        </button>
+      </div>
 
       <h2 style={{ fontSize: 16, fontWeight: 600 }}>{t('System.Backup')}</h2>
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>

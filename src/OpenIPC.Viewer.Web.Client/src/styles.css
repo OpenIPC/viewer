@@ -130,3 +130,57 @@ label input, label select { color:var(--text-1); }
 .form-grid .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
 .spin { color:var(--text-3); padding:24px 0; }
+
+/* Single-camera details table: label column stays narrow, values can wrap. */
+.details td { vertical-align:top; }
+.break { word-break:break-all; }
+
+/* ============================================================================
+   Mobile / narrow viewports. 700px is the app-wide breakpoint (same value the
+   desktop UI uses). The fixed sidebar becomes a bottom tab strip — thumb-reachable
+   and the way the web console is actually used (a phone browser on the LAN).
+   ========================================================================== */
+@media (max-width: 700px) {
+  /* Stack: content scrolls, nav pinned to the bottom. */
+  .shell { grid-template-columns:1fr; grid-template-rows:1fr auto; min-height:100dvh; }
+
+  .sidebar {
+    grid-row:2; flex-direction:row; align-items:center; justify-content:space-around;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom)); gap:0;
+    border-right:none; border-top:1px solid var(--border-weak);
+    position:sticky; bottom:0; z-index:5;
+  }
+  /* Brand + the footer block (user / language / sign out) don't fit a tab strip. */
+  .sidebar .brand, .sidebar .spacer, .sidebar .foot { display:none; }
+  .navitem {
+    flex-direction:column; gap:3px; padding:6px 4px; font-size:11px;
+    text-align:center; justify-content:center;
+  }
+  .navitem svg { width:20px; height:20px; }
+
+  main { padding:14px 12px 18px; }
+  h1 { font-size:18px; }
+
+  /* Never more than 2 columns on a phone, whatever the layout says — a 5x5 wall
+     of postage stamps is useless. Tiles keep their 16:9 box. */
+  .videos.n9, .videos.n16, .videos.n25 { grid-template-columns:repeat(2,1fr); }
+  .videos { gap:6px; }
+  .cell .expand { opacity:1; }   /* no hover on touch — always show */
+
+  /* Wide list tables (the camera list) scroll sideways rather than squashing;
+     narrow key/value tables (.details) stack instead — see below. */
+  .wrap { overflow-x:auto; }
+  table.list { min-width:520px; }
+  .details { min-width:0; }
+  .details td { display:block; width:auto !important; }
+  .details tr { display:block; padding:6px 0; border-bottom:1px solid var(--border-weak); }
+  .details td:first-child { font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+
+  /* Dialogs take the full width, anchored higher up. */
+  .backdrop { padding:6vh 10px; align-items:flex-start; }
+  .modal { max-width:none; padding:18px; }
+  .form-grid .two { grid-template-columns:1fr; }
+
+  .toolbar { gap:6px; }
+  .login { margin-top:8vh; padding:16px; }
+}

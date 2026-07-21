@@ -94,6 +94,14 @@ export const EN: Dict = {
   'Groups.Rename': 'Rename group',
   'Groups.DeleteConfirm': 'Delete this group?',
   'Groups.InUse': 'Group is still used by cameras.',
+  'System.Account': 'Account',
+
+  'Live.Back': '← Cameras',
+  'Camera.Details': 'Details',
+  'Camera.Credentials': 'Credentials set',
+  'Camera.Capabilities': 'Capabilities',
+  'Camera.Chip': 'Chip',
+  'Camera.Firmware': 'Firmware',
 }
 
 export const RU: Dict = {
@@ -186,4 +194,12 @@ export const RU: Dict = {
   'Groups.Rename': 'Переименовать группу',
   'Groups.DeleteConfirm': 'Удалить группу?',
   'Groups.InUse': 'Группа ещё используется камерами.',
+  'System.Account': 'Учётная запись',
+
+  'Live.Back': '← Камеры',
+  'Camera.Details': 'Детали',
+  'Camera.Credentials': 'Учётные данные заданы',
+  'Camera.Capabilities': 'Возможности',
+  'Camera.Chip': 'Чип',
+  'Camera.Firmware': 'Прошивка',
 }

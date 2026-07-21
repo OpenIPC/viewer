@@ -52,7 +52,7 @@ export function Cameras() {
       ) : cameras.length === 0 ? (
         <p className="muted">{t('Cameras.Empty')}</p>
       ) : (
-        <table>
+        <table className="list">
           <thead>
             <tr>
               <th>{t('Cameras.Th.Name')}</th>
@@ -74,7 +74,7 @@ export function Cameras() {
                   </span>
                 </td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <Link to={`/grid?only=${c.id}`}>{t('Cameras.Live')}</Link>{' '}
+                  <Link to={`/camera/${c.id}`}>{t('Cameras.Live')}</Link>{' '}
                   <button onClick={() => setEditing(c)}>{t('Cameras.Edit')}</button>{' '}
                   <button className="danger" onClick={() => setDeleting(c)}>
                     {t('Cameras.Delete')}
