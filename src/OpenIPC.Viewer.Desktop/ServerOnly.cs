@@ -37,6 +37,9 @@ internal static class ServerOnly
         var authOptions = new WebAuthOptions
         {
             AdminPassword = Environment.GetEnvironmentVariable(AdminPasswordEnv),
+            // The user roster lives next to the database, so a server that is
+            // moved keeps its accounts with its cameras.
+            UsersFilePath = Path.Combine(AppPaths.AppDataDir.FullName, "web-users.json"),
         };
         // Same on-disk database as the desktop app — the web server reads/writes
         // the very same cameras.

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -22,6 +23,20 @@ public static class LiveApi
             if (!ctx.WebSockets.IsWebSocketRequest)
             {
                 ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
+
+            // Watching is a permission, and a camera outside the caller's subset
+            // must not stream — this is the endpoint that would actually leak
+            // pixels, so it checks before touching the backend.
+            if (ctx.GetIdentity() is not { } identity || !identity.Can(WebPermission.ViewLive))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+            if (!identity.CanSee(id))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 

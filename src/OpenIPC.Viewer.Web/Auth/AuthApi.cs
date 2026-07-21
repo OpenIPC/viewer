@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -88,6 +90,8 @@ public static class AuthApi
                 token,
                 user = identity.Name,
                 roles = identity.Roles,
+                permissions = PermissionNames(identity),
+                cameras = identity.Cameras,
                 expiresAt,
             });
         }).RequireRateLimiting(LoginRateLimitPolicy);
@@ -107,11 +111,25 @@ public static class AuthApi
             var identity = ctx.GetIdentity();
             return identity is null
                 ? Results.Json(new { error = "unauthorized" }, statusCode: StatusCodes.Status401Unauthorized)
-                : Results.Json(new { user = identity.Name, roles = identity.Roles });
+                : Results.Json(new
+                {
+                    user = identity.Name,
+                    roles = identity.Roles,
+                    // The SPA hides what the caller can't do; the server still
+                    // enforces every one of these independently.
+                    permissions = PermissionNames(identity),
+                    cameras = identity.Cameras,
+                });
         });
     }
 
     public const string LoginRateLimitPolicy = "login";
+
+    private static List<string> PermissionNames(WebIdentity identity) =>
+        Enum.GetValues<WebPermission>()
+            .Where(p => p != WebPermission.None && p != WebPermission.All && identity.Permissions.HasFlag(p))
+            .Select(p => p.ToString())
+            .ToList();
 
     private static bool RequiresAuth(PathString path)
     {

@@ -12,5 +12,9 @@ public sealed record WebAuthOptions
 
     public string? AdminPassword { get; init; }
 
+    // Where the user roster lives (JSON, next to the database). Null disables
+    // the roster entirely — then the bootstrap admin above is the only account.
+    public string? UsersFilePath { get; init; }
+
     public TimeSpan SessionTtl { get; init; } = TimeSpan.FromHours(12);
 }

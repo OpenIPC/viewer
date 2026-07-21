@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { useAuth } from '../auth'
 import { CameraEditor } from '../components/CameraEditor'
 import { ConfirmModal } from '../components/Modals'
 
@@ -10,6 +11,7 @@ import { ConfirmModal } from '../components/Modals'
 // full-page form posts).
 export function Cameras() {
   const { t } = useI18n()
+  const { can } = useAuth()
   const [cameras, setCameras] = useState<CameraDto[] | null>(null)
   const [groups, setGroups] = useState<GroupDto[]>([])
   const [editing, setEditing] = useState<CameraDto | null | undefined>(undefined) // undefined=closed, null=add
@@ -42,9 +44,11 @@ export function Cameras() {
     <div className="wrap">
       <div className="toolbar">
         <h1 style={{ margin: 0, flex: 1 }}>{t('Cameras.Title')}</h1>
-        <button className="primary" onClick={() => setEditing(null)}>
-          {t('Cameras.Add')}
-        </button>
+        {can('Manage') && (
+          <button className="primary" onClick={() => setEditing(null)}>
+            {t('Cameras.Add')}
+          </button>
+        )}
       </div>
 
       {cameras === null ? (
@@ -75,10 +79,14 @@ export function Cameras() {
                 </td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <Link to={`/camera/${c.id}`}>{t('Cameras.Live')}</Link>{' '}
-                  <button onClick={() => setEditing(c)}>{t('Cameras.Edit')}</button>{' '}
-                  <button className="danger" onClick={() => setDeleting(c)}>
-                    {t('Cameras.Delete')}
-                  </button>
+                  {can('Manage') && (
+                    <>
+                      <button onClick={() => setEditing(c)}>{t('Cameras.Edit')}</button>{' '}
+                      <button className="danger" onClick={() => setDeleting(c)}>
+                        {t('Cameras.Delete')}
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { useAuth } from '../auth'
 import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
 import { PtzPad } from '../components/PtzPad'
@@ -13,6 +14,7 @@ import { ConfirmModal } from '../components/Modals'
 export function Camera() {
   const { id = '' } = useParams()
   const { t } = useI18n()
+  const { can } = useAuth()
   const navigate = useNavigate()
   const [camera, setCamera] = useState<CameraDto | null | undefined>(undefined)
   const [groups, setGroups] = useState<GroupDto[]>([])
@@ -52,17 +54,21 @@ export function Camera() {
           {t('Live.Back')}
         </Link>
         <h1 style={{ margin: 0, flex: 1 }}>{camera.name}</h1>
-        <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>
-        <button className="danger" onClick={() => setDeleting(true)}>
-          {t('Cameras.Delete')}
-        </button>
+        {can('Manage') && (
+          <>
+            <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>
+            <button className="danger" onClick={() => setDeleting(true)}>
+              {t('Cameras.Delete')}
+            </button>
+          </>
+        )}
       </div>
 
       <div className="videos n1">
         <LiveTile key={camera.id} camera={camera} />
       </div>
 
-      {camera.ptzReady && (
+      {camera.ptzReady && can('Ptz') && (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Ptz.Title')}</h2>
           <PtzPad cameraId={camera.id} />

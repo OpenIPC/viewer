@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Web.Auth;
 using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
 namespace OpenIPC.Viewer.Web.Api;
@@ -127,6 +128,13 @@ public static class PtzApi
     private static async Task<(PtzTarget? Target, IResult? Error)> TryResolveAsync(
         HttpContext ctx, string id, CancellationToken ct)
     {
+        // Every PTZ endpoint funnels through here, so one check covers them all:
+        // the caller needs the Ptz permission and must be allowed this camera.
+        if (ctx.Deny(WebPermission.Ptz) is { } forbidden)
+            return (null, forbidden);
+        if (ctx.DenyCamera(id) is { } hidden)
+            return (null, hidden);
+
         var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
         var onvif = ctx.RequestServices.GetService<IOnvifClient>();
         if (dir is null || onvif is null)

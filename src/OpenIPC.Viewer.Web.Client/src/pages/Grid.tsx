@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type CameraDto, type LayoutDto } from '../api'
 import { useI18n } from '../i18n'
+import { useAuth } from '../auth'
 import { EmptyCell, LiveTile } from '../components/LiveTile'
 import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
@@ -19,6 +20,7 @@ const SIDES = [1, 2, 3, 4, 5]
 // current page gets live tiles — flipping pages tears the old sockets down.
 export function Grid() {
   const { t } = useI18n()
+  const { user, can } = useAuth()
   const [cameras, setCameras] = useState<CameraDto[] | null>(null)
   const [layouts, setLayouts] = useState<LayoutDto[] | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
@@ -52,10 +54,20 @@ export function Grid() {
 
   const active = layouts?.find((l) => l.id === activeId) ?? null
 
+  // A layout is global, but a restricted user may only see part of it. Drop the
+  // tiles they can't see before paginating — otherwise someone with two cameras
+  // pages through ten screens of empty cells.
+  const restricted = user?.cameras != null
+  const tiles = active
+    ? restricted
+      ? active.tiles.filter((id) => camById.has(id))
+      : active.tiles
+    : []
+
   // Pagination of the active layout. Clamped rather than corrected in state, so
   // a layout that shrank under us (another client edited it) still renders.
   const pageSize = active ? active.gridSize * active.gridSize : 1
-  const pageCount = active ? Math.max(1, Math.ceil(active.tiles.length / pageSize)) : 1
+  const pageCount = active ? Math.max(1, Math.ceil(tiles.length / pageSize)) : 1
   const safePage = Math.min(page, pageCount - 1)
   const pageStart = safePage * pageSize
 
@@ -150,9 +162,13 @@ export function Grid() {
               {l.name}
             </button>
           ))}
-          {!editing && <button onClick={() => setDialog('create')}>{t('Grid.NewLayout')}</button>}
+          {!editing && can('Manage') && !restricted && (
+            <button onClick={() => setDialog('create')}>{t('Grid.NewLayout')}</button>
+          )}
         </div>
-        {active && !editing && <button onClick={startEdit}>{t('Grid.Edit')}</button>}
+        {active && !editing && can('Manage') && !restricted && (
+          <button onClick={startEdit}>{t('Grid.Edit')}</button>
+        )}
         {editing && (
           <div className="row">
             <button onClick={() => setDialog('rename')}>{t('Grid.Rename')}</button>
@@ -211,7 +227,7 @@ export function Grid() {
         <>
           <div className={`videos n${pageSize}`}>
             {Array.from({ length: pageSize }, (_, i) => {
-              const id = active.tiles[pageStart + i]
+              const id = tiles[pageStart + i]
               const cam = id ? camById.get(id) : undefined
               return cam ? <LiveTile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
             })}

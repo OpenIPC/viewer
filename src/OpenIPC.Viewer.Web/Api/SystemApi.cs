@@ -37,6 +37,8 @@ public static class SystemApi
         // passwords or secrets are ever written).
         app.MapGet("/api/v1/config/export", async (HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var backup = ctx.RequestServices.GetService<IConfigBackupService>();
             if (backup is null)
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
@@ -50,6 +52,8 @@ public static class SystemApi
         // (Was a form-post + redirect for the Razor UI; the SPA reads the JSON.)
         app.MapPost("/api/v1/config/import", async (HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var backup = ctx.RequestServices.GetService<IConfigBackupService>();
             if (backup is null)
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
@@ -83,6 +87,8 @@ public static class SystemApi
         // local auth state and returns to the login screen.
         app.MapPost("/api/v1/sessions/revoke-all", (HttpContext ctx, SessionStore store) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var count = store.RevokeAll();
             ApiHelpers.Audit(ctx, "sessions.revoke-all", count);
             AuthApi.ClearSessionCookie(ctx);

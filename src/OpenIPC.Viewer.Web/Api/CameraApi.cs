@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Web.Auth;
 using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
 namespace OpenIPC.Viewer.Web.Api;
@@ -27,14 +28,23 @@ public static class CameraApi
             if (repo is null)
                 return BackendUnavailable();
 
+            if (ctx.Deny(WebPermission.ViewLive) is { } denied)
+                return denied;
+
             var cameras = await repo.GetAllAsync(ct);
             var groupNames = await LoadGroupNamesAsync(ctx, ct);
-            var dtos = cameras.Select(c => CameraDto.From(c, GroupName(c, groupNames))).ToList();
+            // A restricted user simply never learns the others exist.
+            var dtos = cameras
+                .Where(c => ctx.CanSeeCamera(c.Id.ToString()))
+                .Select(c => CameraDto.From(c, GroupName(c, groupNames)))
+                .ToList();
             return Results.Json(dtos);
         });
 
         app.MapPost("/api/v1/cameras", async (CameraWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
             if (dir is null)
                 return BackendUnavailable();
@@ -53,6 +63,8 @@ public static class CameraApi
 
         app.MapPut("/api/v1/cameras/{id}", async (string id, CameraWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
             if (dir is null)
                 return BackendUnavailable();
@@ -79,6 +91,8 @@ public static class CameraApi
 
         app.MapDelete("/api/v1/cameras/{id}", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
             if (dir is null)
                 return BackendUnavailable();

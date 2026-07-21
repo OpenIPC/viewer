@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { useAuth } from '../auth'
 import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
 // Camera-group CRUD against /api/v1/groups. Deleting a group cameras still use
 // returns 409 group_in_use — surfaced inline rather than swallowed.
 export function Groups() {
   const { t } = useI18n()
+  const { can } = useAuth()
   const [groups, setGroups] = useState<GroupDto[] | null>(null)
   const [adding, setAdding] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -63,9 +65,11 @@ export function Groups() {
           onKeyDown={(e) => e.key === 'Enter' && onAdd()}
           style={{ flex: 1 }}
         />
-        <button className="primary" onClick={onAdd}>
-          {t('Groups.Add')}
-        </button>
+        {can('Manage') && (
+          <button className="primary" onClick={onAdd}>
+            {t('Groups.Add')}
+          </button>
+        )}
       </div>
 
       {error && <p className="err">{error}</p>}
@@ -87,10 +91,14 @@ export function Groups() {
               <tr key={g.id}>
                 <td>{g.name}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button onClick={() => setRenaming(g)}>{t('Cameras.Edit')}</button>{' '}
-                  <button className="danger" onClick={() => setDeleting(g)}>
-                    {t('Cameras.Delete')}
-                  </button>
+                  {can('Manage') && (
+                    <>
+                      <button onClick={() => setRenaming(g)}>{t('Cameras.Edit')}</button>{' '}
+                      <button className="danger" onClick={() => setDeleting(g)}>
+                        {t('Cameras.Delete')}
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

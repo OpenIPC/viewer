@@ -7,6 +7,7 @@ import { Cameras } from './pages/Cameras'
 import { Camera } from './pages/Camera'
 import { Grid } from './pages/Grid'
 import { Discovery } from './pages/Discovery'
+import { Users } from './pages/Users'
 import { Groups } from './pages/Groups'
 import { System } from './pages/System'
 
@@ -33,6 +34,7 @@ export function App() {
         <Route path="/discovery" element={<Discovery />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/system" element={<System />} />
+        <Route path="/users" element={<Users />} />
         <Route path="*" element={<Navigate to="/cameras" replace />} />
       </Route>
     </Routes>

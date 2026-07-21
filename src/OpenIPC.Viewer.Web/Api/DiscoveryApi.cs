@@ -11,6 +11,7 @@ using OpenIPC.Viewer.Core.Discovery;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Web.Auth;
 using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
 namespace OpenIPC.Viewer.Web.Api;
@@ -32,6 +33,8 @@ public static class DiscoveryApi
     {
         app.MapPost("/api/v1/discovery/scan", (DiscoveryScanRequest? body, HttpContext ctx) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var store = ctx.RequestServices.GetService<DiscoveryScanStore>();
             if (store is null)
                 return BackendUnavailable();
@@ -51,6 +54,8 @@ public static class DiscoveryApi
 
         app.MapGet("/api/v1/discovery/scan/{id}", (string id, HttpContext ctx) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var store = ctx.RequestServices.GetService<DiscoveryScanStore>();
             if (store is null)
                 return BackendUnavailable();
@@ -60,6 +65,8 @@ public static class DiscoveryApi
 
         app.MapDelete("/api/v1/discovery/scan/{id}", (string id, HttpContext ctx) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var store = ctx.RequestServices.GetService<DiscoveryScanStore>();
             if (store is null)
                 return BackendUnavailable();
@@ -76,6 +83,8 @@ public static class DiscoveryApi
         app.MapPost("/api/v1/discovery/probe", async (
             DiscoveryProbeRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var probe = ctx.RequestServices.GetService<OnvifProbeService>();
             if (probe is null)
                 return BackendUnavailable();
@@ -93,6 +102,8 @@ public static class DiscoveryApi
         app.MapPost("/api/v1/discovery/add", async (
             DiscoveryAddRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
             var probeService = ctx.RequestServices.GetService<OnvifProbeService>();
             if (dir is null || probeService is null)

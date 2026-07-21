@@ -27,6 +27,21 @@ export type CameraDto = {
   sortOrder: number
 }
 
+// Who the caller is and what they may do — the UI gates on `permissions`.
+export type MeDto = {
+  user: string
+  roles: string[]
+  permissions: string[]
+  cameras: string[] | null
+}
+
+export type WebUserDto = {
+  name: string
+  role: string
+  permissions: string[]
+  cameras: string[] | null
+}
+
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
@@ -129,15 +144,22 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 export const api = {
   version: () => req<{ product: string; version: string }>('GET', '/api/v1/version'),
-  me: () => req<{ user: string; roles: string[] }>('GET', '/api/v1/auth/me'),
+  me: () => req<MeDto>('GET', '/api/v1/auth/me'),
   login: (user: string, password: string) =>
-    req<{ user: string; roles: string[]; expiresAt: string }>('POST', '/api/v1/auth/login', {
-      user,
-      password,
-    }),
+    req<MeDto & { expiresAt: string }>('POST', '/api/v1/auth/login', { user, password }),
   logout: () => req<void>('POST', '/api/v1/auth/logout'),
 
   cameras: () => req<CameraDto[]>('GET', '/api/v1/cameras'),
+
+  // Web console accounts (Manage only). Passwords go in, never come back.
+  users: () => req<{ available: boolean; users: WebUserDto[] }>('GET', '/api/v1/users'),
+  createUser: (body: { name: string; password: string; permissions: string[]; cameras?: string[] | null }) =>
+    req<WebUserDto>('POST', '/api/v1/users', body),
+  updateUser: (
+    name: string,
+    body: { password?: string; permissions?: string[]; cameras?: string[] | null; allCameras?: boolean },
+  ) => req<WebUserDto>('PUT', `/api/v1/users/${encodeURIComponent(name)}`, body),
+  deleteUser: (name: string) => req<void>('DELETE', `/api/v1/users/${encodeURIComponent(name)}`),
   createCamera: (body: CameraWrite) => req<CameraDto>('POST', '/api/v1/cameras', body),
   updateCamera: (id: string, body: CameraWrite) =>
     req<CameraDto>('PUT', `/api/v1/cameras/${id}`, body),

@@ -8,18 +8,25 @@ using Microsoft.Extensions.Logging;
 
 namespace OpenIPC.Viewer.Web.Auth;
 
-// The minimal public-build auth provider: one admin account. The password comes
-// from WebAuthOptions; when absent, a random one is generated for this run and
-// logged once (so a fresh server is protected without shipping a default). The
-// hash lives only in memory here — persisting it is part of the backend slice.
+// Authenticates against the user roster (WebUserStore), plus one bootstrap
+// admin account whose password comes from WebAuthOptions — when absent, a
+// random one is generated for this run and logged once, so a fresh server is
+// protected without shipping a default.
+//
+// The bootstrap admin always works, even once a roster exists. That is
+// deliberate: it is the recovery account for an install whose only Manage user
+// was deleted or forgot their password, mirroring the desktop's synthetic
+// administrator principal in the access config.
 public sealed class PasswordAuthProvider : IWebAuthProvider
 {
     private readonly string _adminUser;
     private readonly string _passwordHash;
+    private readonly WebUserStore _users;
 
-    public PasswordAuthProvider(WebAuthOptions options, ILogger<PasswordAuthProvider> logger)
+    public PasswordAuthProvider(WebAuthOptions options, WebUserStore users, ILogger<PasswordAuthProvider> logger)
     {
         _adminUser = options.AdminUser;
+        _users = users;
 
         var password = options.AdminPassword;
         if (string.IsNullOrEmpty(password))
@@ -36,18 +43,28 @@ public sealed class PasswordAuthProvider : IWebAuthProvider
 
     public ValueTask<WebIdentity?> ValidateCredentialsAsync(string user, string password, CancellationToken ct)
     {
-        // Verify the password hash regardless of the username outcome so a wrong
+        // Verify the bootstrap hash regardless of the username outcome so a wrong
         // username and a wrong password cost the same time (no user enumeration
         // via timing). Username itself is not a secret, so an ordinal compare is
         // fine.
-        var passwordOk = PasswordHash.Verify(password, _passwordHash);
-        var userOk = string.Equals(user, _adminUser, StringComparison.Ordinal);
+        var bootstrapPasswordOk = PasswordHash.Verify(password, _passwordHash);
+        var isBootstrapUser = string.Equals(user, _adminUser, StringComparison.Ordinal);
+        if (isBootstrapUser && bootstrapPasswordOk)
+            return new ValueTask<WebIdentity?>(WebIdentity.Administrator(_adminUser));
 
-        WebIdentity? identity = userOk && passwordOk
-            ? new WebIdentity(_adminUser, new HashSet<string>(StringComparer.Ordinal) { WebRoles.Admin })
-            : null;
+        var record = _users.Find(user);
+        if (record is null || !PasswordHash.Verify(password, record.PasswordHash))
+            return new ValueTask<WebIdentity?>((WebIdentity?)null);
 
-        return new ValueTask<WebIdentity?>(identity);
+        return new ValueTask<WebIdentity?>(new WebIdentity(
+            record.Name,
+            new HashSet<string>(StringComparer.Ordinal) { WebRoles.ForPermissions(record.Permissions) },
+            record.Permissions,
+            // Null stays null (unrestricted); a list — even an empty one — is a
+            // real restriction and must be honoured as written.
+            record.Cameras is null
+                ? null
+                : new HashSet<string>(record.Cameras, StringComparer.OrdinalIgnoreCase)));
     }
 
     private static string GeneratePassword() =>

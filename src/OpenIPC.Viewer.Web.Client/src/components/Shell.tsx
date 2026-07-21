@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 // ported from the Phase 20 NavSidebar.razor; nav uses client-side routing so the
 // content swaps without a page reload.
 export function Shell() {
-  const { user, logout } = useAuth()
+  const { user, can, logout } = useAuth()
   const { t, setLang } = useI18n()
   const navigate = useNavigate()
 
@@ -37,6 +37,7 @@ export function Shell() {
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
         </NavItem>
+        {can('Manage') && (
         <NavItem to="/discovery" label={t('Nav.Discovery')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
             <circle cx="12" cy="12" r="2" />
@@ -44,6 +45,7 @@ export function Shell() {
             <path d="M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2" />
           </svg>
         </NavItem>
+        )}
         <NavItem to="/groups" label={t('Nav.Groups')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -51,6 +53,14 @@ export function Shell() {
             <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
         </NavItem>
+        {can('Manage') && (
+        <NavItem to="/users" label={t('Nav.Users')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </NavItem>
+        )}
         <NavItem to="/system" label={t('Nav.System')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" y1="6" x2="20" y2="6" />

@@ -14,6 +14,7 @@ export const EN: Dict = {
   'Nav.Grid': 'Grid',
   'Nav.Groups': 'Groups',
   'Nav.Discovery': 'Discovery',
+  'Nav.Users': 'Users',
   'Nav.System': 'System',
   'Nav.SignOut': 'Sign out',
 
@@ -153,6 +154,27 @@ export const EN: Dict = {
   'Discovery.ProbeFailed': 'Probe failed.',
   'Discovery.NoOnvif': 'No ONVIF answer — check the login, or add it with the RTSP URL below.',
   'Discovery.AddFailed': 'Could not add the camera.',
+
+  'Users.Title': 'Users',
+  'Users.Add': '＋ Add user',
+  'Users.AddTitle': 'Add user',
+  'Users.EditTitle': 'Edit user',
+  'Users.Empty': 'No users yet — only the built-in administrator can sign in.',
+  'Users.Unavailable': 'This server runs without a user roster, so only the built-in administrator can sign in.',
+  'Users.BootstrapNote':
+    'The built-in administrator ({user}) always keeps full access — it is the way back in if an account is lost.',
+  'Users.Th.Name': 'Name',
+  'Users.Th.Permissions': 'May do',
+  'Users.Th.Cameras': 'Cameras',
+  'Users.AllCameras': 'All cameras',
+  'Users.DeleteConfirm': 'Delete this user?',
+  'Users.Exists': 'A user with that name already exists.',
+  'Users.SaveFailed': 'Could not save the user.',
+  'Users.Perm.ViewLive': 'watch live',
+  'Users.Perm.ViewArchive': 'watch archive',
+  'Users.Perm.Ptz': 'PTZ',
+  'Users.Perm.Export': 'export',
+  'Users.Perm.Manage': 'manage',
 }
 
 export const RU: Dict = {
@@ -166,6 +188,7 @@ export const RU: Dict = {
   'Nav.Grid': 'Сетка',
   'Nav.Groups': 'Группы',
   'Nav.Discovery': 'Поиск',
+  'Nav.Users': 'Пользователи',
   'Nav.System': 'Система',
   'Nav.SignOut': 'Выход',
 
@@ -304,4 +327,25 @@ export const RU: Dict = {
   'Discovery.ProbeFailed': 'Опрос не удался.',
   'Discovery.NoOnvif': 'ONVIF не ответил — проверьте логин или добавьте камеру по RTSP URL ниже.',
   'Discovery.AddFailed': 'Не удалось добавить камеру.',
+
+  'Users.Title': 'Пользователи',
+  'Users.Add': '＋ Добавить пользователя',
+  'Users.AddTitle': 'Добавить пользователя',
+  'Users.EditTitle': 'Изменить пользователя',
+  'Users.Empty': 'Пользователей пока нет — войти может только встроенный администратор.',
+  'Users.Unavailable': 'Сервер запущен без списка пользователей, войти может только встроенный администратор.',
+  'Users.BootstrapNote':
+    'Встроенный администратор ({user}) всегда сохраняет полный доступ — это способ вернуться, если аккаунт потерян.',
+  'Users.Th.Name': 'Имя',
+  'Users.Th.Permissions': 'Права',
+  'Users.Th.Cameras': 'Камеры',
+  'Users.AllCameras': 'Все камеры',
+  'Users.DeleteConfirm': 'Удалить пользователя?',
+  'Users.Exists': 'Пользователь с таким именем уже есть.',
+  'Users.SaveFailed': 'Не удалось сохранить пользователя.',
+  'Users.Perm.ViewLive': 'смотреть эфир',
+  'Users.Perm.ViewArchive': 'смотреть архив',
+  'Users.Perm.Ptz': 'PTZ',
+  'Users.Perm.Export': 'экспорт',
+  'Users.Perm.Manage': 'управление',
 }

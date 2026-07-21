@@ -236,3 +236,8 @@ label input, label select { color:var(--text-1); }
 /* Discovery scan progress. */
 .progress { height:4px; background:var(--bg3); border-radius:999px; overflow:hidden; margin:4px 0 10px; }
 .progress span { display:block; height:100%; background:var(--accent); transition:width .3s; }
+
+/* Camera subset picker in the user editor — a scrollable checkbox list. */
+.camera-picker { max-height:200px; overflow-y:auto; margin-top:8px; padding:8px;
+  border:1px solid var(--border-weak); border-radius:var(--r-sm); background:var(--bg2);
+  display:flex; flex-direction:column; gap:6px; }

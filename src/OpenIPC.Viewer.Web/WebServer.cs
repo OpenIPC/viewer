@@ -84,6 +84,7 @@ public static class WebServer
     {
         builder.Services.AddSingleton(authOptions);
         builder.Services.AddSingleton<SessionStore>();
+        builder.Services.AddSingleton<WebUserStore>();
         builder.Services.AddSingleton<IWebAuthProvider, PasswordAuthProvider>();
 
         // Per-IP fixed window on the login endpoint — blunts credential stuffing
@@ -184,6 +185,7 @@ public static class WebServer
         app.MapPtzEndpoints();
         app.MapDiscoveryEndpoints();
         app.MapSystemEndpoints();
+        app.MapUserEndpoints();
 
         // Client-side routes (/, /cameras, /grid, …) resolve to the SPA entry;
         // real endpoints and static assets are matched before this. Without an

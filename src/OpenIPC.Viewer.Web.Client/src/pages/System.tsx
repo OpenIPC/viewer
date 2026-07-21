@@ -12,7 +12,7 @@ type Status = { version: string; cameras: number; groups: number; sessions: numb
 // server-side and we then drop local auth state.
 export function System() {
   const { t, setLang } = useI18n()
-  const { user, logout } = useAuth()
+  const { user, can, logout } = useAuth()
   const navigate = useNavigate()
   const [status, setStatus] = useState<Status | null>(null)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
@@ -100,6 +100,7 @@ export function System() {
         </button>
       </div>
 
+      {can('Manage') && (<>
       <h2 style={{ fontSize: 16, fontWeight: 600 }}>{t('System.Backup')}</h2>
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
         <a
@@ -134,6 +135,8 @@ export function System() {
       >
         {t('System.RevokeAll')}
       </button>
+
+      </>)}
 
       {confirmRevoke && (
         <ConfirmModal

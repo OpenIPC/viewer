@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,16 +14,52 @@ public sealed class AuthTests
     private static WebIdentity Admin() =>
         new("admin", new HashSet<string>(StringComparer.Ordinal) { WebRoles.Admin });
 
+    // No UsersFilePath: the roster is unavailable, so only the bootstrap admin
+    // can sign in — the shape a fresh install starts in.
+    private static PasswordAuthProvider Provider(WebAuthOptions options, WebUserStore? users = null) =>
+        new(options,
+            users ?? new WebUserStore(options, NullLogger<WebUserStore>.Instance),
+            NullLogger<PasswordAuthProvider>.Instance);
+
     [Fact]
     public async Task Provider_AcceptsCorrectCredentials_RejectsWrong()
     {
-        var provider = new PasswordAuthProvider(
-            new WebAuthOptions { AdminUser = "admin", AdminPassword = "hunter2" },
-            NullLogger<PasswordAuthProvider>.Instance);
+        var provider = Provider(new WebAuthOptions { AdminUser = "admin", AdminPassword = "hunter2" });
 
-        Assert.NotNull(await provider.ValidateCredentialsAsync("admin", "hunter2", CancellationToken.None));
+        var admin = await provider.ValidateCredentialsAsync("admin", "hunter2", CancellationToken.None);
+        Assert.NotNull(admin);
+        Assert.True(admin!.Can(WebPermission.Manage));
         Assert.Null(await provider.ValidateCredentialsAsync("admin", "wrong", CancellationToken.None));
         Assert.Null(await provider.ValidateCredentialsAsync("root", "hunter2", CancellationToken.None));
+    }
+
+    // A roster user gets exactly the permissions and camera subset stored for
+    // them — and nothing more, however the endpoints later ask.
+    [Fact]
+    public async Task Provider_RosterUser_CarriesPermissionsAndCameraSubset()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"openipc-roster-{Guid.NewGuid():n}.json");
+        var options = new WebAuthOptions { AdminUser = "admin", AdminPassword = "hunter2", UsersFilePath = path };
+        try
+        {
+            var store = new WebUserStore(options, NullLogger<WebUserStore>.Instance);
+            store.Add("watcher", "pw", WebPermission.ViewLive, new[] { "cam-1" });
+            var provider = Provider(options, store);
+
+            var identity = await provider.ValidateCredentialsAsync("watcher", "pw", CancellationToken.None);
+            Assert.NotNull(identity);
+            Assert.True(identity!.Can(WebPermission.ViewLive));
+            Assert.False(identity.Can(WebPermission.Ptz));
+            Assert.False(identity.Can(WebPermission.Manage));
+            Assert.True(identity.CanSee("cam-1"));
+            Assert.False(identity.CanSee("cam-2"));
+
+            Assert.Null(await provider.ValidateCredentialsAsync("watcher", "nope", CancellationToken.None));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
     }
 
     [Fact]

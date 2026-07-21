@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -27,6 +28,8 @@ public static class GroupApi
 
         app.MapPost("/api/v1/groups", async (GroupWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<IGroupRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
@@ -42,6 +45,8 @@ public static class GroupApi
 
         app.MapPut("/api/v1/groups/{id:int}", async (int id, GroupWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<IGroupRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
@@ -61,6 +66,8 @@ public static class GroupApi
 
         app.MapDelete("/api/v1/groups/{id:int}", async (int id, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<IGroupRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();

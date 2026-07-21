@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -37,6 +38,8 @@ public static class LayoutApi
 
         app.MapPost("/api/v1/layouts", async (LayoutWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<ILayoutRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
@@ -53,6 +56,8 @@ public static class LayoutApi
 
         app.MapPut("/api/v1/layouts/{id:int}", async (int id, LayoutWriteRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<ILayoutRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
@@ -74,6 +79,8 @@ public static class LayoutApi
 
         app.MapDelete("/api/v1/layouts/{id:int}", async (int id, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<ILayoutRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
@@ -91,6 +98,8 @@ public static class LayoutApi
         // ids for cameras that no longer exist on read.
         app.MapPut("/api/v1/layouts/{id:int}/tiles", async (int id, LayoutTilesRequest? body, HttpContext ctx, CancellationToken ct) =>
         {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
             var repo = ctx.RequestServices.GetService<ILayoutRepository>();
             if (repo is null)
                 return ApiHelpers.BackendUnavailable();
