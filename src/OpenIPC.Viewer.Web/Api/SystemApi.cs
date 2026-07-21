@@ -16,6 +16,25 @@ public static class SystemApi
 {
     public static void MapSystemEndpoints(this WebApplication app)
     {
+        // Read-only status for the SPA System page: version + live counts. The
+        // Razor page computes the same values inline; the SPA needs them as JSON.
+        // Auth-guarded (under /api/v1); counts fall back to 0 without a backend.
+        app.MapGet("/api/v1/system", async (HttpContext ctx, CancellationToken ct) =>
+        {
+            var cameras = ctx.RequestServices.GetService<ICameraRepository>();
+            var groups = ctx.RequestServices.GetService<IGroupRepository>();
+            var sessions = ctx.RequestServices.GetRequiredService<SessionStore>();
+            var hub = ctx.RequestServices.GetService<LiveStreamHub>();
+            return Results.Json(new
+            {
+                version = WebServer.Version,
+                cameras = cameras is null ? 0 : (await cameras.GetAllAsync(ct)).Count,
+                groups = groups is null ? 0 : (await groups.GetAllAsync(ct)).Count,
+                sessions = sessions.ActiveCount,
+                streams = hub?.ActiveStreamCount ?? 0,
+            });
+        });
+
         // Download a browser-safe config backup (passphrase null → no camera
         // passwords or secrets are ever written).
         app.MapGet("/app/config/export", async (HttpContext ctx, CancellationToken ct) =>

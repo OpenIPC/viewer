@@ -27,6 +27,9 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
+    <!-- Serves the embedded React SPA (Phase 21) from the Web assembly, so the
+         built front-end travels with the DLL regardless of which head hosts it. -->
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="9.0.0" />
 
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageVersion Include="Dapper" Version="2.1.79" />

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Web.Api;
@@ -140,6 +141,15 @@ public static class WebServer
             await next(context);
         });
 
+        // Serve the built React SPA (Vite output embedded in this assembly under
+        // wwwroot/). Hashed assets under /assets are immutable; the entry
+        // index.html is the client-routing fallback registered below. No auth
+        // here: the bundles are public, the API behind them is guarded. Null when
+        // the front-end wasn't built (glob empty) — then only Razor /app serves.
+        var spa = TryCreateSpaFileProvider();
+        if (spa is not null)
+            app.UseStaticFiles(new StaticFileOptions { FileProvider = spa });
+
         app.UseRateLimiter();
         // Origin check on mutations + bearer-token guard over protected API paths.
         app.UseWebAuth();
@@ -175,8 +185,42 @@ public static class WebServer
         app.MapUiEndpoints();
         app.MapCameraFormEndpoints();
         app.MapSystemEndpoints();
+        // Razor pages stay mounted under /app as the transitional fallback until
+        // the React SPA reaches full parity (then they're removed in a later commit).
         app.MapRazorComponents<App>();
 
-        app.MapGet("/", () => Results.Redirect("/app"));
+        // Client-side routes (/, /cameras, /grid, …) resolve to the SPA entry;
+        // /api, /app, /healthz and static assets are matched before this. If the
+        // SPA hasn't been built (no embedded index.html), this 404s and /app still
+        // serves the Razor UI — a clean transitional state.
+        if (spa is not null)
+        {
+            app.MapFallback(async ctx =>
+            {
+                var index = spa.GetFileInfo("index.html");
+                if (!index.Exists)
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.SendFileAsync(index);
+            });
+        }
+    }
+
+    // The embedded SPA served at web root. Returns null when the wwwroot glob was
+    // empty at build time (no manifest), so a backend-only build still runs.
+    private static IFileProvider? TryCreateSpaFileProvider()
+    {
+        try
+        {
+            return new ManifestEmbeddedFileProvider(typeof(WebServer).Assembly, "wwwroot");
+        }
+        catch (InvalidOperationException)
+        {
+            // No embedded files manifest — the front-end wasn't built into wwwroot.
+            return null;
+        }
     }
 }

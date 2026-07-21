@@ -64,6 +64,7 @@ public static class AuthApi
         var group = app.MapGroup("/api/v1/auth");
 
         group.MapPost("/login", async (
+            HttpContext ctx,
             LoginRequest request,
             IWebAuthProvider provider,
             SessionStore store,
@@ -77,6 +78,11 @@ public static class AuthApi
                 return Results.Json(new { error = "invalid_credentials" }, statusCode: StatusCodes.Status401Unauthorized);
 
             var (token, expiresAt) = store.Create(identity);
+            // Also drop the HttpOnly session cookie so a browser SPA never has to
+            // hold the token: both REST and the same-origin live-video WebSocket
+            // then authenticate off the cookie automatically. Native/API clients
+            // keep using the returned bearer token and ignore the Set-Cookie.
+            SetSessionCookie(ctx, token);
             return Results.Json(new
             {
                 token,
@@ -88,8 +94,11 @@ public static class AuthApi
 
         group.MapPost("/logout", (HttpContext ctx, SessionStore store) =>
         {
-            if (BearerToken(ctx) is { } token)
+            // Revoke whichever transport carried the session (bearer for API
+            // clients, cookie for the SPA) and clear the cookie either way.
+            if (TokenFrom(ctx) is { } token)
                 store.Revoke(token);
+            ClearSessionCookie(ctx);
             return Results.NoContent();
         });
 

@@ -45,6 +45,17 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      # Node for the React web SPA (Phase 21). The dotnet build/publish steps run
+      # an MSBuild target that invokes `npm ci` + `npm run build` and embeds the
+      # result into OpenIPC.Viewer.Web.dll, so Node must be present; cache keyed on
+      # the client lockfile keeps `npm ci` fast across runs.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/OpenIPC.Viewer.Web.Client/package-lock.json
+
       # libsecret for the keyring; the bundled FFmpeg 7 .so come from the fetch
       # step below, not apt — the distro ffmpeg (6.1 on 24.04 runners) is the
       # wrong ABI for FFmpeg.AutoGen 7.1.1 and must NOT end up in the archive.
