@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Recording;
+using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Web.Auth;
 using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
@@ -77,6 +78,74 @@ public static class RecordingApi
                 : Results.File(stream, "video/mp4", enableRangeProcessing: true);
         });
 
+        // Start / stop, plus who is recording right now so the UI can show it
+        // without polling every camera.
+        app.MapGet("/api/v1/recordings/active", (HttpContext ctx) =>
+        {
+            if (ctx.Deny(WebPermission.ViewArchive) is { } denied)
+                return denied;
+            var recorder = ctx.RequestServices.GetService<WebRecorder>();
+            if (recorder is null)
+                return BackendUnavailable();
+            return Results.Json(recorder.ActiveCameraIds.Where(ctx.CanSeeCamera).ToList());
+        });
+
+        app.MapPost("/api/v1/cameras/{id}/recording/start", async (string id, HttpContext ctx, CancellationToken ct) =>
+        {
+            // Recording writes to the host's disk until someone stops it, so it
+            // sits with the other install-changing operations rather than with
+            // plain viewing.
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
+            if (ctx.DenyCamera(id) is { } hidden)
+                return hidden;
+
+            var dir = ctx.RequestServices.GetService<CameraDirectoryService>();
+            var recorder = ctx.RequestServices.GetService<WebRecorder>();
+            if (dir is null || recorder is null)
+                return BackendUnavailable();
+            if (!Guid.TryParse(id, out var guid))
+                return ValidationError("invalid camera id");
+
+            var camera = await dir.GetAsync(new CameraId(guid), ct);
+            if (camera is null)
+                return NotFound();
+
+            var credentials = await dir.GetCredentialsAsync(camera.Id, ct);
+            var started = await recorder.StartAsync(camera, BuildRtspUrl(camera.RtspMainUri, credentials), ct);
+            if (started is null)
+                return Results.Json(new { error = "already_recording" }, statusCode: StatusCodes.Status409Conflict);
+
+            Audit(ctx, "recording.start", started.Id);
+            return Results.Json(new { id = started.Id.ToString(), startedAt = started.StartedAt });
+        });
+
+        app.MapPost("/api/v1/cameras/{id}/recording/stop", async (string id, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (ctx.Deny(WebPermission.Manage) is { } denied)
+                return denied;
+            if (ctx.DenyCamera(id) is { } hidden)
+                return hidden;
+
+            var recorder = ctx.RequestServices.GetService<WebRecorder>();
+            if (recorder is null)
+                return BackendUnavailable();
+
+            var wasRecording = recorder.IsRecording(id);
+            var stopped = await recorder.StopAsync(id, ct);
+            if (stopped is null)
+            {
+                // Recording stopped either way; the distinction is whether the
+                // camera actually gave us anything to keep.
+                return wasRecording
+                    ? Results.Json(new { error = "nothing_recorded" }, statusCode: StatusCodes.Status502BadGateway)
+                    : Results.Json(new { error = "not_recording" }, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            Audit(ctx, "recording.stop", stopped.Id);
+            return Results.Json(new { id = stopped.Id.ToString(), sizeBytes = stopped.SizeBytes });
+        });
+
         app.MapDelete("/api/v1/recordings/{id}", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
             // Deleting footage is destructive and irreversible — management only,
@@ -100,6 +169,18 @@ public static class RecordingApi
             Audit(ctx, "recording.delete", recording.Id);
             return Results.NoContent();
         });
+    }
+
+    // Credentials live in the secrets store, not in the stored URI.
+    private static string BuildRtspUrl(Uri baseUri, CameraCredentials? credentials)
+    {
+        if (credentials is null || string.IsNullOrEmpty(credentials.Username))
+            return baseUri.ToString();
+        return new UriBuilder(baseUri)
+        {
+            UserName = credentials.Username,
+            Password = credentials.Password,
+        }.Uri.ToString();
     }
 
     private static async Task<(Recording? Recording, IResult? Error)> ResolveAsync(

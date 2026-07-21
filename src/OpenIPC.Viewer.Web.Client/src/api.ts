@@ -197,6 +197,12 @@ export const api = {
   recordingStreamUrl: (id: string, download = false) =>
     `/api/v1/recordings/${id}/stream` + (download ? '?download=true' : ''),
   deleteRecording: (id: string) => req<void>('DELETE', `/api/v1/recordings/${id}`),
+  // Camera ids currently being recorded by this server.
+  activeRecordings: () => req<string[]>('GET', '/api/v1/recordings/active'),
+  startRecording: (cameraId: string) =>
+    req<{ id: string; startedAt: string }>('POST', `/api/v1/cameras/${cameraId}/recording/start`),
+  stopRecording: (cameraId: string) =>
+    req<{ id: string; sizeBytes: number }>('POST', `/api/v1/cameras/${cameraId}/recording/stop`),
 
   // A fresh still, straight from the camera (Majestic /image.jpg when available,
   // otherwise one ffmpeg pull). Used as an <img> src and as a download target,

@@ -11,6 +11,7 @@ const PATHS: Record<string, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  record: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
   back: <path d="M19 12H5M12 19l-7-7 7-7" />,
   play: <path d="M6 4l14 8-14 8V4z" fill="currentColor" stroke="none" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none" />,

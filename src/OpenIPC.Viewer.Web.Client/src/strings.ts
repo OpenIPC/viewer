@@ -185,6 +185,12 @@ export const EN: Dict = {
   'Snapshot.Download': 'Download',
   'Snapshot.Failed': 'The camera did not return a still.',
 
+  'Recording.Start': 'Record',
+  'Recording.Stop': 'Stop recording',
+  'Recording.Active': 'recording',
+  'Recording.Nothing': 'The camera sent nothing — no clip was saved.',
+  'Recording.Failed': 'Could not start recording.',
+
   'Recordings.Title': 'Archive',
   'Recordings.AllCameras': 'All cameras',
   'Recordings.Empty': 'Nothing recorded yet. Recording is started from the desktop app.',
@@ -379,6 +385,12 @@ export const RU: Dict = {
   'Snapshot.Taking': 'Запрашиваем кадр у камеры…',
   'Snapshot.Download': 'Скачать',
   'Snapshot.Failed': 'Камера не отдала кадр.',
+
+  'Recording.Start': 'Записать',
+  'Recording.Stop': 'Остановить запись',
+  'Recording.Active': 'идёт запись',
+  'Recording.Nothing': 'Камера ничего не передала — запись не сохранена.',
+  'Recording.Failed': 'Не удалось начать запись.',
 
   'Recordings.Title': 'Архив',
   'Recordings.AllCameras': 'Все камеры',

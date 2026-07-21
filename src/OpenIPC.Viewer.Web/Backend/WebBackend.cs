@@ -35,6 +35,9 @@ public static class WebBackend
         // The archive the desktop head recorded: listed, played and deleted from
         // the browser. The web server doesn't record yet, it reads the index.
         services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
+        // Recording started from the browser: its own ffmpeg process per camera,
+        // writing into the same folder and table the desktop head uses.
+        services.AddSingleton<WebRecorder>();
         // Browser-safe config export/import (never serializes camera passwords).
         services.AddSingleton<IConfigBackupService, SqliteConfigBackupService>();
         // CRUD goes through the directory service so credentials land in the

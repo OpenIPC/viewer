@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type CameraDto, type GroupDto } from '../api'
+import { api, ApiError, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
@@ -23,11 +23,42 @@ export function Camera() {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [snapshot, setSnapshot] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [recordError, setRecordError] = useState<string | null>(null)
 
   const load = async () => {
     const [cams, grps] = await Promise.all([api.cameras(), api.groups()])
     setCamera(cams.find((c) => c.id === id) ?? null)
     setGroups(grps)
+    // Recording lives on the server, not in this tab: a clip someone else
+    // started must show as running here too.
+    try {
+      setRecording((await api.activeRecordings()).includes(id))
+    } catch {
+      setRecording(false)   // no archive permission — the button stays hidden anyway
+    }
+  }
+
+  const toggleRecording = async () => {
+    setBusy(true)
+    setRecordError(null)
+    try {
+      if (recording) await api.stopRecording(id)
+      else await api.startRecording(id)
+      setRecording(!recording)
+    } catch (e) {
+      // A camera that delivered nothing still stopped recording — say so, and
+      // don't leave the button claiming it's still running.
+      if (e instanceof ApiError && e.code === 'nothing_recorded') {
+        setRecording(false)
+        setRecordError(t('Recording.Nothing'))
+      } else {
+        setRecordError(t('Recording.Failed'))
+      }
+    } finally {
+      setBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -61,6 +92,16 @@ export function Camera() {
           <Icon name="camera" /> {t('Snapshot.Take')}
         </button>
         {can('Manage') && (
+          <button
+            className={'row' + (recording ? ' danger' : '')}
+            disabled={busy}
+            onClick={() => void toggleRecording()}
+          >
+            <Icon name={recording ? 'stop' : 'record'} />{' '}
+            {recording ? t('Recording.Stop') : t('Recording.Start')}
+          </button>
+        )}
+        {can('Manage') && (
           <>
             <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>
             <button className="danger" onClick={() => setDeleting(true)}>
@@ -69,6 +110,8 @@ export function Camera() {
           </>
         )}
       </div>
+
+      {recordError && <p className="err">{recordError}</p>}
 
       <div className="videos n1">
         <LiveTile key={camera.id} camera={camera} />
