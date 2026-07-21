@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
 import { CameraEditor } from '../components/CameraEditor'
+import { ConfirmModal } from '../components/Modals'
 
 // Camera list + CRUD. Everything mutates in place — add/edit/delete refetch the
 // list and re-render without a page reload (the app-like win over Razor's
@@ -12,6 +13,7 @@ export function Cameras() {
   const [cameras, setCameras] = useState<CameraDto[] | null>(null)
   const [groups, setGroups] = useState<GroupDto[]>([])
   const [editing, setEditing] = useState<CameraDto | null | undefined>(undefined) // undefined=closed, null=add
+  const [deleting, setDeleting] = useState<CameraDto | null>(null)
 
   const load = useCallback(async () => {
     const [cams, grps] = await Promise.all([api.cameras(), api.groups()])
@@ -23,9 +25,11 @@ export function Cameras() {
     void load()
   }, [load])
 
-  const onDelete = async (c: CameraDto) => {
-    if (!confirm(t('Cameras.DeleteConfirm'))) return
-    await api.deleteCamera(c.id)
+  const onDelete = async () => {
+    if (!deleting) return
+    const id = deleting.id
+    setDeleting(null)
+    await api.deleteCamera(id)
     await load()
   }
 
@@ -72,7 +76,7 @@ export function Cameras() {
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <Link to={`/grid?only=${c.id}`}>{t('Cameras.Live')}</Link>{' '}
                   <button onClick={() => setEditing(c)}>{t('Cameras.Edit')}</button>{' '}
-                  <button className="danger" onClick={() => onDelete(c)}>
+                  <button className="danger" onClick={() => setDeleting(c)}>
                     {t('Cameras.Delete')}
                   </button>
                 </td>
@@ -88,6 +92,17 @@ export function Cameras() {
           groups={groups}
           onClose={() => setEditing(undefined)}
           onSaved={onSaved}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmModal
+          title={t('Cameras.DeleteConfirm')}
+          message={deleting.name}
+          confirmLabel={t('Cameras.Delete')}
+          danger
+          onConfirm={onDelete}
+          onCancel={() => setDeleting(null)}
         />
       )}
     </div>

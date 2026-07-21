@@ -91,6 +91,7 @@ export const EN: Dict = {
   'Groups.Name': 'Name',
   'Groups.NewName': 'Group name',
   'Groups.Empty': 'No groups yet.',
+  'Groups.Rename': 'Rename group',
   'Groups.DeleteConfirm': 'Delete this group?',
   'Groups.InUse': 'Group is still used by cameras.',
 }
@@ -182,6 +183,7 @@ export const RU: Dict = {
   'Groups.Name': 'Имя',
   'Groups.NewName': 'Название группы',
   'Groups.Empty': 'Групп пока нет.',
+  'Groups.Rename': 'Переименовать группу',
   'Groups.DeleteConfirm': 'Удалить группу?',
   'Groups.InUse': 'Группа ещё используется камерами.',
 }

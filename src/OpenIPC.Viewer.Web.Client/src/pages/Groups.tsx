@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
 // Camera-group CRUD against /api/v1/groups. Deleting a group cameras still use
 // returns 409 group_in_use — surfaced inline rather than swallowed.
@@ -9,6 +10,8 @@ export function Groups() {
   const [groups, setGroups] = useState<GroupDto[] | null>(null)
   const [adding, setAdding] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<GroupDto | null>(null)
+  const [deleting, setDeleting] = useState<GroupDto | null>(null)
 
   const load = useCallback(async () => {
     setGroups(await api.groups())
@@ -26,15 +29,18 @@ export function Groups() {
     await load()
   }
 
-  const onRename = async (g: GroupDto) => {
-    const name = prompt(t('Groups.Name'), g.name)?.trim()
-    if (!name || name === g.name) return
+  const onRename = async (name: string) => {
+    const g = renaming
+    setRenaming(null)
+    if (!g || name === g.name) return
     await api.renameGroup(g.id, name)
     await load()
   }
 
-  const onDelete = async (g: GroupDto) => {
-    if (!confirm(t('Groups.DeleteConfirm'))) return
+  const onDelete = async () => {
+    const g = deleting
+    setDeleting(null)
+    if (!g) return
     setError(null)
     try {
       await api.deleteGroup(g.id)
@@ -81,8 +87,8 @@ export function Groups() {
               <tr key={g.id}>
                 <td>{g.name}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button onClick={() => onRename(g)}>{t('Cameras.Edit')}</button>{' '}
-                  <button className="danger" onClick={() => onDelete(g)}>
+                  <button onClick={() => setRenaming(g)}>{t('Cameras.Edit')}</button>{' '}
+                  <button className="danger" onClick={() => setDeleting(g)}>
                     {t('Cameras.Delete')}
                   </button>
                 </td>
@@ -90,6 +96,27 @@ export function Groups() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {renaming && (
+        <TextPromptModal
+          title={t('Groups.Rename')}
+          label={t('Groups.Name')}
+          initial={renaming.name}
+          submitLabel={t('Common.Save')}
+          onSubmit={onRename}
+          onCancel={() => setRenaming(null)}
+        />
+      )}
+      {deleting && (
+        <ConfirmModal
+          title={t('Groups.DeleteConfirm')}
+          message={deleting.name}
+          confirmLabel={t('Cameras.Delete')}
+          danger
+          onConfirm={onDelete}
+          onCancel={() => setDeleting(null)}
+        />
       )}
     </div>
   )

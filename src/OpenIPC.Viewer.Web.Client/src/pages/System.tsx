@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { ConfirmModal } from '../components/Modals'
 
 type Status = { version: string; cameras: number; groups: number; sessions: number; streams: number }
 
@@ -16,6 +17,7 @@ export function System() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<Status | null>(null)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = async () => setStatus(await api.system())
@@ -46,7 +48,7 @@ export function System() {
   }
 
   const onRevokeAll = async () => {
-    if (!confirm(t('System.RevokeConfirm'))) return
+    setConfirmRevoke(false)
     await fetch('/app/sessions/revoke-all', { method: 'POST', credentials: 'same-origin' })
     await logout() // our own cookie is gone server-side; clear local state + go to login
     navigate('/login', { replace: true })
@@ -114,11 +116,22 @@ export function System() {
 
       <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 28 }}>{t('System.SessionsTitle')}</h2>
       <button
-        onClick={onRevokeAll}
+        onClick={() => setConfirmRevoke(true)}
         style={{ marginTop: 8, borderColor: '#5a2a2a', color: 'var(--danger)' }}
       >
         {t('System.RevokeAll')}
       </button>
+
+      {confirmRevoke && (
+        <ConfirmModal
+          title={t('System.RevokeAll')}
+          message={t('System.RevokeConfirm')}
+          confirmLabel={t('System.RevokeAll')}
+          danger
+          onConfirm={onRevokeAll}
+          onCancel={() => setConfirmRevoke(false)}
+        />
+      )}
     </div>
   )
 }
