@@ -1,5 +1,7 @@
 # Self-hosting the OpenIPC Viewer web server
 
+**English** · [Русский](web-server.ru.md)
+
 The desktop app ships a headless **web server** mode: the *same binary*, launched
 with `--server-only`, serves a browser console for your OpenIPC cameras over your
 LAN. No cloud, no accounts, no extra services — one admin password and a port.

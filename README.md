@@ -120,7 +120,8 @@ export OPENIPC_WEB_ADMIN_PASSWORD='choose-a-strong-one'
 Localhost-only by default; `--lan` opts into network exposure. For an HTTPS
 domain put it behind a reverse proxy. Full instructions — flags, importing
 cameras, ffmpeg, Caddy/nginx + systemd examples, and how the web UI is built —
-are in the [self-hosting guide](docs/web-server.md).
+are in the self-hosting guide ([English](docs/web-server.md) ·
+[Русский](docs/web-server.ru.md)).
 
 ## Building from source
 
