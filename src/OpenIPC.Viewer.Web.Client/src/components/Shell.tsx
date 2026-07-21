@@ -37,6 +37,14 @@ export function Shell() {
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
         </NavItem>
+        {can('ViewArchive') && (
+        <NavItem to="/recordings" label={t('Nav.Recordings')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+        </NavItem>
+        )}
         {can('Manage') && (
         <NavItem to="/discovery" label={t('Nav.Discovery')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">

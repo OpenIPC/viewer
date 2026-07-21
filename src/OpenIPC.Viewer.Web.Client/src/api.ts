@@ -42,6 +42,22 @@ export type WebUserDto = {
   cameras: string[] | null
 }
 
+// One recorded file. `playable` is false for H.265, which browsers won't decode
+// — the UI then offers a download instead of a dead player.
+export type RecordingDto = {
+  id: string
+  cameraId: string
+  cameraName: string | null
+  fileName: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: number | null
+  sizeBytes: number
+  codec: string | null
+  hasMotion: boolean
+  playable: boolean
+}
+
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
@@ -173,6 +189,14 @@ export const api = {
   probeDevice: (body: { host: string; onvifPort?: number | null; username?: string; password?: string }) =>
     req<CameraDraftDto>('POST', '/api/v1/discovery/probe', body),
   addDiscovered: (body: DiscoveryAdd) => req<CameraDto>('POST', '/api/v1/discovery/add', body),
+
+  // The recorded archive. Playback is a ranged file response, so the URL goes
+  // straight into a <video> and the browser does its own seeking.
+  recordings: (cameraId?: string) =>
+    req<RecordingDto[]>('GET', '/api/v1/recordings' + (cameraId ? `?cameraId=${cameraId}` : '')),
+  recordingStreamUrl: (id: string, download = false) =>
+    `/api/v1/recordings/${id}/stream` + (download ? '?download=true' : ''),
+  deleteRecording: (id: string) => req<void>('DELETE', `/api/v1/recordings/${id}`),
 
   // A fresh still, straight from the camera (Majestic /image.jpg when available,
   // otherwise one ffmpeg pull). Used as an <img> src and as a download target,

@@ -253,3 +253,7 @@ label input, label select { color:var(--text-1); }
 .button-link { display:inline-block; padding:8px 10px; border:1px solid var(--accent);
   border-radius:var(--r-sm); background:var(--accent); color:#fff; }
 .button-link:hover { background:var(--accent-hover); border-color:var(--accent-hover); text-decoration:none; }
+
+/* Archive player: the selected recording, above the list. */
+.player { margin-bottom:18px; }
+.player video { width:100%; max-height:60vh; background:#000; border-radius:var(--r-md); display:block; }

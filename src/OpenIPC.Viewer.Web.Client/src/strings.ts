@@ -14,6 +14,7 @@ export const EN: Dict = {
   'Nav.Grid': 'Grid',
   'Nav.Groups': 'Groups',
   'Nav.Discovery': 'Discovery',
+  'Nav.Recordings': 'Archive',
   'Nav.Users': 'Users',
   'Nav.System': 'System',
   'Nav.SignOut': 'Sign out',
@@ -180,6 +181,19 @@ export const EN: Dict = {
   'Snapshot.Taking': 'Asking the camera for a still…',
   'Snapshot.Download': '⭳ Download',
   'Snapshot.Failed': 'The camera did not return a still.',
+
+  'Recordings.Title': 'Archive',
+  'Recordings.AllCameras': 'All cameras',
+  'Recordings.Empty': 'Nothing recorded yet. Recording is started from the desktop app.',
+  'Recordings.Th.Camera': 'Camera',
+  'Recordings.Th.Started': 'Started',
+  'Recordings.Th.Duration': 'Length',
+  'Recordings.Th.Size': 'Size',
+  'Recordings.Play': '▶ Play',
+  'Recordings.Download': '⭳ Download',
+  'Recordings.Motion': 'motion',
+  'Recordings.NotPlayableHint': 'This codec does not play in most browsers — download the file instead.',
+  'Recordings.DeleteConfirm': 'Delete this recording? The file is removed from disk.',
 }
 
 export const RU: Dict = {
@@ -193,6 +207,7 @@ export const RU: Dict = {
   'Nav.Grid': 'Сетка',
   'Nav.Groups': 'Группы',
   'Nav.Discovery': 'Поиск',
+  'Nav.Recordings': 'Архив',
   'Nav.Users': 'Пользователи',
   'Nav.System': 'Система',
   'Nav.SignOut': 'Выход',
@@ -358,4 +373,17 @@ export const RU: Dict = {
   'Snapshot.Taking': 'Запрашиваем кадр у камеры…',
   'Snapshot.Download': '⭳ Скачать',
   'Snapshot.Failed': 'Камера не отдала кадр.',
+
+  'Recordings.Title': 'Архив',
+  'Recordings.AllCameras': 'Все камеры',
+  'Recordings.Empty': 'Записей пока нет. Запись запускается из десктоп-приложения.',
+  'Recordings.Th.Camera': 'Камера',
+  'Recordings.Th.Started': 'Начало',
+  'Recordings.Th.Duration': 'Длительность',
+  'Recordings.Th.Size': 'Размер',
+  'Recordings.Play': '▶ Смотреть',
+  'Recordings.Download': '⭳ Скачать',
+  'Recordings.Motion': 'движение',
+  'Recordings.NotPlayableHint': 'Этот кодек не играет в большинстве браузеров — скачайте файл.',
+  'Recordings.DeleteConfirm': 'Удалить запись? Файл будет удалён с диска.',
 }

@@ -4,6 +4,7 @@ using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Settings;
 using OpenIPC.Viewer.Devices.Discovery;
@@ -31,6 +32,9 @@ public static class WebBackend
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
         services.AddSingleton<ILayoutRepository, SqliteLayoutRepository>();
+        // The archive the desktop head recorded: listed, played and deleted from
+        // the browser. The web server doesn't record yet, it reads the index.
+        services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
         // Browser-safe config export/import (never serializes camera passwords).
         services.AddSingleton<IConfigBackupService, SqliteConfigBackupService>();
         // CRUD goes through the directory service so credentials land in the

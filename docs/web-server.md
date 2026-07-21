@@ -12,6 +12,10 @@ LAN. No cloud, no extra services — one admin password and a port.
 * **Find cameras on the network** — ONVIF, mDNS and an opt-in subnet sweep, then
   add what you found without leaving the browser.
 * **PTZ** — pan/tilt/zoom and presets for cameras that support it.
+* **Snapshots** — grab a still from any camera and download it.
+* **Archive** — browse, play and download what the desktop app recorded; seeking
+  works because playback is a ranged file response. (Starting a recording is
+  still a desktop action.)
 * **Users and permissions** — accounts with permission flags and, if you like, a
   per-user subset of cameras.
 * **H.264 over WebSocket** (fMP4 + MSE); H.265 is transcoded on the fly. One
