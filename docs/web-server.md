@@ -1,0 +1,186 @@
+# Self-hosting the OpenIPC Viewer web server
+
+The desktop app ships a headless **web server** mode: the *same binary*, launched
+with `--server-only`, serves a browser console for your OpenIPC cameras over your
+LAN. No cloud, no accounts, no extra services — one admin password and a port.
+
+* **Live grid** (1 / 4 / 9), per-camera live view, fullscreen tiles.
+* **Camera management** — add / edit / delete, groups, import/export config backup.
+* **H.264 over WebSocket** (fMP4 + MSE); H.265 is transcoded on the fly. One
+  ffmpeg session is shared across all viewers of a camera.
+* Works from any browser on the network — phone, tablet, another PC.
+* English / Russian, dark Console skin matching the desktop app.
+
+It reads and writes the **same database as the desktop app**, so cameras you add
+in one show up in the other.
+
+---
+
+## Quick start (LAN)
+
+1. **Download** the release archive for your OS and unzip it
+   (`openipc-viewer-win-x64.zip`, `-linux-x64.tar.gz`, `-osx-arm64.tar.gz`),
+   or [build from source](#build-from-source).
+
+2. **Pick an admin password** (otherwise a random one is generated and printed to
+   the log on every start — fine for a quick test, not for a stable deployment).
+
+3. **Run it, bound to the LAN:**
+
+   **Linux / macOS**
+   ```bash
+   export OPENIPC_WEB_ADMIN_PASSWORD='choose-a-strong-one'
+   ./OpenIPC.Viewer.Desktop --server-only --lan --port 8787
+   ```
+
+   **Windows (PowerShell)**
+   ```powershell
+   $env:OPENIPC_WEB_ADMIN_PASSWORD = 'choose-a-strong-one'
+   .\OpenIPC.Viewer.Desktop.exe --server-only --lan --port 8787
+   ```
+
+4. **Open** `http://<this-machine-ip>:8787` from any device on the network and log
+   in as **`admin`** with the password you set.
+
+Without `--lan` the server binds to `127.0.0.1` only (reachable from the same
+machine) — the safe default. `--lan` binds `0.0.0.0` and prints a warning, because
+there is no TLS at this layer; for anything beyond your trusted LAN, put it
+[behind a reverse proxy](#expose-on-a-domain-https).
+
+### Flags
+
+| Flag              | Meaning                                             | Default |
+|-------------------|-----------------------------------------------------|---------|
+| `--server-only`   | Run headless as a web server (no desktop GUI)       | —       |
+| `--port <n>`      | TCP port to listen on                               | `8787`  |
+| `--lan`           | Bind `0.0.0.0` (reachable from the LAN)             | off (localhost only) |
+
+| Env var                       | Meaning                                          |
+|-------------------------------|--------------------------------------------------|
+| `OPENIPC_WEB_ADMIN_PASSWORD`  | Admin password. Unset → random, logged on start. |
+
+---
+
+## Adding cameras
+
+Three ways, all landing in the same database:
+
+* **In the web UI** — *Cameras → ＋ Add camera*.
+* **Import a backup** — *System → Import* a JSON file exported from the desktop app
+  or another instance (*System → Export config* produces one; camera passwords are
+  never included in the export).
+* **Reuse the desktop app's data** — run the server on a machine that already has
+  the desktop app configured; it uses the same on-disk database:
+
+  | OS      | Database path                                                        |
+  |---------|----------------------------------------------------------------------|
+  | Windows | `%LOCALAPPDATA%\OpenIPC.Viewer\openipc-viewer.db`                     |
+  | Linux   | `~/.local/share/openipc-viewer/openipc-viewer.db` (`$XDG_DATA_HOME`) |
+  | macOS   | `~/Library/Application Support/OpenIPC.Viewer/openipc-viewer.db`      |
+
+  Camera credentials live in the OS secret store, not in this file.
+
+---
+
+## ffmpeg
+
+Live video needs ffmpeg. Resolution order: a bundled binary next to the app
+(`runtimes/<rid>/native/ffmpeg`) first, then `ffmpeg` on `PATH`.
+
+* **Windows** — bundled in the release archive. Nothing to install.
+* **Linux** — bundled in the release archive; or `sudo apt install ffmpeg`.
+* **macOS** — install via `brew install ffmpeg` (not bundled).
+
+---
+
+## Expose on a domain (HTTPS)
+
+The server speaks plain HTTP. To reach it over the internet or from an untrusted
+network, terminate TLS at a reverse proxy and forward to the local port. The server
+already honours `X-Forwarded-*` from a loopback proxy, and the session cookie
+becomes `Secure` automatically once requests arrive over HTTPS.
+
+**Caddy** (automatic Let's Encrypt certificates, WebSockets pass through as-is):
+
+```caddy
+cameras.example.com {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+Run the app **without** `--lan` (localhost bind) when the proxy is on the same host
+— nothing else needs network exposure. If the proxy runs on a *different* host,
+bind with `--lan` and pass the proxy's IP so its forwarded headers are trusted
+(otherwise cross-origin/CSRF checks reject proxied requests):
+
+```bash
+./OpenIPC.Viewer.Desktop --server-only --lan --port 8787
+# and set the trusted proxy IP(s) — see WebServerOptions.TrustedProxies
+```
+
+**nginx** equivalent needs the WebSocket upgrade headers:
+
+```nginx
+location / {
+    proxy_pass         http://127.0.0.1:8787;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header   Upgrade    $http_upgrade;   # live-video WebSocket
+    proxy_set_header   Connection "upgrade";
+}
+```
+
+---
+
+## Run it as a service
+
+**Linux (systemd)** — `/etc/systemd/system/openipc-web.service`:
+
+```ini
+[Unit]
+Description=OpenIPC Viewer web server
+After=network.target
+
+[Service]
+Environment=OPENIPC_WEB_ADMIN_PASSWORD=choose-a-strong-one
+ExecStart=/opt/openipc-viewer/OpenIPC.Viewer.Desktop --server-only --lan --port 8787
+Restart=on-failure
+User=openipc
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now openipc-web
+```
+
+**Windows** — run at logon via Task Scheduler, or wrap it as a service with
+[NSSM](https://nssm.cc/). Set `OPENIPC_WEB_ADMIN_PASSWORD` as a machine environment
+variable so the service picks it up.
+
+---
+
+## Security notes
+
+* **Localhost by default.** Network exposure (`--lan`) is opt-in and warned about.
+* **No built-in TLS** — use a reverse proxy for HTTPS (above).
+* **One admin account.** Login is rate-limited (5/min/IP); sessions are opaque
+  tokens in an `HttpOnly`, `SameSite=Strict` cookie with a 12-hour sliding expiry.
+* **Config export** never contains camera passwords.
+* Health check: `GET /healthz` (no auth) returns `{"status":"ok","version":"…"}`.
+
+---
+
+## Build from source
+
+```bash
+dotnet publish src/OpenIPC.Viewer.Desktop -c Release -r linux-x64 \
+  --self-contained true -o publish
+# Node is required — the build compiles the React web UI and embeds it.
+./publish/OpenIPC.Viewer.Desktop --server-only --lan --port 8787
+```
+
+Swap `linux-x64` for `win-x64` / `osx-arm64` as needed.
