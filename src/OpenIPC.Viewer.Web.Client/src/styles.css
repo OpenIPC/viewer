@@ -1,0 +1,243 @@
+/* Console design system — ported verbatim from the desktop Themes/Colors.axaml +
+   Theme.axaml (via the Phase 20 App.razor <style>) so the React SPA wears the
+   exact same skin that was already approved. Kept as plain CSS + variables on
+   purpose: no Tailwind/PostCSS build step to reproduce a look we already have. */
+/* Inter, self-hosted from the `inter-ui` npm package (rsms' own — the same
+   upstream the desktop heads get through Avalonia.Fonts.Inter). Bundled, not
+   CDN-linked: the server is meant to run on a LAN with no internet, and a
+   remote font would leak every page view to a third party.
+
+   The FULL variable file, not the `variable-latin` subset — the UI ships
+   Russian, and the subset drops Cyrillic. One weight axis (100–900) covers
+   every weight we use, so it's a single ~350 kB request, cached forever;
+   italics are not bundled because the UI has none. Inter is SIL OFL 1.1
+   (LICENSE.txt in the package). */
+@font-face {
+  font-family: 'InterVariable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../node_modules/inter-ui/variable/InterVariable.woff2') format('woff2');
+}
+
+:root {
+  --bg0:#0a0d11; --bg1:#0f1318; --bg2:#171c24; --bg3:#1f262f;
+  --border-weak:#222831; --border-med:#2a323d;
+  --text-1:#e4e7ec; --text-2:#8b95a3; --text-3:#5e6878;
+  --accent:#5B6CD9; --accent-hover:#7E8DE8; --accent-tint:#1C2658;
+  --danger:#ef4444; --warning:#f59e0b; --success:#22c55e;
+  --r-sm:6px; --r-md:10px; --r-lg:14px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; background:var(--bg1); color:var(--text-1);
+  /* Bundled first, then a locally installed Inter, then the platform stack. */
+  font-family: InterVariable, Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font-size:14px; line-height:1.5;
+}
+a { color:var(--accent); text-decoration:none; }
+a:hover { color:var(--accent-hover); text-decoration:underline; }
+h1 { font-size:20px; font-weight:600; margin:0 0 16px; }
+.muted { color:var(--text-2); }
+.err { color:var(--danger); }
+code, .mono { font-family: "Cascadia Code", Consolas, Menlo, monospace; }
+
+/* App shell: fixed left sidebar + scrolling content, like the desktop. */
+.shell { display:grid; grid-template-columns:216px 1fr; min-height:100vh; }
+.sidebar { background:var(--bg0); border-right:1px solid var(--border-weak);
+  display:flex; flex-direction:column; padding:16px 12px; gap:2px; }
+.sidebar .brand { font-weight:600; font-size:16px; padding:6px 10px 18px;
+  display:flex; align-items:center; gap:9px; }
+.sidebar .brand .dot { width:16px; height:16px; border-radius:5px; background:var(--accent); display:inline-block; }
+.navitem { display:flex; align-items:center; gap:10px; padding:9px 10px;
+  border-radius:var(--r-sm); color:var(--text-2); font-weight:500; cursor:pointer;
+  background:none; border:none; width:100%; text-align:left; font:inherit; }
+.navitem:hover { background:var(--bg2); color:var(--text-1); text-decoration:none; }
+.navitem.active { background:var(--accent-tint); color:var(--text-1); }
+.navitem svg { width:16px; height:16px; flex:none; }
+.sidebar .spacer { flex:1; }
+.sidebar .foot { border-top:1px solid var(--border-weak); margin-top:8px; padding-top:12px;
+  font-size:12px; color:var(--text-3); display:flex; flex-direction:column; gap:9px; }
+.sidebar .foot .who { color:var(--text-2); }
+main { padding:24px; overflow:auto; min-width:0; }
+
+.wrap { max-width:1100px; }
+table { width:100%; border-collapse:collapse; }
+th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border-weak); }
+th { color:var(--text-2); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+tbody tr:hover { background:var(--bg2); }
+
+input, select, button, textarea {
+  font:inherit; padding:8px 10px; border-radius:var(--r-sm);
+  border:1px solid var(--border-med); background:var(--bg2); color:var(--text-1);
+}
+input:focus, select:focus { outline:none; border-color:var(--accent); }
+button { cursor:pointer; }
+button:hover { border-color:var(--text-3); }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+button.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
+button.danger { color:var(--danger); }
+button.primary.danger-btn { background:var(--danger); border-color:var(--danger); color:#fff; }
+button.primary.danger-btn:hover { background:#dc2626; border-color:#dc2626; }
+button:disabled { opacity:.5; cursor:default; }
+label { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-2); }
+label input, label select { color:var(--text-1); }
+
+.row { display:flex; gap:8px; align-items:center; }
+.toolbar { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+
+.badge { font-size:12px; padding:2px 8px; border-radius:var(--r-sm); background:var(--bg3); color:var(--text-2); }
+.badge.on { color:var(--success); }
+
+.tabs a, .tabs button { display:inline-block; margin-right:8px; padding:6px 13px;
+  border:1px solid var(--border-med); border-radius:var(--r-sm); color:var(--text-2); background:var(--bg2); }
+.tabs a:hover, .tabs button:hover { text-decoration:none; color:var(--text-1); }
+.tabs a.active, .tabs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+.videos { display:grid; gap:8px; margin-top:16px; }
+.videos.n1 { grid-template-columns:1fr; }
+.videos.n4 { grid-template-columns:repeat(2,1fr); }
+.videos.n9 { grid-template-columns:repeat(3,1fr); }
+.videos.n16 { grid-template-columns:repeat(4,1fr); }
+.videos.n25 { grid-template-columns:repeat(5,1fr); }
+.cell { position:relative; background:#000; border:1px solid var(--border-weak);
+  border-radius:var(--r-md); overflow:hidden; aspect-ratio:16/9; transition:border-color .15s; }
+.cell:hover { border-color:var(--border-med); }
+.cell .video-slot { position:absolute; inset:0; }
+.cell video { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
+/* Parking lot for pooled <video>s between mounts — must stay in the document
+   and not be display:none (browsers pause/throttle those), so: 1px, clipped,
+   off-screen and non-interactive. */
+.live-pool { position:fixed; left:-9999px; top:0; width:1px; height:1px;
+  overflow:hidden; pointer-events:none; opacity:0; }
+.cell .label { position:absolute; left:8px; bottom:8px; font-size:12px;
+  background:rgba(0,0,0,.55); padding:3px 9px; border-radius:var(--r-sm); color:#fff;
+  max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cell.empty-slot { border-style:dashed; background:var(--bg1); }
+.cell .empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-3); }
+
+/* Live-status pill (top-left) — a colored dot + terse label. */
+.cell .status { position:absolute; left:8px; top:8px; display:flex; align-items:center; gap:6px;
+  font-size:11px; background:rgba(0,0,0,.55); padding:3px 8px; border-radius:999px; color:var(--text-1); }
+.cell .status .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+.dot.live { background:var(--success); }
+.dot.connecting { background:var(--warning); animation:pulse 1.2s ease-in-out infinite; }
+.dot.error { background:var(--danger); }
+.dot.offline { background:var(--text-3); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* Centered spinner while the first frame hasn't arrived. */
+.cell .loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.cell .spinner { width:26px; height:26px; border:2px solid rgba(255,255,255,.15);
+  border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Fullscreen affordance, revealed on hover. */
+.cell .expand { position:absolute; right:8px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:15px; line-height:1; }
+.cell:hover .expand { opacity:1; }
+.cell .expand:hover { background:var(--accent); }
+
+/* Login: centered card, no sidebar. */
+.login { max-width:340px; margin:12vh auto 0; padding:24px; }
+.login .card { background:var(--bg2); border:1px solid var(--border-weak);
+  border-radius:var(--r-lg); padding:28px 24px; }
+
+/* Modal dialog for the camera/group editors. */
+.backdrop { position:fixed; inset:0; background:rgba(0,0,0,.6);
+  display:flex; align-items:flex-start; justify-content:center; padding:8vh 16px; z-index:10; }
+.modal { background:var(--bg1); border:1px solid var(--border-med);
+  border-radius:var(--r-lg); padding:24px; width:100%; max-width:460px; }
+.modal h2 { margin:0 0 16px; font-size:16px; }
+.form-grid { display:grid; gap:12px; }
+.form-grid .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+.spin { color:var(--text-3); padding:24px 0; }
+
+/* Single-camera details table: label column stays narrow, values can wrap. */
+.details td { vertical-align:top; }
+.break { word-break:break-all; }
+
+/* ============================================================================
+   Mobile / narrow viewports. 700px is the app-wide breakpoint (same value the
+   desktop UI uses). The fixed sidebar becomes a bottom tab strip — thumb-reachable
+   and the way the web console is actually used (a phone browser on the LAN).
+   ========================================================================== */
+@media (max-width: 700px) {
+  /* Stack: content scrolls, nav pinned to the bottom. */
+  .shell { grid-template-columns:1fr; grid-template-rows:1fr auto; min-height:100dvh; }
+
+  .sidebar {
+    grid-row:2; flex-direction:row; align-items:center; justify-content:space-around;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom)); gap:0;
+    border-right:none; border-top:1px solid var(--border-weak);
+    position:sticky; bottom:0; z-index:5;
+  }
+  /* Brand + the footer block (user / language / sign out) don't fit a tab strip. */
+  .sidebar .brand, .sidebar .spacer, .sidebar .foot { display:none; }
+  .navitem {
+    flex-direction:column; gap:3px; padding:6px 4px; font-size:11px;
+    text-align:center; justify-content:center;
+  }
+  .navitem svg { width:20px; height:20px; }
+
+  main { padding:14px 12px 18px; }
+  h1 { font-size:18px; }
+
+  /* Never more than 2 columns on a phone, whatever the layout says — a 5x5 wall
+     of postage stamps is useless. Tiles keep their 16:9 box. */
+  .videos.n9, .videos.n16, .videos.n25 { grid-template-columns:repeat(2,1fr); }
+  .videos { gap:6px; }
+  .cell .expand { opacity:1; }   /* no hover on touch — always show */
+
+  /* Wide list tables (the camera list) scroll sideways rather than squashing;
+     narrow key/value tables (.details) stack instead — see below. */
+  .wrap { overflow-x:auto; }
+  table.list { min-width:520px; }
+  .details { min-width:0; }
+  .details td { display:block; width:auto !important; }
+  .details tr { display:block; padding:6px 0; border-bottom:1px solid var(--border-weak); }
+  .details td:first-child { font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+
+  /* Dialogs take the full width, anchored higher up. */
+  .backdrop { padding:6vh 10px; align-items:flex-start; }
+  .modal { max-width:none; padding:18px; }
+  .form-grid .two { grid-template-columns:1fr; }
+
+  .toolbar { gap:6px; }
+  .login { margin-top:8vh; padding:16px; }
+}
+
+/* --- PTZ controls (single-camera page) --- */
+.ptz { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; }
+.ptz-pad { display:grid; grid-template-columns:repeat(3,46px); gap:6px; flex:none; }
+.ptz-pad button { height:46px; padding:0; font-size:17px; line-height:1;
+  background:var(--bg2); border:1px solid var(--border-med); border-radius:var(--r-sm);
+  color:var(--text-1); touch-action:none; user-select:none; }
+.ptz-pad button:active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ptz-side { display:flex; flex-direction:column; gap:12px; min-width:220px; flex:1; }
+.ptz-zoom { display:flex; align-items:center; gap:8px; }
+.ptz-zoom button { width:46px; height:34px; padding:0; font-size:15px; touch-action:none; user-select:none; }
+.ptz-zoom button:active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ptz-side label { max-width:240px; }
+.ptz-presets { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.ptz-presets input { width:130px; }
+.ptz-presets button.preset { background:var(--bg3); }
+
+/* Layout pager (a layout can hold more cameras than the grid has cells). */
+.pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; }
+.pager button { min-width:34px; padding:6px 10px; background:var(--bg2);
+  border:1px solid var(--border-med); border-radius:var(--r-sm); color:var(--text-2); }
+.pager button:hover:not(:disabled) { color:var(--text-1); }
+.pager button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* Discovery scan progress. */
+.progress { height:4px; background:var(--bg3); border-radius:999px; overflow:hidden; margin:4px 0 10px; }
+.progress span { display:block; height:100%; background:var(--accent); transition:width .3s; }
+
+/* Camera subset picker in the user editor — a scrollable checkbox list. */
+.camera-picker { max-height:200px; overflow-y:auto; margin-top:8px; padding:8px;
+  border:1px solid var(--border-weak); border-radius:var(--r-sm); background:var(--bg2);
+  display:flex; flex-direction:column; gap:6px; }

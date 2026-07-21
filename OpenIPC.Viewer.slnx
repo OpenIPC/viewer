@@ -12,6 +12,7 @@
     <Project Path="src/OpenIPC.Viewer.Infrastructure/OpenIPC.Viewer.Infrastructure.csproj" />
     <Project Path="src/OpenIPC.Viewer.iOS/OpenIPC.Viewer.iOS.csproj" />
     <Project Path="src/OpenIPC.Viewer.Video/OpenIPC.Viewer.Video.csproj" />
+    <Project Path="src/OpenIPC.Viewer.Web/OpenIPC.Viewer.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OpenIPC.Viewer.Analytics.Tests/OpenIPC.Viewer.Analytics.Tests.csproj" />
@@ -20,5 +21,6 @@
       <Build Solution="Debug|*" Project="false" />
     </Project>
     <Project Path="tests/OpenIPC.Viewer.Video.Tests/OpenIPC.Viewer.Video.Tests.csproj" />
+    <Project Path="tests/OpenIPC.Viewer.Web.Tests/OpenIPC.Viewer.Web.Tests.csproj" />
   </Folder>
 </Solution>

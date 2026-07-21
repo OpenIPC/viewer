@@ -16,6 +16,11 @@ internal static class Program
         System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.ConsoleTraceListener());
 #endif
 
+        // Headless web-server mode (Phase 20): run Kestrel without Avalonia and
+        // return, before the single-instance guard or any GUI service spins up.
+        if (ServerOnly.IsRequested(args))
+            return ServerOnly.Run(args);
+
         // Opt-in single-instance mode: when another copy already runs and the
         // user enabled the guard, hand focus to it and bail out before any
         // services (logs, db) spin up.

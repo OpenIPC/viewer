@@ -40,6 +40,11 @@ Built with .NET 9 / 10 and Avalonia 12.
   close-to-tray, light/dark themes with accent colors.
 - **Camera groups**, English / Russian UI (runtime switch), responsive layout
   (sidebar ↔ bottom tab strip).
+- **Web console (self-host)** — run the same binary with `--server-only` for a
+  browser UI to your cameras over the LAN: live grid with saved layouts, PTZ,
+  network discovery, camera management, config backup, and accounts with
+  per-user permissions and camera subsets. No cloud. See the
+  [self-hosting guide](docs/web-server.md).
 
 ## Screenshots
 
@@ -101,6 +106,25 @@ a later release.
 > in CI but aren't yet end-to-end tested on real devices for every commit.
 > Feedback is welcome — open an issue with OS version, what you did, and what
 > happened.
+
+## Web console (self-host)
+
+The same binary can run headless as a small web server, serving a React
+single-page UI for your cameras to any browser on your network — live grid with
+saved layouts, PTZ, network discovery, and accounts with per-user permissions and
+camera subsets. No cloud, no extra services:
+
+```bash
+export OPENIPC_WEB_ADMIN_PASSWORD='choose-a-strong-one'
+./OpenIPC.Viewer.Desktop --server-only --lan --port 8787
+# then open http://<this-machine-ip>:8787 and log in as admin
+```
+
+Localhost-only by default; `--lan` opts into network exposure. For an HTTPS
+domain put it behind a reverse proxy. Full instructions — flags, adding and
+finding cameras, users and permissions, ffmpeg, Caddy/nginx + systemd examples —
+are in the self-hosting guide ([English](docs/web-server.md) ·
+[Русский](docs/web-server.ru.md)).
 
 ## Building from source
 

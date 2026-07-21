@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <!-- The React SPA lives in wwwroot as EMBEDDED resources: the Desktop host is
+         a non-web SDK, so a plain wwwroot folder would be dropped at publish. The
+         manifest lets ManifestEmbeddedFileProvider serve the files at runtime.
+         (Plain SDK since the Razor UI was removed — no .razor left to compile.) -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <!-- === React SPA (Phase 21) build + embed ==========================================
+       The Vite output (src/OpenIPC.Viewer.Web.Client → wwwroot) is embedded so it ships
+       inside OpenIPC.Viewer.Web.dll (the Desktop host is a non-web SDK and would drop an
+       RCL wwwroot at publish). Two targets:
+         BuildWebClient — runs `npm ci` (once) + `npm run build`, incremental via Inputs/
+                          Outputs so backend-only builds don't pay the npm cost.
+         _EmbedWebClient — UNCONDITIONAL re-glob of wwwroot into @(EmbeddedResource) before
+                          the manifest/compile, so incremental builds still embed the SPA.
+       Opt out with -p:BuildWebClient=false (or when Node is absent — auto-detected). -->
+  <PropertyGroup>
+    <WebClientDir>$(MSBuildProjectDirectory)\..\OpenIPC.Viewer.Web.Client</WebClientDir>
+    <WebClientOut>$(MSBuildProjectDirectory)\wwwroot</WebClientOut>
+    <BuildWebClient Condition="'$(BuildWebClient)' == ''">true</BuildWebClient>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <WebClientInput Include="$(WebClientDir)\src\**\*" />
+    <WebClientInput Include="$(WebClientDir)\index.html;$(WebClientDir)\package.json;$(WebClientDir)\package-lock.json;$(WebClientDir)\vite.config.ts;$(WebClientDir)\tsconfig*.json" />
+  </ItemGroup>
+
+  <!-- Auto-detect Node so a machine without it (or an explicit opt-out) still builds the
+       backend; the server then runs API-only (no UI). Uses Message, not Warning, to
+       preserve the repo-wide 0-warnings / TreatWarningsAsErrors rule. -->
+  <Target Name="_DetectNode" Condition="'$(BuildWebClient)' == 'true'">
+    <Exec Command="node --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_NodeExit" />
+    </Exec>
+    <PropertyGroup>
+      <BuildWebClient Condition="'$(_NodeExit)' != '0'">false</BuildWebClient>
+    </PropertyGroup>
+    <Message Condition="'$(_NodeExit)' != '0'" Importance="high"
+             Text="OpenIPC.Web: Node not found — skipping React SPA build; the server will run API-only (no web UI). Install Node and rebuild, or ignore for backend-only work." />
+  </Target>
+
+  <Target Name="BuildWebClient"
+          Condition="'$(BuildWebClient)' == 'true'"
+          DependsOnTargets="_DetectNode"
+          BeforeTargets="BeforeBuild;BeforeRebuild"
+          Inputs="@(WebClientInput)"
+          Outputs="$(WebClientOut)\index.html">
+    <Message Importance="high" Text="OpenIPC.Web: building React SPA (npm run build)…" />
+    <Exec Condition="!Exists('$(WebClientDir)\node_modules')" Command="npm ci" WorkingDirectory="$(WebClientDir)" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebClientDir)" />
+  </Target>
+
+  <!-- Runs every build (even when BuildWebClient was skipped/up-to-date) so whatever is
+       in wwwroot gets embedded before the manifest + compile consume @(EmbeddedResource). -->
+  <Target Name="_EmbedWebClient" BeforeTargets="PrepareForBuild;CoreCompile">
+    <ItemGroup>
+      <EmbeddedResource Include="$(WebClientOut)\**\*" Exclude="@(EmbeddedResource)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- ASP.NET Core (Kestrel + minimal API) via the shared framework, so no
+       package reference / CPM entry is needed. This project is a library: the
+       Desktop head hosts it (in-process or headless server-only mode). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
+  </ItemGroup>
+
+  <!-- Core contracts + the SQLite persistence implementation + the device layer
+       (ONVIF, for PTZ). NOT the App (Avalonia) layer — the headless server
+       composes only the UI-free backend. -->
+  <ItemGroup>
+    <ProjectReference Include="..\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Devices\OpenIPC.Viewer.Devices.csproj" />
+  </ItemGroup>
+
+</Project>

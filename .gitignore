@@ -50,6 +50,12 @@ runtimes/android-x64/native/
 # FFmpeg cross-compile scratch tree (build-ffmpeg-android.sh output)
 build/ffmpeg-android-*/
 
+# Web React SPA (Phase 21): node deps + the Vite build output that lands in the
+# Web project's wwwroot. The MSBuild target rebuilds wwwroot on publish; the
+# lockfile (package-lock.json) IS tracked.
+node_modules/
+src/OpenIPC.Viewer.Web/wwwroot/
+
 ## Local-only docs (planning, architecture, design-system, CLAUDE notes).
 ## Kept on disk for reference but not tracked.
 /*.md

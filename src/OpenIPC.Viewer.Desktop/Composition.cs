@@ -102,7 +102,10 @@ internal static class Composition
         _ => LangCode.System,
     };
 
-    private static void AddPlatformServices(IServiceCollection services)
+    // Internal so the headless server-only path (ServerOnly) can reuse the exact
+    // same platform trio (IFileSystem / ISecretsStore / …) without duplicating
+    // the per-OS guards.
+    internal static void AddPlatformServices(IServiceCollection services)
     {
         // Platform — one trio of IFileSystem / ISecretsStore / IHwDecoderFactory
         // per OS. Selection happens once at startup; downstream services see a

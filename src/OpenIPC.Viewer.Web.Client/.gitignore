@@ -1,0 +1,4 @@
+# Node / Vite build artifacts — the built SPA lands in ../OpenIPC.Viewer.Web/wwwroot
+node_modules/
+dist/
+*.tsbuildinfo
