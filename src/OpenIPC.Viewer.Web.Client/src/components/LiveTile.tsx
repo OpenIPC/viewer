@@ -2,6 +2,7 @@ import { memo, useRef, useState } from 'react'
 import type { CameraDto } from '../api'
 import { useLiveTile } from '../hooks/useLiveTile'
 import { useI18n } from '../i18n'
+import { Icon } from './Icon'
 import { SnapshotModal } from './SnapshotModal'
 
 // Collapse the raw useLiveTile status string into a small set of visual states:
@@ -58,14 +59,14 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
           title={session.muted ? t('Tile.Listen') : t('Tile.Mute')}
           onClick={() => session.setMuted(!session.muted)}
         >
-          {session.muted ? '🔇' : '🔊'}
+          <Icon name={session.muted ? 'volumeOff' : 'volumeOn'} size={15} />
         </button>
       )}
       <button className="snap" title={t('Snapshot.Take')} onClick={() => setSnapshot(true)}>
-        ⧉
+        <Icon name="camera" size={15} />
       </button>
       <button className="expand" title={t('Tile.Fullscreen')} onClick={toggleFullscreen}>
-        ⤢
+        <Icon name="maximize" size={15} />
       </button>
       {snapshot && (
         <SnapshotModal cameraId={camera.id} cameraName={camera.name} onClose={() => setSnapshot(false)} />

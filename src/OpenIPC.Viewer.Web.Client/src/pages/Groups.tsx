@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
 import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
@@ -66,8 +67,8 @@ export function Groups() {
           style={{ flex: 1 }}
         />
         {can('Manage') && (
-          <button className="primary" onClick={onAdd}>
-            {t('Groups.Add')}
+          <button className="primary row" onClick={onAdd}>
+            <Icon name="plus" /> {t('Groups.Add')}
           </button>
         )}
       </div>

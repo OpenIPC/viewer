@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type CameraDto, type RecordingDto } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { ConfirmModal } from '../components/Modals'
 
 // The recorded archive: what the desktop head wrote, listed newest-first and
@@ -54,8 +55,8 @@ export function Recordings() {
               {playing.cameraName ?? '—'} · {formatStart(playing.startedAt)}
             </span>
             <span className="row">
-              <a className="button-link" href={api.recordingStreamUrl(playing.id, true)}>
-                {t('Recordings.Download')}
+              <a className="button-link row" href={api.recordingStreamUrl(playing.id, true)}>
+                <Icon name="download" /> {t('Recordings.Download')}
               </a>
               <button onClick={() => setPlaying(null)}>{t('Common.Close')}</button>
             </span>
@@ -93,10 +94,12 @@ export function Recordings() {
                 <td className="muted">{formatSize(r.sizeBytes)}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {r.playable ? (
-                    <button onClick={() => setPlaying(r)}>{t('Recordings.Play')}</button>
+                    <button className="row" onClick={() => setPlaying(r)}>
+                      <Icon name="play" size={13} /> {t('Recordings.Play')}
+                    </button>
                   ) : (
-                    <a className="muted" href={api.recordingStreamUrl(r.id, true)}>
-                      {t('Recordings.Download')}
+                    <a className="muted row" href={api.recordingStreamUrl(r.id, true)}>
+                      <Icon name="download" size={13} /> {t('Recordings.Download')}
                     </a>
                   )}{' '}
                   {can('Manage') && (

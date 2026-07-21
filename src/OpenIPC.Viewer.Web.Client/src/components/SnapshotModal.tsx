@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from './Icon'
 
 // A still, taken on demand and shown full size with a download link.
 //
@@ -58,8 +59,8 @@ export function SnapshotModal({ cameraId, cameraName, onClose }: {
         <div className="modal-actions">
           <button onClick={onClose}>{t('Common.Close')}</button>
           {url && (
-            <a className="button-link" href={url} download={fileName}>
-              {t('Snapshot.Download')}
+            <a className="button-link row" href={url} download={fileName}>
+              <Icon name="download" /> {t('Snapshot.Download')}
             </a>
           )}
         </div>

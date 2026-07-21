@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
 import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
@@ -52,11 +53,13 @@ export function Camera() {
   return (
     <div className="wrap" style={{ maxWidth: 1000 }}>
       <div className="toolbar">
-        <Link to="/cameras" className="muted">
-          {t('Live.Back')}
+        <Link to="/cameras" className="muted row">
+          <Icon name="back" /> {t('Live.Back')}
         </Link>
         <h1 style={{ margin: 0, flex: 1 }}>{camera.name}</h1>
-        <button onClick={() => setSnapshot(true)}>{t('Snapshot.Take')}</button>
+        <button className="row" onClick={() => setSnapshot(true)}>
+          <Icon name="camera" /> {t('Snapshot.Take')}
+        </button>
         {can('Manage') && (
           <>
             <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>

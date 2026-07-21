@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type CameraDto, type LayoutDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
 import { EmptyCell, LiveTile } from '../components/LiveTile'
 import { ConfirmModal, TextPromptModal } from '../components/Modals'
@@ -163,7 +164,9 @@ export function Grid() {
             </button>
           ))}
           {!editing && can('Manage') && !restricted && (
-            <button onClick={() => setDialog('create')}>{t('Grid.NewLayout')}</button>
+            <button className="row" onClick={() => setDialog('create')}>
+              <Icon name="plus" size={13} /> {t('Grid.NewLayout')}
+            </button>
           )}
         </div>
         {active && !editing && can('Manage') && !restricted && (
@@ -235,7 +238,7 @@ export function Grid() {
           {pageCount > 1 && (
             <div className="pager">
               <button disabled={safePage === 0} title={t('Grid.PrevPage')} onClick={() => setPage(safePage - 1)}>
-                ‹
+                <Icon name="chevronLeft" size={14} />
               </button>
               {Array.from({ length: pageCount }, (_, i) => (
                 <button
@@ -251,7 +254,7 @@ export function Grid() {
                 title={t('Grid.NextPage')}
                 onClick={() => setPage(safePage + 1)}
               >
-                ›
+                <Icon name="chevronRight" size={14} />
               </button>
             </div>
           )}

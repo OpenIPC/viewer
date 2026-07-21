@@ -265,3 +265,8 @@ label input, label select { color:var(--text-1); }
   background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:13px; line-height:1; }
 .cell:hover .listen { opacity:1; }
 .cell .listen:hover { background:var(--accent); }
+
+/* Icons sit on the text baseline and take the surrounding colour; a button or
+   link that pairs one with a label gets the gap from .row. */
+.icon { flex:none; }
+button.row, a.row { display:inline-flex; align-items:center; gap:6px; }

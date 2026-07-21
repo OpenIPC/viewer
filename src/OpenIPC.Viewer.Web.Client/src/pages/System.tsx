@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { ConfirmModal } from '../components/Modals'
 
 type Status = { version: string; cameras: number; groups: number; sessions: number; streams: number }
@@ -113,7 +114,7 @@ export function System() {
             color: 'var(--text-1)',
           }}
         >
-          {t('System.Export')}
+          <Icon name="download" /> {t('System.Export')}
         </a>
         <div className="row">
           <input
