@@ -209,9 +209,9 @@ variable so the service picks it up.
   opaque tokens in an `HttpOnly`, `SameSite=Strict` cookie with a 12-hour sliding
   expiry. Every request is authorized on the server — the UI hides what you may
   not do, but hiding is not the boundary.
-* **The web server is a separate door to the same cameras.** Its accounts are its
-  own; desktop-side access control does not apply to it. Give it its own roster
-  (above) if the machine is shared.
+* **The web server is a separate door to your cameras.** Anyone who reaches the
+  port with an account gets whatever their permissions allow, from any machine.
+  Bind to the LAN deliberately, and give each person only the cameras they need.
 * **Config export** never contains camera passwords.
 * Health check: `GET /healthz` (no auth) returns `{"status":"ok","version":"…"}`.
 
