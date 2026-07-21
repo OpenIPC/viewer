@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { EN, RU } from './strings'
 
-// Language from the `lang` cookie (shared with the Phase 20 Razor switcher) else
-// the browser's preference. Kept client-side; switching is instant (no reload) —
-// one of the app-like wins over the Razor version.
+// Language from the `lang` cookie (kept from the Phase 20 server-rendered UI)
+// else the browser's preference. Purely client-side now — switching is instant,
+// with no reload.
 type Lang = 'en' | 'ru'
 
 function initialLang(): Lang {

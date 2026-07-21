@@ -7,10 +7,9 @@ import { ConfirmModal } from '../components/Modals'
 
 type Status = { version: string; cameras: number; groups: number; sessions: number; streams: number }
 
-// System status + backup/restore + session revocation. Status is JSON
-// (/api/v1/system). Export/import/revoke reuse the Phase 20 /app form endpoints
-// (they already exist and are Origin-guarded); import is a same-origin multipart
-// fetch, revoke clears the cookie server-side and we then drop local auth state.
+// System status + backup/restore + session revocation, all over /api/v1 JSON.
+// Import is a same-origin multipart POST; revoke-all clears the cookie
+// server-side and we then drop local auth state.
 export function System() {
   const { t, setLang } = useI18n()
   const { user, logout } = useAuth()
@@ -27,29 +26,19 @@ export function System() {
 
   const onImport = async (file: File) => {
     setNotice(null)
-    const form = new FormData()
-    form.append('file', file)
-    const res = await fetch('/app/config/import', {
-      method: 'POST',
-      body: form,
-      credentials: 'same-origin',
-    })
-    // The endpoint redirects to /app/system?added=..&updated=.. (or ?error=1).
-    const url = new URL(res.url, location.origin)
-    if (!res.ok || url.searchParams.has('error')) {
-      setNotice({ ok: false, text: t('System.ImportError') })
-    } else {
-      const added = url.searchParams.get('added') ?? '0'
-      const updated = url.searchParams.get('updated') ?? '0'
+    try {
+      const { added, updated } = await api.importConfig(file)
       setNotice({ ok: true, text: `${t('System.Imported')} +${added} / ~${updated}` })
       await loadStatus()
+    } catch {
+      setNotice({ ok: false, text: t('System.ImportError') })
     }
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const onRevokeAll = async () => {
     setConfirmRevoke(false)
-    await fetch('/app/sessions/revoke-all', { method: 'POST', credentials: 'same-origin' })
+    await api.revokeAllSessions()
     await logout() // our own cookie is gone server-side; clear local state + go to login
     navigate('/login', { replace: true })
   }
@@ -114,7 +103,7 @@ export function System() {
       <h2 style={{ fontSize: 16, fontWeight: 600 }}>{t('System.Backup')}</h2>
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
         <a
-          href="/app/config/export"
+          href={api.configExportUrl}
           style={{
             display: 'inline-block',
             padding: '8px 12px',

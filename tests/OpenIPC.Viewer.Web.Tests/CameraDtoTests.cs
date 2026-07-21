@@ -49,6 +49,16 @@ public sealed class CameraDtoTests
         Assert.True(dto.HasCredentials);
     }
 
+    // The SPA shows the PTZ pad on PtzReady, not HasPtz: without a probed media
+    // profile every /ptz/* call would answer 409.
+    [Fact]
+    public void PtzReady_RequiresBothFlagAndProfileToken()
+    {
+        Assert.False(CameraDto.From(SampleCamera() with { HasPtz = false }, null).PtzReady);
+        Assert.False(CameraDto.From(SampleCamera() with { HasPtz = true, OnvifProfileToken = null }, null).PtzReady);
+        Assert.True(CameraDto.From(SampleCamera() with { HasPtz = true }, null).PtzReady);
+    }
+
     [Fact]
     public void SerializedDto_LeaksNoSecret()
     {

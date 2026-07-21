@@ -4,6 +4,7 @@ import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
 import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
+import { PtzPad } from '../components/PtzPad'
 import { ConfirmModal } from '../components/Modals'
 
 // Dedicated single-camera view: one large live tile plus the camera's details
@@ -60,6 +61,13 @@ export function Camera() {
       <div className="videos n1">
         <LiveTile key={camera.id} camera={camera} />
       </div>
+
+      {camera.ptzReady && (
+        <>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Ptz.Title')}</h2>
+          <PtzPad cameraId={camera.id} />
+        </>
+      )}
 
       <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Camera.Details')}</h2>
       <table className="details">
@@ -130,8 +138,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-// Capability chips straight off the camera record — PTZ control itself is a
-// separate slice (needs the ONVIF client wired into the web backend).
+// Capability chips straight off the camera record. PTZ additionally needs a
+// probed media profile before the controls appear — see camera.ptzReady above.
 function capabilityBadges(c: CameraDto): string[] {
   const out: string[] = []
   if (c.hasPtz) out.push('PTZ')

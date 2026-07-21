@@ -1,6 +1,6 @@
-// EN/RU strings for the React SPA — ported from the Phase 20 WebStrings.cs, plus
-// a handful of new keys for the client-only bits (Groups CRUD, in-place toasts).
-// Keep in sync with the backend set where they overlap.
+// EN/RU strings for the SPA — originally ported from the Phase 20 WebStrings.cs
+// (since removed along with the Razor UI), so this is now the only UI string
+// table: the backend carries none.
 type Dict = Record<string, string>
 
 export const EN: Dict = {
@@ -85,6 +85,9 @@ export const EN: Dict = {
   'Grid.EmptyCell': '(empty)',
   'Grid.NoLayouts': 'No layouts yet — create one.',
   'Grid.Single': 'Single camera',
+  'Grid.PrevPage': 'Previous page',
+  'Grid.NextPage': 'Next page',
+  'Grid.EditingPage': 'Editing page',
 
   'Groups.Title': 'Groups',
   'Groups.Add': '＋ Add group',
@@ -102,6 +105,26 @@ export const EN: Dict = {
   'Camera.Capabilities': 'Capabilities',
   'Camera.Chip': 'Chip',
   'Camera.Firmware': 'Firmware',
+
+  'Ptz.Title': 'PTZ control',
+  'Ptz.Up': 'Up',
+  'Ptz.Down': 'Down',
+  'Ptz.Left': 'Left',
+  'Ptz.Right': 'Right',
+  'Ptz.UpLeft': 'Up-left',
+  'Ptz.UpRight': 'Up-right',
+  'Ptz.DownLeft': 'Down-left',
+  'Ptz.DownRight': 'Down-right',
+  'Ptz.Stop': 'Stop',
+  'Ptz.Zoom': 'Zoom',
+  'Ptz.ZoomIn': 'Zoom in',
+  'Ptz.ZoomOut': 'Zoom out',
+  'Ptz.Speed': 'Speed',
+  'Ptz.Presets': 'Presets',
+  'Ptz.PresetName': 'New preset',
+  'Ptz.PresetSave': 'Save',
+  'Ptz.PresetDelete': 'Delete preset',
+  'Ptz.Error': 'The camera did not accept the PTZ command.',
 }
 
 export const RU: Dict = {
@@ -185,6 +208,9 @@ export const RU: Dict = {
   'Grid.EmptyCell': '(пусто)',
   'Grid.NoLayouts': 'Раскладок пока нет — создайте.',
   'Grid.Single': 'Одна камера',
+  'Grid.PrevPage': 'Предыдущая страница',
+  'Grid.NextPage': 'Следующая страница',
+  'Grid.EditingPage': 'Редактируется страница',
 
   'Groups.Title': 'Группы',
   'Groups.Add': '＋ Добавить группу',
@@ -202,4 +228,24 @@ export const RU: Dict = {
   'Camera.Capabilities': 'Возможности',
   'Camera.Chip': 'Чип',
   'Camera.Firmware': 'Прошивка',
+
+  'Ptz.Title': 'Управление PTZ',
+  'Ptz.Up': 'Вверх',
+  'Ptz.Down': 'Вниз',
+  'Ptz.Left': 'Влево',
+  'Ptz.Right': 'Вправо',
+  'Ptz.UpLeft': 'Вверх-влево',
+  'Ptz.UpRight': 'Вверх-вправо',
+  'Ptz.DownLeft': 'Вниз-влево',
+  'Ptz.DownRight': 'Вниз-вправо',
+  'Ptz.Stop': 'Стоп',
+  'Ptz.Zoom': 'Зум',
+  'Ptz.ZoomIn': 'Приблизить',
+  'Ptz.ZoomOut': 'Отдалить',
+  'Ptz.Speed': 'Скорость',
+  'Ptz.Presets': 'Пресеты',
+  'Ptz.PresetName': 'Новый пресет',
+  'Ptz.PresetSave': 'Сохранить',
+  'Ptz.PresetDelete': 'Удалить пресет',
+  'Ptz.Error': 'Камера не приняла команду PTZ.',
 }

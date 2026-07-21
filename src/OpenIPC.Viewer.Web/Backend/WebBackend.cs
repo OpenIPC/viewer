@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Devices.Onvif;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 using OpenIPC.Viewer.Web.Api;
 
@@ -30,6 +32,10 @@ public static class WebBackend
         services.AddSingleton<CameraDirectoryService>();
         // Fan-out for live video: one shared ffmpeg session per (camera, mode).
         services.AddSingleton<LiveStreamHub>();
+        // ONVIF transport for the PTZ endpoints. The hand-rolled SOAP client is
+        // stateless (one short-lived HTTP call per operation), so a singleton is
+        // safe and matches the desktop registration in SharedComposition.
+        services.AddSingleton<IOnvifClient, SoapOnvifClient>();
         return services;
     }
 }

@@ -24,6 +24,7 @@ public sealed record CameraDto(
     string? FirmwareVersion,
     bool IncludedInGrid,
     bool HasPtz,
+    bool PtzReady,
     bool IsMajestic,
     bool HasAudioIn,
     bool HasAudioOut,
@@ -46,6 +47,10 @@ public sealed record CameraDto(
         FirmwareVersion: c.FirmwareVersion,
         IncludedInGrid: c.IncludedInGrid,
         HasPtz: c.HasPtz,
+        // HasPtz alone only says the camera advertises PTZ; the ONVIF calls also
+        // need a media profile token from the probe. Without it the SPA shows the
+        // capability badge but no controls (and /ptz/* answers 409).
+        PtzReady: c.HasPtz && !string.IsNullOrEmpty(c.OnvifProfileToken),
         IsMajestic: c.IsMajestic,
         HasAudioIn: c.HasAudioIn,
         HasAudioOut: c.HasAudioOut,

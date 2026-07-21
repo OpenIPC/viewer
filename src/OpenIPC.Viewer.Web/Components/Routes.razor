@@ -1,9 +1,0 @@
-@* Static-SSR router over the @@page components in this assembly. *@
-<Router AppAssembly="@typeof(WebServer).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" />
-    </Found>
-    <NotFound>
-        <div class="wrap"><h1>Not found</h1><p><a href="/app">Back</a></p></div>
-    </NotFound>
-</Router>

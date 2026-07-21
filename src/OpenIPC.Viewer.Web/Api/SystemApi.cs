@@ -9,16 +9,14 @@ using OpenIPC.Viewer.Web.Auth;
 
 namespace OpenIPC.Viewer.Web.Api;
 
-// System/admin form-post + download endpoints: config export/import and session
-// revocation. Origin-checked via UseWebAuth; antiforgery disabled like the other
-// form posts (Origin + SameSite cookie cover CSRF).
+// System/admin endpoints: status, config export/import, session revocation.
+// All under /api/v1, so the auth guard and the Origin check on mutations apply.
 public static class SystemApi
 {
     public static void MapSystemEndpoints(this WebApplication app)
     {
-        // Read-only status for the SPA System page: version + live counts. The
-        // Razor page computes the same values inline; the SPA needs them as JSON.
-        // Auth-guarded (under /api/v1); counts fall back to 0 without a backend.
+        // Read-only status for the SPA System page: version + live counts.
+        // Counts fall back to 0 without a backend.
         app.MapGet("/api/v1/system", async (HttpContext ctx, CancellationToken ct) =>
         {
             var cameras = ctx.RequestServices.GetService<ICameraRepository>();
@@ -37,7 +35,7 @@ public static class SystemApi
 
         // Download a browser-safe config backup (passphrase null → no camera
         // passwords or secrets are ever written).
-        app.MapGet("/app/config/export", async (HttpContext ctx, CancellationToken ct) =>
+        app.MapGet("/api/v1/config/export", async (HttpContext ctx, CancellationToken ct) =>
         {
             var backup = ctx.RequestServices.GetService<IConfigBackupService>();
             if (backup is null)
@@ -48,16 +46,20 @@ public static class SystemApi
             return Results.File(bytes, "application/json", "openipc-config.json");
         });
 
-        app.MapPost("/app/config/import", async (HttpContext ctx, CancellationToken ct) =>
+        // Multipart upload of a backup file, answering with the applied counts.
+        // (Was a form-post + redirect for the Razor UI; the SPA reads the JSON.)
+        app.MapPost("/api/v1/config/import", async (HttpContext ctx, CancellationToken ct) =>
         {
             var backup = ctx.RequestServices.GetService<IConfigBackupService>();
             if (backup is null)
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            if (!ctx.Request.HasFormContentType)
+                return ApiHelpers.ValidationError("expected a multipart upload");
 
             var form = await ctx.Request.ReadFormAsync(ct);
             var file = form.Files.GetFile("file");
             if (file is null || file.Length == 0)
-                return Results.Redirect("/app/system?error=1");
+                return ApiHelpers.ValidationError("missing file");
 
             string json;
             using (var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8))
@@ -67,20 +69,24 @@ public static class SystemApi
             {
                 var result = await backup.ImportAsync(json, ct);
                 ApiHelpers.Audit(ctx, "config.import", $"+{result.CamerasAdded}/~{result.CamerasUpdated}");
-                return Results.Redirect($"/app/system?added={result.CamerasAdded}&updated={result.CamerasUpdated}");
+                return Results.Json(new { added = result.CamerasAdded, updated = result.CamerasUpdated });
             }
             catch
             {
-                return Results.Redirect("/app/system?error=1");
+                // Malformed or foreign backup — the service's own error detail is
+                // not browser-safe, so answer with a plain code.
+                return ApiHelpers.ValidationError("import_failed");
             }
-        }).DisableAntiforgery();
+        });
 
-        app.MapPost("/app/sessions/revoke-all", (HttpContext ctx, SessionStore store) =>
+        // Kills every session including the caller's; the client then drops its
+        // local auth state and returns to the login screen.
+        app.MapPost("/api/v1/sessions/revoke-all", (HttpContext ctx, SessionStore store) =>
         {
             var count = store.RevokeAll();
             ApiHelpers.Audit(ctx, "sessions.revoke-all", count);
             AuthApi.ClearSessionCookie(ctx);
-            return Results.Redirect("/app/login");
-        }).DisableAntiforgery();
+            return Results.Json(new { revoked = count });
+        });
     }
 }

@@ -1,13 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <!-- The React SPA (Phase 21) lives in wwwroot as EMBEDDED resources, not RCL
-         static web assets: the Desktop host is a non-web SDK and would otherwise
-         drop the RCL's wwwroot at publish. Disabling static web assets frees
-         wwwroot for embedding; the manifest lets ManifestEmbeddedFileProvider
-         serve the files at runtime. -->
-    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- The React SPA lives in wwwroot as EMBEDDED resources: the Desktop host is
+         a non-web SDK, so a plain wwwroot folder would be dropped at publish. The
+         manifest lets ManifestEmbeddedFileProvider serve the files at runtime.
+         (Plain SDK since the Razor UI was removed — no .razor left to compile.) -->
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
@@ -32,8 +30,8 @@
   </ItemGroup>
 
   <!-- Auto-detect Node so a machine without it (or an explicit opt-out) still builds the
-       backend; the server then simply serves the Razor /app fallback. Uses Message, not
-       Warning, to preserve the repo-wide 0-warnings / TreatWarningsAsErrors rule. -->
+       backend; the server then runs API-only (no UI). Uses Message, not Warning, to
+       preserve the repo-wide 0-warnings / TreatWarningsAsErrors rule. -->
   <Target Name="_DetectNode" Condition="'$(BuildWebClient)' == 'true'">
     <Exec Command="node --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
       <Output TaskParameter="ExitCode" PropertyName="_NodeExit" />
@@ -42,7 +40,7 @@
       <BuildWebClient Condition="'$(_NodeExit)' != '0'">false</BuildWebClient>
     </PropertyGroup>
     <Message Condition="'$(_NodeExit)' != '0'" Importance="high"
-             Text="OpenIPC.Web: Node not found — skipping React SPA build; the server will serve the Razor /app fallback. Install Node and rebuild, or ignore for backend-only work." />
+             Text="OpenIPC.Web: Node not found — skipping React SPA build; the server will run API-only (no web UI). Install Node and rebuild, or ignore for backend-only work." />
   </Target>
 
   <Target Name="BuildWebClient"
@@ -72,11 +70,13 @@
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
   </ItemGroup>
 
-  <!-- Core contracts + the SQLite persistence implementation. NOT the App
-       (Avalonia) layer — the headless server composes only the UI-free backend. -->
+  <!-- Core contracts + the SQLite persistence implementation + the device layer
+       (ONVIF, for PTZ). NOT the App (Avalonia) layer — the headless server
+       composes only the UI-free backend. -->
   <ItemGroup>
     <ProjectReference Include="..\OpenIPC.Viewer.Core\OpenIPC.Viewer.Core.csproj" />
     <ProjectReference Include="..\OpenIPC.Viewer.Infrastructure\OpenIPC.Viewer.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpenIPC.Viewer.Devices\OpenIPC.Viewer.Devices.csproj" />
   </ItemGroup>
 
 </Project>

@@ -18,6 +18,7 @@ export type CameraDto = {
   firmwareVersion: string | null
   includedInGrid: boolean
   hasPtz: boolean
+  ptzReady: boolean
   isMajestic: boolean
   hasAudioIn: boolean
   hasAudioOut: boolean
@@ -27,6 +28,8 @@ export type CameraDto = {
 }
 
 export type GroupDto = { id: number; name: string; sortOrder: number }
+
+export type PtzPresetDto = { token: string; name: string }
 
 export type LayoutDto = {
   id: number
@@ -93,11 +96,42 @@ export const api = {
     req<CameraDto>('PUT', `/api/v1/cameras/${id}`, body),
   deleteCamera: (id: string) => req<void>('DELETE', `/api/v1/cameras/${id}`),
 
+  // PTZ. Movement is stateless on the server: each move carries a self-stop
+  // timeout, so the caller must repeat it while a direction is held (see PtzPad)
+  // and send stop on release. A camera that never gets the stop halts on its own.
+  ptzMove: (id: string, v: { panX?: number; tiltY?: number; zoom?: number; timeoutMs?: number }) =>
+    req<void>('POST', `/api/v1/cameras/${id}/ptz/move`, v),
+  ptzStop: (id: string) => req<void>('POST', `/api/v1/cameras/${id}/ptz/stop`),
+  ptzPresets: (id: string) => req<PtzPresetDto[]>('GET', `/api/v1/cameras/${id}/ptz/presets`),
+  ptzSavePreset: (id: string, name: string) =>
+    req<PtzPresetDto>('POST', `/api/v1/cameras/${id}/ptz/presets`, { name }),
+  ptzGotoPreset: (id: string, token: string) =>
+    req<void>('POST', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}/goto`),
+  ptzDeletePreset: (id: string, token: string) =>
+    req<void>('DELETE', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}`),
+
   system: () =>
     req<{ version: string; cameras: number; groups: number; sessions: number; streams: number }>(
       'GET',
       '/api/v1/system',
     ),
+
+  // Backup/restore. Export is a plain download link (the browser handles the
+  // file); import is a same-origin multipart POST answering with the counts.
+  configExportUrl: '/api/v1/config/export',
+  importConfig: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/v1/config/import', {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+    })
+    const data = res.status === 204 ? undefined : await res.json().catch(() => undefined)
+    if (!res.ok) throw new ApiError(res.status, data?.error ?? `http_${res.status}`, data?.details)
+    return data as { added: number; updated: number }
+  },
+  revokeAllSessions: () => req<{ revoked: number }>('POST', '/api/v1/sessions/revoke-all'),
 
   groups: () => req<GroupDto[]>('GET', '/api/v1/groups'),
   createGroup: (name: string) => req<GroupDto>('POST', '/api/v1/groups', { name }),

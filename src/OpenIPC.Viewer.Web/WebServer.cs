@@ -11,18 +11,17 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Web.Api;
 using OpenIPC.Viewer.Web.Auth;
-using OpenIPC.Viewer.Web.Components;
-using OpenIPC.Viewer.Web.Localization;
 
 namespace OpenIPC.Viewer.Web;
 
-// The embedded ASP.NET Core (Kestrel) host.
+// The embedded ASP.NET Core (Kestrel) host: process lifecycle, safe bind
+// defaults, the auth pipeline, the /api/v1 surface, and the embedded React SPA.
 //
-// Phase 20 slice A (foundation): process lifecycle + health/version endpoints
-// and safe bind defaults only. The camera/API/live-video surface, auth, and the
-// shared backend composition land in later slices (§20.2–20.5). Keeping this
-// slice backend-free is deliberate — it proves the headless host boots and
-// serves before the data layer is wired in.
+// The backend is composed by the caller (Desktop head / --server-only) and is
+// optional: without it the host still boots and serves health/version, and the
+// data endpoints answer 503. The Phase 20 server-rendered Razor UI it used to
+// carry was removed once the SPA reached parity — the API is now the only
+// contract, and the SPA is just its first client.
 public static class WebServer
 {
     // Version string surfaced by /healthz and /api/v1/version. Prefers the
@@ -45,9 +44,6 @@ public static class WebServer
     {
         var builder = WebApplication.CreateBuilder();
         ConfigureAuthServices(builder, authOptions ?? new WebAuthOptions());
-        builder.Services.AddRazorComponents();
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.AddScoped<WebLocalizer>();
         configureBackend?.Invoke(builder.Services);
 
         var app = builder.Build();
@@ -145,15 +141,17 @@ public static class WebServer
         // wwwroot/). Hashed assets under /assets are immutable; the entry
         // index.html is the client-routing fallback registered below. No auth
         // here: the bundles are public, the API behind them is guarded. Null when
-        // the front-end wasn't built (glob empty) — then only Razor /app serves.
+        // the front-end wasn't built (glob empty) — then the host serves the API
+        // only, which is all a headless/API deployment needs.
         var spa = TryCreateSpaFileProvider();
         if (spa is not null)
             app.UseStaticFiles(new StaticFileOptions { FileProvider = spa });
 
         app.UseRateLimiter();
         // Origin check on mutations + bearer-token guard over protected API paths.
+        // (No UseAntiforgery: the Razor UI it served is gone, and the JSON API is
+        // covered by the Origin check plus SameSite=Strict on the session cookie.)
         app.UseWebAuth();
-        app.UseAntiforgery();
 
         // Liveness probe — touches no backend, so it answers even before the
         // data layer exists. Public (no auth) for --server-only smoke checks and,
@@ -183,21 +181,27 @@ public static class WebServer
         app.MapGroupEndpoints();
         app.MapLayoutEndpoints();
         app.MapLiveEndpoints();
-        app.MapUiEndpoints();
-        app.MapCameraFormEndpoints();
+        app.MapPtzEndpoints();
         app.MapSystemEndpoints();
-        // Razor pages stay mounted under /app as the transitional fallback until
-        // the React SPA reaches full parity (then they're removed in a later commit).
-        app.MapRazorComponents<App>();
 
         // Client-side routes (/, /cameras, /grid, …) resolve to the SPA entry;
-        // /api, /app, /healthz and static assets are matched before this. If the
-        // SPA hasn't been built (no embedded index.html), this 404s and /app still
-        // serves the Razor UI — a clean transitional state.
+        // real endpoints and static assets are matched before this. Without an
+        // embedded index.html (front-end not built) this 404s and the host is an
+        // API-only server.
         if (spa is not null)
         {
             app.MapFallback(async ctx =>
             {
+                // An unmatched API path is a 404, not a page: otherwise a typo'd
+                // or removed endpoint answers "200 text/html" and a client only
+                // discovers the mistake when JSON.parse chokes on a doctype.
+                if (IsApiPath(ctx.Request.Path))
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                    await ctx.Response.WriteAsJsonAsync(new { error = "not_found" });
+                    return;
+                }
+
                 var index = spa.GetFileInfo("index.html");
                 if (!index.Exists)
                 {
@@ -209,6 +213,10 @@ public static class WebServer
             });
         }
     }
+
+    // Paths that belong to the server, never to the client router.
+    private static bool IsApiPath(PathString path) =>
+        path.StartsWithSegments("/api") || path.StartsWithSegments("/healthz");
 
     // The embedded SPA served at web root. Returns null when the wwwroot glob was
     // empty at build time (no manifest), so a backend-only build still runs.
