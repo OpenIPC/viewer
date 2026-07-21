@@ -7,6 +7,7 @@ import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
 import { PtzPad } from '../components/PtzPad'
 import { ConfirmModal } from '../components/Modals'
+import { SnapshotModal } from '../components/SnapshotModal'
 
 // Dedicated single-camera view: one large live tile plus the camera's details
 // and actions. This is the natural shape on a phone (you watch one camera at a
@@ -20,6 +21,7 @@ export function Camera() {
   const [groups, setGroups] = useState<GroupDto[]>([])
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [snapshot, setSnapshot] = useState(false)
 
   const load = async () => {
     const [cams, grps] = await Promise.all([api.cameras(), api.groups()])
@@ -54,6 +56,7 @@ export function Camera() {
           {t('Live.Back')}
         </Link>
         <h1 style={{ margin: 0, flex: 1 }}>{camera.name}</h1>
+        <button onClick={() => setSnapshot(true)}>{t('Snapshot.Take')}</button>
         {can('Manage') && (
           <>
             <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>
@@ -118,6 +121,9 @@ export function Camera() {
             void load()
           }}
         />
+      )}
+      {snapshot && (
+        <SnapshotModal cameraId={camera.id} cameraName={camera.name} onClose={() => setSnapshot(false)} />
       )}
       {deleting && (
         <ConfirmModal

@@ -190,7 +190,7 @@ label input, label select { color:var(--text-1); }
      of postage stamps is useless. Tiles keep their 16:9 box. */
   .videos.n9, .videos.n16, .videos.n25 { grid-template-columns:repeat(2,1fr); }
   .videos { gap:6px; }
-  .cell .expand { opacity:1; }   /* no hover on touch — always show */
+  .cell .expand, .cell .snap { opacity:1; }   /* no hover on touch — always show */
 
   /* Wide list tables (the camera list) scroll sideways rather than squashing;
      narrow key/value tables (.details) stack instead — see below. */
@@ -241,3 +241,15 @@ label input, label select { color:var(--text-1); }
 .camera-picker { max-height:200px; overflow-y:auto; margin-top:8px; padding:8px;
   border:1px solid var(--border-weak); border-radius:var(--r-sm); background:var(--bg2);
   display:flex; flex-direction:column; gap:6px; }
+
+/* Snapshot: a second tile affordance next to fullscreen, and the viewer modal. */
+.cell .snap { position:absolute; right:42px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:14px; line-height:1; }
+.cell:hover .snap { opacity:1; }
+.cell .snap:hover { background:var(--accent); }
+.snapshot-modal { max-width:900px; }
+.snapshot-modal img { width:100%; height:auto; border-radius:var(--r-sm); background:#000; display:block; }
+.button-link { display:inline-block; padding:8px 10px; border:1px solid var(--accent);
+  border-radius:var(--r-sm); background:var(--accent); color:#fff; }
+.button-link:hover { background:var(--accent-hover); border-color:var(--accent-hover); text-decoration:none; }

@@ -63,6 +63,9 @@ internal static class LiveFfmpeg
     }
 
     // Same bundled-then-PATH resolution as FfmpegSubprocessRecorder.
+    // Also used by the snapshot endpoint, which spawns its own one-shot ffmpeg.
+    public static string ResolveExecutable() => Resolve();
+
     private static string Resolve()
     {
         string? rid = null;

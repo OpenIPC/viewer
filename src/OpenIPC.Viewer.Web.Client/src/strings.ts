@@ -175,6 +175,11 @@ export const EN: Dict = {
   'Users.Perm.Ptz': 'PTZ',
   'Users.Perm.Export': 'export',
   'Users.Perm.Manage': 'manage',
+
+  'Snapshot.Take': '⧉ Snapshot',
+  'Snapshot.Taking': 'Asking the camera for a still…',
+  'Snapshot.Download': '⭳ Download',
+  'Snapshot.Failed': 'The camera did not return a still.',
 }
 
 export const RU: Dict = {
@@ -348,4 +353,9 @@ export const RU: Dict = {
   'Users.Perm.Ptz': 'PTZ',
   'Users.Perm.Export': 'экспорт',
   'Users.Perm.Manage': 'управление',
+
+  'Snapshot.Take': '⧉ Снимок',
+  'Snapshot.Taking': 'Запрашиваем кадр у камеры…',
+  'Snapshot.Download': '⭳ Скачать',
+  'Snapshot.Failed': 'Камера не отдала кадр.',
 }

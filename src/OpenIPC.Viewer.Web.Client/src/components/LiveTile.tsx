@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from 'react'
 import type { CameraDto } from '../api'
 import { useLiveTile } from '../hooks/useLiveTile'
+import { SnapshotModal } from './SnapshotModal'
 
 // Collapse the raw useLiveTile status string into a small set of visual states:
 // a dot colour + a terse label, plus whether to show the "still connecting"
@@ -24,6 +25,7 @@ export function statusKind(status: string): { kind: Kind; label: string } {
 // (route change, page flip) leaves the stream running for a grace period.
 export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }) {
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
+  const [snapshot, setSnapshot] = useState(false)
   const cellRef = useRef<HTMLDivElement>(null)
   const status = useLiveTile(slot, camera.id)
   const { kind, label } = statusKind(status)
@@ -48,9 +50,15 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
         {label}
       </span>
       <span className="label">{camera.name}</span>
+      <button className="snap" title="Snapshot" onClick={() => setSnapshot(true)}>
+        ⧉
+      </button>
       <button className="expand" title="Fullscreen" onClick={toggleFullscreen}>
         ⤢
       </button>
+      {snapshot && (
+        <SnapshotModal cameraId={camera.id} cameraName={camera.name} onClose={() => setSnapshot(false)} />
+      )}
     </div>
   )
 })

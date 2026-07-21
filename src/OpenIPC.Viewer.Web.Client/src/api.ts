@@ -174,6 +174,11 @@ export const api = {
     req<CameraDraftDto>('POST', '/api/v1/discovery/probe', body),
   addDiscovered: (body: DiscoveryAdd) => req<CameraDto>('POST', '/api/v1/discovery/add', body),
 
+  // A fresh still, straight from the camera (Majestic /image.jpg when available,
+  // otherwise one ffmpeg pull). Used as an <img> src and as a download target,
+  // so it's a URL rather than a fetch wrapper.
+  snapshotUrl: (id: string) => `/api/v1/cameras/${id}/snapshot`,
+
   // PTZ. Movement is stateless on the server: each move carries a self-stop
   // timeout, so the caller must repeat it while a direction is held (see PtzPad)
   // and send stop on release. A camera that never gets the stop halts on its own.
