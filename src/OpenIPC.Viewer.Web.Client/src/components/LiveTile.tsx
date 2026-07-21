@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from 'react'
 import type { CameraDto } from '../api'
 import { useLiveTile } from '../hooks/useLiveTile'
+import { useI18n } from '../i18n'
 import { SnapshotModal } from './SnapshotModal'
 
 // Collapse the raw useLiveTile status string into a small set of visual states:
@@ -24,10 +25,11 @@ export function statusKind(status: string): { kind: Kind; label: string } {
 // borrows a pooled element from live/liveSession.ts, so even an actual unmount
 // (route change, page flip) leaves the stream running for a grace period.
 export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }) {
+  const { t } = useI18n()
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   const [snapshot, setSnapshot] = useState(false)
   const cellRef = useRef<HTMLDivElement>(null)
-  const status = useLiveTile(slot, camera.id)
+  const { status, session } = useLiveTile(slot, camera.id)
   const { kind, label } = statusKind(status)
 
   const toggleFullscreen = () => {
@@ -50,10 +52,19 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
         {label}
       </span>
       <span className="label">{camera.name}</span>
-      <button className="snap" title="Snapshot" onClick={() => setSnapshot(true)}>
+      {session?.hasAudio && (
+        <button
+          className="listen"
+          title={session.muted ? t('Tile.Listen') : t('Tile.Mute')}
+          onClick={() => session.setMuted(!session.muted)}
+        >
+          {session.muted ? '🔇' : '🔊'}
+        </button>
+      )}
+      <button className="snap" title={t('Snapshot.Take')} onClick={() => setSnapshot(true)}>
         ⧉
       </button>
-      <button className="expand" title="Fullscreen" onClick={toggleFullscreen}>
+      <button className="expand" title={t('Tile.Fullscreen')} onClick={toggleFullscreen}>
         ⤢
       </button>
       {snapshot && (

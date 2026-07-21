@@ -177,6 +177,9 @@ export const EN: Dict = {
   'Users.Perm.Export': 'export',
   'Users.Perm.Manage': 'manage',
 
+  'Tile.Listen': 'Listen',
+  'Tile.Mute': 'Mute',
+  'Tile.Fullscreen': 'Fullscreen',
   'Snapshot.Take': '⧉ Snapshot',
   'Snapshot.Taking': 'Asking the camera for a still…',
   'Snapshot.Download': '⭳ Download',
@@ -369,6 +372,9 @@ export const RU: Dict = {
   'Users.Perm.Export': 'экспорт',
   'Users.Perm.Manage': 'управление',
 
+  'Tile.Listen': 'Слушать',
+  'Tile.Mute': 'Выключить звук',
+  'Tile.Fullscreen': 'Во весь экран',
   'Snapshot.Take': '⧉ Снимок',
   'Snapshot.Taking': 'Запрашиваем кадр у камеры…',
   'Snapshot.Download': '⭳ Скачать',

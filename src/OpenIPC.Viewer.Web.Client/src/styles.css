@@ -190,7 +190,7 @@ label input, label select { color:var(--text-1); }
      of postage stamps is useless. Tiles keep their 16:9 box. */
   .videos.n9, .videos.n16, .videos.n25 { grid-template-columns:repeat(2,1fr); }
   .videos { gap:6px; }
-  .cell .expand, .cell .snap { opacity:1; }   /* no hover on touch — always show */
+  .cell .expand, .cell .snap, .cell .listen { opacity:1; }   /* no hover on touch — always show */
 
   /* Wide list tables (the camera list) scroll sideways rather than squashing;
      narrow key/value tables (.details) stack instead — see below. */
@@ -257,3 +257,11 @@ label input, label select { color:var(--text-1); }
 /* Archive player: the selected recording, above the list. */
 .player { margin-bottom:18px; }
 .player video { width:100%; max-height:60vh; background:#000; border-radius:var(--r-md); display:block; }
+
+/* Listen toggle — same affordance row as snapshot/fullscreen, shown only when
+   the stream actually carries an audio track. */
+.cell .listen { position:absolute; right:76px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:13px; line-height:1; }
+.cell:hover .listen { opacity:1; }
+.cell .listen:hover { background:var(--accent); }
