@@ -2,6 +2,24 @@
    Theme.axaml (via the Phase 20 App.razor <style>) so the React SPA wears the
    exact same skin that was already approved. Kept as plain CSS + variables on
    purpose: no Tailwind/PostCSS build step to reproduce a look we already have. */
+/* Inter, self-hosted from the `inter-ui` npm package (rsms' own — the same
+   upstream the desktop heads get through Avalonia.Fonts.Inter). Bundled, not
+   CDN-linked: the server is meant to run on a LAN with no internet, and a
+   remote font would leak every page view to a third party.
+
+   The FULL variable file, not the `variable-latin` subset — the UI ships
+   Russian, and the subset drops Cyrillic. One weight axis (100–900) covers
+   every weight we use, so it's a single ~350 kB request, cached forever;
+   italics are not bundled because the UI has none. Inter is SIL OFL 1.1
+   (LICENSE.txt in the package). */
+@font-face {
+  font-family: 'InterVariable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../node_modules/inter-ui/variable/InterVariable.woff2') format('woff2');
+}
+
 :root {
   --bg0:#0a0d11; --bg1:#0f1318; --bg2:#171c24; --bg3:#1f262f;
   --border-weak:#222831; --border-med:#2a323d;
@@ -14,7 +32,8 @@
 * { box-sizing: border-box; }
 body {
   margin:0; background:var(--bg1); color:var(--text-1);
-  font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  /* Bundled first, then a locally installed Inter, then the platform stack. */
+  font-family: InterVariable, Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   font-size:14px; line-height:1.5;
 }
 a { color:var(--accent); text-decoration:none; }
@@ -85,7 +104,13 @@ label input, label select { color:var(--text-1); }
 .cell { position:relative; background:#000; border:1px solid var(--border-weak);
   border-radius:var(--r-md); overflow:hidden; aspect-ratio:16/9; transition:border-color .15s; }
 .cell:hover { border-color:var(--border-med); }
+.cell .video-slot { position:absolute; inset:0; }
 .cell video { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
+/* Parking lot for pooled <video>s between mounts — must stay in the document
+   and not be display:none (browsers pause/throttle those), so: 1px, clipped,
+   off-screen and non-interactive. */
+.live-pool { position:fixed; left:-9999px; top:0; width:1px; height:1px;
+  overflow:hidden; pointer-events:none; opacity:0; }
 .cell .label { position:absolute; left:8px; bottom:8px; font-size:12px;
   background:rgba(0,0,0,.55); padding:3px 9px; border-radius:var(--r-sm); color:#fff;
   max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -184,3 +209,26 @@ label input, label select { color:var(--text-1); }
   .toolbar { gap:6px; }
   .login { margin-top:8vh; padding:16px; }
 }
+
+/* --- PTZ controls (single-camera page) --- */
+.ptz { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; }
+.ptz-pad { display:grid; grid-template-columns:repeat(3,46px); gap:6px; flex:none; }
+.ptz-pad button { height:46px; padding:0; font-size:17px; line-height:1;
+  background:var(--bg2); border:1px solid var(--border-med); border-radius:var(--r-sm);
+  color:var(--text-1); touch-action:none; user-select:none; }
+.ptz-pad button:active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ptz-side { display:flex; flex-direction:column; gap:12px; min-width:220px; flex:1; }
+.ptz-zoom { display:flex; align-items:center; gap:8px; }
+.ptz-zoom button { width:46px; height:34px; padding:0; font-size:15px; touch-action:none; user-select:none; }
+.ptz-zoom button:active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ptz-side label { max-width:240px; }
+.ptz-presets { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.ptz-presets input { width:130px; }
+.ptz-presets button.preset { background:var(--bg3); }
+
+/* Layout pager (a layout can hold more cameras than the grid has cells). */
+.pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; }
+.pager button { min-width:34px; padding:6px 10px; background:var(--bg2);
+  border:1px solid var(--border-med); border-radius:var(--r-sm); color:var(--text-2); }
+.pager button:hover:not(:disabled) { color:var(--text-1); }
+.pager button.active { background:var(--accent); border-color:var(--accent); color:#fff; }

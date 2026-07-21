@@ -17,13 +17,15 @@ export function statusKind(status: string): { kind: Kind; label: string } {
 // A single live tile, shared by the grid and the single-camera page. Memoized and
 // keyed by camera id where it's used in a list, so changing the layout (size OR
 // which saved layout is active) NEVER remounts a tile whose camera stays on
-// screen — React matches it by key and only moves the DOM node. That is the
-// app-like point: the <video>/WebSocket/ffmpeg session for a surviving camera is
-// not torn down and restarted on a switch.
+// screen — React matches it by key and only moves the DOM node.
+//
+// The <video> itself is not rendered here: the tile provides an empty slot and
+// borrows a pooled element from live/liveSession.ts, so even an actual unmount
+// (route change, page flip) leaves the stream running for a grace period.
 export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }) {
-  const [video, setVideo] = useState<HTMLVideoElement | null>(null)
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   const cellRef = useRef<HTMLDivElement>(null)
-  const status = useLiveTile(video, camera.id)
+  const status = useLiveTile(slot, camera.id)
   const { kind, label } = statusKind(status)
 
   const toggleFullscreen = () => {
@@ -35,7 +37,7 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
 
   return (
     <div className="cell" ref={cellRef} onDoubleClick={toggleFullscreen}>
-      <video ref={setVideo} autoPlay muted playsInline />
+      <div className="video-slot" ref={setSlot} />
       {kind === 'connecting' && (
         <div className="loading">
           <span className="spinner" />

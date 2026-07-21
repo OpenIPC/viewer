@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth'
+import { LivePool } from './live/LivePool'
 import { Shell } from './components/Shell'
 import { Login } from './pages/Login'
 import { Cameras } from './pages/Cameras'
@@ -9,14 +10,18 @@ import { Groups } from './pages/Groups'
 import { System } from './pages/System'
 
 // The whole app is client-routed: navigating between these never reloads the
-// page, and — crucially — the Grid's <video> tiles are not torn down on route
-// changes. The .NET host serves index.html for any of these paths (fallback).
+// page, and — crucially — live tiles are not torn down on route changes: the
+// <video> elements live in <LivePool/>, which sits outside the router and
+// therefore survives every navigation. The .NET host serves index.html for any
+// of these paths (fallback).
 export function App() {
   const { loading, user } = useAuth()
 
   if (loading) return <div className="spin" style={{ padding: 40 }} />
 
   return (
+    <>
+    <LivePool />
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/cameras" replace /> : <Login />} />
       <Route element={user ? <Shell /> : <Navigate to="/login" replace />}>
@@ -29,5 +34,6 @@ export function App() {
         <Route path="*" element={<Navigate to="/cameras" replace />} />
       </Route>
     </Routes>
+    </>
   )
 }
