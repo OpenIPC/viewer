@@ -37,6 +37,13 @@ export function Shell() {
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
         </NavItem>
+        <NavItem to="/discovery" label={t('Nav.Discovery')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+            <circle cx="12" cy="12" r="2" />
+            <path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4" />
+            <path d="M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2" />
+          </svg>
+        </NavItem>
         <NavItem to="/groups" label={t('Nav.Groups')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

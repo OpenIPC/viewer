@@ -182,6 +182,7 @@ public static class WebServer
         app.MapLayoutEndpoints();
         app.MapLiveEndpoints();
         app.MapPtzEndpoints();
+        app.MapDiscoveryEndpoints();
         app.MapSystemEndpoints();
 
         // Client-side routes (/, /cameras, /grid, …) resolve to the SPA entry;

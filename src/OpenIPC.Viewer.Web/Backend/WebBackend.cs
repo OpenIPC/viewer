@@ -1,8 +1,16 @@
 using Microsoft.Extensions.DependencyInjection;
+using OpenIPC.Viewer.Core.Discovery;
+using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
+using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Settings;
+using OpenIPC.Viewer.Devices.Discovery;
+using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
+using OpenIPC.Viewer.Devices.Onvif.Discovery;
+using OpenIPC.Viewer.Infrastructure.Net;
 using OpenIPC.Viewer.Infrastructure.Persistence;
 using OpenIPC.Viewer.Web.Api;
 
@@ -36,6 +44,22 @@ public static class WebBackend
         // stateless (one short-lived HTTP call per operation), so a singleton is
         // safe and matches the desktop registration in SharedComposition.
         services.AddSingleton<IOnvifClient, SoapOnvifClient>();
+        // Discovery (same source set and aggregator as the desktop dialog) plus
+        // the ONVIF probe chain the add flow runs on a chosen candidate.
+        services.AddSingleton<OnvifProbeService>();
+        // The sources read settings (interface pick, timeouts) through this view;
+        // the server has no settings UI, so it hands them the shipped defaults.
+        services.AddSingleton<IUserSettingsAccessor, ServerSettings>();
+        services.AddSingleton<INetworkInterfaceProvider, SystemNetworkInterfaceProvider>();
+        services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
+        services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+        services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
+        services.AddSingleton<IDiscoverySource, OnvifDiscoverySource>();
+        services.AddSingleton<IDiscoverySource, MdnsDiscoverySource>();
+        services.AddSingleton<IDiscoverySource, SubnetSweepDiscoverySource>();
+        services.AddSingleton<IDiscoveryAggregator, DiscoveryAggregator>();
+        // Scans outlive the request that starts them, so the runs live here.
+        services.AddSingleton<DiscoveryScanStore>();
         return services;
     }
 }

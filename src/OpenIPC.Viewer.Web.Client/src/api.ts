@@ -39,6 +39,53 @@ export type LayoutDto = {
   tiles: string[] // ordered camera ids (position = index)
 }
 
+// A LAN device a scan turned up. `protocols` are the signals that found it
+// (Onvif/Mdns/Majestic/Rtsp/Http) and `confidence` how much they agree.
+export type DiscoveredDeviceDto = {
+  host: string
+  name: string | null
+  model: string | null
+  ports: number[]
+  protocols: string[]
+  confidence: 'Low' | 'Medium' | 'High'
+  onvifPort: number | null
+}
+
+export type ScanDto = {
+  id: string
+  status: 'running' | 'done' | 'cancelled' | 'failed'
+  progress: number
+  error: string | null
+  devices: DiscoveredDeviceDto[]
+}
+
+// What a probe learned about one candidate — the truth when ONVIF answered
+// (onvifOk), a guessed RTSP URI otherwise.
+export type CameraDraftDto = {
+  host: string
+  suggestedName: string
+  rtspMain: string
+  onvifOk: boolean
+  manufacturer: string | null
+  model: string | null
+  firmwareVersion: string | null
+  hasPtz: boolean
+  hasAudioIn: boolean
+  hasAudioOut: boolean
+  error: string | null
+}
+
+export type DiscoveryAdd = {
+  host: string
+  name?: string
+  httpPort?: number
+  onvifPort?: number | null
+  username?: string
+  password?: string
+  rtspMain?: string
+  groupId?: number | null
+}
+
 export type CameraWrite = {
   name: string
   host: string
@@ -95,6 +142,15 @@ export const api = {
   updateCamera: (id: string, body: CameraWrite) =>
     req<CameraDto>('PUT', `/api/v1/cameras/${id}`, body),
   deleteCamera: (id: string) => req<void>('DELETE', `/api/v1/cameras/${id}`),
+
+  // Discovery. A scan is a background job on the server: start it, then poll by
+  // id until status leaves 'running' (results accumulate as sources report).
+  startScan: (deepScan: boolean) => req<ScanDto>('POST', '/api/v1/discovery/scan', { deepScan }),
+  getScan: (id: string) => req<ScanDto>('GET', `/api/v1/discovery/scan/${id}`),
+  cancelScan: (id: string) => req<void>('DELETE', `/api/v1/discovery/scan/${id}`),
+  probeDevice: (body: { host: string; onvifPort?: number | null; username?: string; password?: string }) =>
+    req<CameraDraftDto>('POST', '/api/v1/discovery/probe', body),
+  addDiscovered: (body: DiscoveryAdd) => req<CameraDto>('POST', '/api/v1/discovery/add', body),
 
   // PTZ. Movement is stateless on the server: each move carries a self-stop
   // timeout, so the caller must repeat it while a direction is held (see PtzPad)

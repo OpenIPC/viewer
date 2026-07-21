@@ -232,3 +232,7 @@ label input, label select { color:var(--text-1); }
   border:1px solid var(--border-med); border-radius:var(--r-sm); color:var(--text-2); }
 .pager button:hover:not(:disabled) { color:var(--text-1); }
 .pager button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* Discovery scan progress. */
+.progress { height:4px; background:var(--bg3); border-radius:999px; overflow:hidden; margin:4px 0 10px; }
+.progress span { display:block; height:100%; background:var(--accent); transition:width .3s; }
