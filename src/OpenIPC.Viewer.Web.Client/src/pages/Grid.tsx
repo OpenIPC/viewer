@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api, type CameraDto, type LayoutDto } from '../api'
 import { useI18n } from '../i18n'
 import { useLiveTile } from '../hooks/useLiveTile'
+import { ConfirmModal, TextPromptModal } from '../components/Modals'
 
 // Grid size is the side N of an NxN grid (matches the backend/desktop model);
 // cells = N*N. The UI labels each option by its cell count (1, 4, 9, 16, 25).
@@ -80,6 +81,8 @@ export function Grid() {
   const [draftSize, setDraftSize] = useState(4)
   const [draftTiles, setDraftTiles] = useState<(string | null)[]>([])
   const [busy, setBusy] = useState(false)
+  // Which dialog is open, if any (replaces native prompt/confirm).
+  const [dialog, setDialog] = useState<'create' | 'rename' | 'delete' | null>(null)
 
   const camById = useMemo(() => {
     const m = new Map<string, CameraDto>()
@@ -169,23 +172,21 @@ export function Grid() {
     }
   }
 
-  const addLayout = async () => {
-    const name = prompt(t('Grid.NewLayoutName'))?.trim()
-    if (!name) return
+  const createLayout = async (name: string) => {
+    setDialog(null)
     const created = await api.createLayout(name, 2)
     await reloadLayouts()
     setActiveId(created.id)
   }
-  const renameLayout = async () => {
-    if (!active) return
-    const name = prompt(t('Grid.Rename'), active.name)?.trim()
-    if (!name || name === active.name) return
+  const renameLayout = async (name: string) => {
+    setDialog(null)
+    if (!active || name === active.name) return
     await api.updateLayout(active.id, { name })
     await reloadLayouts()
   }
   const deleteLayout = async () => {
+    setDialog(null)
     if (!active) return
-    if (!confirm(t('Grid.DeleteLayoutConfirm'))) return
     await api.deleteLayout(active.id)
     setEditing(false)
     setActiveId(null)
@@ -211,13 +212,13 @@ export function Grid() {
               {l.name}
             </button>
           ))}
-          {!editing && <button onClick={addLayout}>{t('Grid.NewLayout')}</button>}
+          {!editing && <button onClick={() => setDialog('create')}>{t('Grid.NewLayout')}</button>}
         </div>
         {active && !editing && <button onClick={startEdit}>{t('Grid.Edit')}</button>}
         {editing && (
           <div className="row">
-            <button onClick={renameLayout}>{t('Grid.Rename')}</button>
-            <button className="danger" onClick={deleteLayout}>
+            <button onClick={() => setDialog('rename')}>{t('Grid.Rename')}</button>
+            <button className="danger" onClick={() => setDialog('delete')}>
               {t('Grid.DeleteLayout')}
             </button>
             <span style={{ width: 8 }} />
@@ -268,6 +269,36 @@ export function Grid() {
             return cam ? <Tile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
           })}
         </div>
+      )}
+
+      {dialog === 'create' && (
+        <TextPromptModal
+          title={t('Grid.NewLayoutTitle')}
+          label={t('Grid.NewLayoutName')}
+          submitLabel={t('Common.Save')}
+          onSubmit={createLayout}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'rename' && active && (
+        <TextPromptModal
+          title={t('Grid.Rename')}
+          label={t('Grid.NewLayoutName')}
+          initial={active.name}
+          submitLabel={t('Common.Save')}
+          onSubmit={renameLayout}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'delete' && active && (
+        <ConfirmModal
+          title={t('Grid.DeleteLayout')}
+          message={t('Grid.DeleteLayoutConfirm')}
+          confirmLabel={t('Cameras.Delete')}
+          danger
+          onConfirm={deleteLayout}
+          onCancel={() => setDialog(null)}
+        />
       )}
     </div>
   )

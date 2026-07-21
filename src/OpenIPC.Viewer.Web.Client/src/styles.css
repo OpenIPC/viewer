@@ -59,6 +59,8 @@ button:hover { border-color:var(--text-3); }
 button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
 button.primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
 button.danger { color:var(--danger); }
+button.primary.danger-btn { background:var(--danger); border-color:var(--danger); color:#fff; }
+button.primary.danger-btn:hover { background:#dc2626; border-color:#dc2626; }
 button:disabled { opacity:.5; cursor:default; }
 label { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-2); }
 label input, label select { color:var(--text-1); }
