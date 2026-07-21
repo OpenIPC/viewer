@@ -12,11 +12,17 @@ const SIDES = [1, 2, 3, 4, 5]
 // The Live grid, driven by saved layouts (name + grid size + ordered camera
 // tiles). Switching between layouts keeps shared cameras playing. An edit mode
 // assigns a camera to each cell and changes the grid size.
+//
+// A layout may hold more cameras than the grid has cells (the desktop's 82-camera
+// "Default" is one), so the tile list is paginated exactly like the desktop head:
+// one page = gridSize² cells, page count = ceil(tiles / pageSize). Only the
+// current page gets live tiles — flipping pages tears the old sockets down.
 export function Grid() {
   const { t } = useI18n()
   const [cameras, setCameras] = useState<CameraDto[] | null>(null)
   const [layouts, setLayouts] = useState<LayoutDto[] | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
+  const [page, setPage] = useState(0)
   const [editing, setEditing] = useState(false)
   const [draftSize, setDraftSize] = useState(4)
   const [draftTiles, setDraftTiles] = useState<(string | null)[]>([])
@@ -46,6 +52,13 @@ export function Grid() {
 
   const active = layouts?.find((l) => l.id === activeId) ?? null
 
+  // Pagination of the active layout. Clamped rather than corrected in state, so
+  // a layout that shrank under us (another client edited it) still renders.
+  const pageSize = active ? active.gridSize * active.gridSize : 1
+  const pageCount = active ? Math.max(1, Math.ceil(active.tiles.length / pageSize)) : 1
+  const safePage = Math.min(page, pageCount - 1)
+  const pageStart = safePage * pageSize
+
   async function reloadLayouts(): Promise<LayoutDto[]> {
     const ls = await api.layouts()
     ls.sort((a, b) => a.sortOrder - b.sortOrder)
@@ -58,7 +71,7 @@ export function Grid() {
   const startEdit = () => {
     if (!active) return
     setDraftSize(active.gridSize)
-    setDraftTiles(Array.from({ length: active.gridSize * active.gridSize }, (_, i) => active.tiles[i] ?? null))
+    setDraftTiles(Array.from({ length: pageSize }, (_, i) => active.tiles[pageStart + i] ?? null))
     setEditing(true)
   }
   const changeDraftSize = (n: number) => {
@@ -76,15 +89,19 @@ export function Grid() {
     setBusy(true)
     try {
       if (draftSize !== active.gridSize) await api.updateLayout(active.id, { gridSize: draftSize })
-      // The editor only shows the first page (gridSize² cells). Desktop layouts
-      // can hold more cameras than that (paginated), so preserve everything beyond
-      // the edited page instead of truncating it. Tiles are a compact ordered
-      // list — drop empty cells, keep order, then re-append the untouched tail.
+      // The editor shows one page; everything outside it must survive untouched,
+      // so splice the edited cells back between the pages before and after.
+      // Tiles are a compact ordered list (no holes), so emptied cells are dropped
+      // and the tail slides up — that's the model, not a bug.
       const edited = draftTiles.filter((x): x is string => !!x)
-      const tail = active.tiles.slice(active.gridSize * active.gridSize)
-      await api.setLayoutTiles(active.id, [...edited, ...tail])
+      const head = active.tiles.slice(0, pageStart)
+      const tail = active.tiles.slice(pageStart + pageSize)
+      await api.setLayoutTiles(active.id, [...head, ...edited, ...tail])
       await reloadLayouts()
       setEditing(false)
+      // A different grid size re-cuts every page boundary; the old page index
+      // would land somewhere arbitrary, so go back to the first page.
+      if (draftSize !== active.gridSize) setPage(0)
     } finally {
       setBusy(false)
     }
@@ -95,6 +112,7 @@ export function Grid() {
     const created = await api.createLayout(name, 2)
     await reloadLayouts()
     setActiveId(created.id)
+    setPage(0)
   }
   const renameLayout = async (name: string) => {
     setDialog(null)
@@ -108,6 +126,7 @@ export function Grid() {
     await api.deleteLayout(active.id)
     setEditing(false)
     setActiveId(null)
+    setPage(0)
     await reloadLayouts()
   }
 
@@ -125,6 +144,7 @@ export function Grid() {
               onClick={() => {
                 setEditing(false)
                 setActiveId(l.id)
+                setPage(0)
               }}
             >
               {l.name}
@@ -166,6 +186,12 @@ export function Grid() {
       ) : !active ? (
         <p className="muted">{t('Grid.NoLayouts')}</p>
       ) : editing ? (
+        <>
+        {pageCount > 1 && (
+          <p className="muted" style={{ margin: '0 0 8px', fontSize: 12 }}>
+            {t('Grid.EditingPage')} {safePage + 1} / {pageCount}
+          </p>
+        )}
         <div className={`videos n${draftSize * draftSize}`}>
           {draftTiles.map((camId, i) => (
             <div className="cell empty-slot" key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
@@ -180,13 +206,40 @@ export function Grid() {
             </div>
           ))}
         </div>
+        </>
       ) : (
-        <div className={`videos n${active.gridSize * active.gridSize}`}>
-          {Array.from({ length: active.gridSize * active.gridSize }, (_, i) => {
-            const cam = active.tiles[i] ? camById.get(active.tiles[i]) : undefined
-            return cam ? <LiveTile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
-          })}
-        </div>
+        <>
+          <div className={`videos n${pageSize}`}>
+            {Array.from({ length: pageSize }, (_, i) => {
+              const id = active.tiles[pageStart + i]
+              const cam = id ? camById.get(id) : undefined
+              return cam ? <LiveTile key={cam.id} camera={cam} /> : <EmptyCell key={`empty-${i}`} />
+            })}
+          </div>
+          {pageCount > 1 && (
+            <div className="pager">
+              <button disabled={safePage === 0} title={t('Grid.PrevPage')} onClick={() => setPage(safePage - 1)}>
+                ‹
+              </button>
+              {Array.from({ length: pageCount }, (_, i) => (
+                <button
+                  key={i}
+                  className={i === safePage ? 'active' : ''}
+                  onClick={() => setPage(i)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                disabled={safePage + 1 >= pageCount}
+                title={t('Grid.NextPage')}
+                onClick={() => setPage(safePage + 1)}
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {dialog === 'create' && (
