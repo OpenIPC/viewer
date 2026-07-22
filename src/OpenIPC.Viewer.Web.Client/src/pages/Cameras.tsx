@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
 import { CameraEditor } from '../components/CameraEditor'
 import { ConfirmModal } from '../components/Modals'
@@ -45,9 +46,16 @@ export function Cameras() {
       <div className="toolbar">
         <h1 style={{ margin: 0, flex: 1 }}>{t('Cameras.Title')}</h1>
         {can('Manage') && (
-          <button className="primary" onClick={() => setEditing(null)}>
-            {t('Cameras.Add')}
-          </button>
+          <>
+            {/* Finding cameras on the network is a way to add one, so it sits
+                next to Add rather than in its own nav entry. */}
+            <Link to="/discovery" className="row button-link ghost">
+              <Icon name="search" /> {t('Nav.Discovery')}
+            </Link>
+            <button className="primary row" onClick={() => setEditing(null)}>
+              <Icon name="plus" /> {t('Cameras.Add')}
+            </button>
+          </>
         )}
       </div>
 
@@ -78,7 +86,7 @@ export function Cameras() {
                   </span>
                 </td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <Link to={`/camera/${c.id}`}>{t('Cameras.Live')}</Link>{' '}
+                  <Link to={`/camera/${c.id}`} className="row"><Icon name="play" size={13} /> {t('Cameras.Live')}</Link>{' '}
                   {can('Manage') && (
                     <>
                       <button onClick={() => setEditing(c)}>{t('Cameras.Edit')}</button>{' '}

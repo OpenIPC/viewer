@@ -42,9 +42,70 @@ export type WebUserDto = {
   cameras: string[] | null
 }
 
+// One recorded file. `playable` is false for H.265, which browsers won't decode
+// — the UI then offers a download instead of a dead player.
+export type RecordingDto = {
+  id: string
+  cameraId: string
+  cameraName: string | null
+  fileName: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: number | null
+  sizeBytes: number
+  codec: string | null
+  hasMotion: boolean
+  playable: boolean
+}
+
+// One dot on the archive calendar. Deliberately minimal: the browser groups
+// these into days in its own time zone.
+// A page of the archive: the rows plus where they sit in the whole set.
+export type RecordingPageDto = {
+  total: number
+  offset: number
+  limit: number
+  items: RecordingDto[]
+}
+
+export type CalendarPointDto = { startedAt: string; sizeBytes: number }
+
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
+
+// A snapshot kept in the shared library (same rows the desktop browser reads).
+export type SnapshotDto = {
+  id: string
+  cameraId: string
+  cameraName: string | null
+  takenAt: string
+  width: number
+  height: number
+  hasThumb: boolean
+  source: string
+}
+
+// A Majestic config.json, flattened by the server into whatever scalar knobs the
+// live config actually exposes — the schema drifts between firmware builds, so
+// nothing here is a fixed field list.
+export type MajesticFieldDto = {
+  path: string
+  section: string
+  key: string
+  kind: 'string' | 'bool' | 'int' | 'number' | 'enum'
+  value: string
+  options: string[] | null
+  // Changing this one restarts the video pipeline (the tile will blink).
+  restart: boolean
+}
+
+export type MajesticDto = {
+  info: { model: string | null; firmware: string | null; chip: string | null; uptime: string | null } | null
+  nightMode: 'unknown' | 'day' | 'night' | 'auto'
+  sections: { name: string; fields: MajesticFieldDto[] }[]
+  rawJson: string
+}
 
 export type LayoutDto = {
   id: number
@@ -126,6 +187,14 @@ export class ApiError extends Error {
   }
 }
 
+// Drops empty values so the URL only carries the filters that are actually set.
+function query(params: Record<string, string | number | undefined>): string {
+  const pairs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => [k, String(v)] as [string, string])
+  return pairs.length ? '?' + new URLSearchParams(pairs).toString() : ''
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -174,6 +243,56 @@ export const api = {
     req<CameraDraftDto>('POST', '/api/v1/discovery/probe', body),
   addDiscovered: (body: DiscoveryAdd) => req<CameraDto>('POST', '/api/v1/discovery/add', body),
 
+  // The recorded archive. Playback is a ranged file response, so the URL goes
+  // straight into a <video> and the browser does its own seeking.
+  recordings: (filter: { cameraId?: string; from?: string; to?: string; offset?: number; limit?: number } = {}) =>
+    req<RecordingPageDto>(
+      'GET',
+      '/api/v1/recordings' +
+        query({
+          ...filter,
+          offset: filter.offset ? String(filter.offset) : undefined,
+          limit: filter.limit ? String(filter.limit) : undefined,
+        }),
+    ),
+  // Cut of a recording, as a download URL (start/end are seconds into the file).
+  recordingExportUrl: (id: string, start: number, end: number, precise: boolean) =>
+    `/api/v1/recordings/${id}/export?start=${start.toFixed(2)}&end=${end.toFixed(2)}` +
+    (precise ? '&precise=true' : ''),
+  recordingCalendar: (filter: { cameraId?: string; from?: string; to?: string } = {}) =>
+    req<CalendarPointDto[]>('GET', '/api/v1/recordings/calendar' + query(filter)),
+  recordingStreamUrl: (id: string, download = false) =>
+    `/api/v1/recordings/${id}/stream` + (download ? '?download=true' : ''),
+  deleteRecording: (id: string) => req<void>('DELETE', `/api/v1/recordings/${id}`),
+  // Camera ids currently being recorded by this server.
+  activeRecordings: () => req<string[]>('GET', '/api/v1/recordings/active'),
+  startRecording: (cameraId: string) =>
+    req<{ id: string; startedAt: string }>('POST', `/api/v1/cameras/${cameraId}/recording/start`),
+  stopRecording: (cameraId: string) =>
+    req<{ id: string; sizeBytes: number }>('POST', `/api/v1/cameras/${cameraId}/recording/stop`),
+
+  // A fresh still, straight from the camera (Majestic /image.jpg when available,
+  // otherwise one ffmpeg pull). Used as an <img> src and as a download target,
+  // so it's a URL rather than a fetch wrapper.
+  snapshotUrl: (id: string) => `/api/v1/cameras/${id}/snapshot`,
+
+  // Keep a still: captured the same way as the preview above, but written into
+  // the shared library so the desktop gallery sees it too.
+  saveSnapshot: (cameraId: string) => req<SnapshotDto>('POST', `/api/v1/cameras/${cameraId}/snapshots`),
+  snapshots: (q: { cameraId?: string; offset?: number; limit?: number } = {}) => {
+    const p = new URLSearchParams()
+    if (q.cameraId) p.set('cameraId', q.cameraId)
+    if (q.offset) p.set('offset', String(q.offset))
+    if (q.limit) p.set('limit', String(q.limit))
+    const qs = p.toString()
+    return req<{ total: number; offset: number; limit: number; items: SnapshotDto[] }>(
+      'GET', '/api/v1/snapshots' + (qs ? '?' + qs : ''))
+  },
+  // A URL rather than a fetch: these are <img> sources and download targets.
+  snapshotImageUrl: (id: string, thumb = false, download = false) =>
+    `/api/v1/snapshots/${id}/image` + (thumb ? '?thumb=true' : download ? '?download=true' : ''),
+  deleteSnapshot: (id: string) => req<void>('DELETE', `/api/v1/snapshots/${id}`),
+
   // PTZ. Movement is stateless on the server: each move carries a self-stop
   // timeout, so the caller must repeat it while a direction is held (see PtzPad)
   // and send stop on release. A camera that never gets the stop halts on its own.
@@ -187,6 +306,26 @@ export const api = {
     req<void>('POST', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}/goto`),
   ptzDeletePreset: (id: string, token: string) =>
     req<void>('DELETE', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}`),
+
+  // Camera settings (Majestic config.json). Manage-only on the server, reads
+  // included: the config carries the camera's own logins.
+  majestic: (id: string) => req<MajesticDto>('GET', `/api/v1/cameras/${id}/majestic`),
+  // Only changed fields travel; the server re-reads the camera's config and
+  // applies them onto it, so a stale tab can't revert someone else's edit.
+  majesticApply: (id: string, edits: { path: string; value: string }[]) =>
+    req<{ applied: number; restart: boolean }>('POST', `/api/v1/cameras/${id}/majestic/config`, { edits }),
+  majesticRaw: (id: string, json: string) =>
+    req<void>('POST', `/api/v1/cameras/${id}/majestic/raw`, { json }),
+  majesticNight: (id: string, mode: 'day' | 'night' | 'auto') =>
+    req<void>('POST', `/api/v1/cameras/${id}/majestic/night`, { mode }),
+  majesticMetrics: (id: string) =>
+    req<{ name: string; value: number }[]>('GET', `/api/v1/cameras/${id}/majestic/metrics`),
+
+  // Can this camera be talked to, and is someone already doing it? A real RTSP
+  // probe, so it costs a round-trip to the camera — the UI asks on press, not
+  // on page load.
+  talkProbe: (id: string) =>
+    req<{ supported: boolean | null; busy: boolean }>('GET', `/api/v1/cameras/${id}/talk`),
 
   system: () =>
     req<{ version: string; cameras: number; groups: number; sessions: number; streams: number }>(

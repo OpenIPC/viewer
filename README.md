@@ -4,6 +4,8 @@ Cross-platform desktop and mobile viewer for OpenIPC IP cameras.
 Built with .NET 9 / 10 and Avalonia 12.
 
 [![build](https://github.com/OpenIPC/viewer/actions/workflows/build.yml/badge.svg)](https://github.com/OpenIPC/viewer/actions/workflows/build.yml)
+[![latest release](https://img.shields.io/github/v/release/OpenIPC/viewer?sort=semver&label=release)](https://github.com/OpenIPC/viewer/releases/latest)
+[![downloads](https://img.shields.io/github/downloads/OpenIPC/viewer/total?label=downloads)](https://github.com/OpenIPC/viewer/releases)
 
 > Status: **beta** — releases ship as standalone builds for Windows / Linux /
 > macOS / Android from the [releases page](https://github.com/OpenIPC/viewer/releases).

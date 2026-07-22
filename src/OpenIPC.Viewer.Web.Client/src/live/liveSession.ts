@@ -56,6 +56,8 @@ export class LiveSession {
   private closed = false
   /** Borrowed by a mounted tile; false means idle and eligible for retention. */
   inUse = false
+  /** True once the init segment turned out to carry an audio track. */
+  hasAudio = false
   idleTimer: number | null = null
 
   constructor(cameraId: string) {
@@ -93,6 +95,18 @@ export class LiveSession {
     return this._status
   }
 
+  get muted(): boolean {
+    return this.video.muted
+  }
+
+  // Tiles start muted — browsers refuse to autoplay anything else — so listening
+  // is always an explicit click, and it survives the tile being re-attached.
+  setMuted(muted: boolean) {
+    this.video.muted = muted
+    if (!muted) this.video.play().catch(() => undefined)
+    this.notify()
+  }
+
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn)
     return () => this.listeners.delete(fn)
@@ -115,7 +129,14 @@ export class LiveSession {
   private say(s: string) {
     if (this.closed) return
     this._status = s
-    for (const fn of this.listeners) fn(s)
+    this.notify()
+  }
+
+  // Subscribers re-read the session, so anything observable — status, audio
+  // presence, mute — goes through here.
+  private notify() {
+    if (this.closed) return
+    for (const fn of this.listeners) fn(this._status)
   }
 
   // transcode=false → copy remux (H.264). If the source turns out to be H.265
@@ -140,7 +161,12 @@ export class LiveSession {
     // plain ArrayBuffer, not the widened ArrayBufferLike (TS 5.7+ typed arrays).
     const queue: Uint8Array<ArrayBuffer>[] = []
     let pending: Uint8Array<ArrayBuffer>[] = []
+    // Video codec string plus, when the camera sends sound, the AAC track the
+    // server transcodes it to. MSE needs BOTH declared on the SourceBuffer or the
+    // init segment is rejected — so the string is built from what's actually in
+    // the box, never assumed.
     let codec: string | null = null
+    let audio = false
     let msOpen = false
     let switching = false
     const say = (s: string) => this.say(s)
@@ -176,7 +202,7 @@ export class LiveSession {
     }
     const setup = () => {
       if (sb || !msOpen || !codec || codec === 'hevc') return
-      const mime = `video/mp4; codecs="${codec}"`
+      const mime = `video/mp4; codecs="${codec}${audio ? ', mp4a.40.2' : ''}"`
       if (!MediaSource.isTypeSupported(mime)) {
         if (!transcode) retryTranscoded()
         else say('unsupported ' + codec)
@@ -204,7 +230,14 @@ export class LiveSession {
       const b = new Uint8Array(e.data as ArrayBuffer)
       if (!sb) {
         pending.push(b)
-        if (codec === null) codec = findCodec(pending)
+        if (codec === null) {
+          codec = findCodec(pending)
+          if (codec !== null && codec !== 'hevc') {
+            audio = hasAudioTrack(pending)
+            this.hasAudio = audio
+            if (audio) this.notify()   // the tile can show its listen button now
+          }
+        }
         if (codec === 'hevc' && !transcode) {
           retryTranscoded()
           return
@@ -277,6 +310,17 @@ function findCodec(chunks: Uint8Array<ArrayBuffer>[]): string | null {
     if (d[i] === 0x68 && d[i + 1] === 0x76 && d[i + 2] === 0x63 && d[i + 3] === 0x43) return 'hevc'
   }
   return null
+}
+
+// An 'mp4a' sample-entry anywhere in the init segment means the stream carries
+// sound. Same crude fourcc scan as findCodec — enough to decide the codec string.
+function hasAudioTrack(chunks: Uint8Array<ArrayBuffer>[]): boolean {
+  for (const c of chunks) {
+    for (let i = 0; i + 4 <= c.length; i++) {
+      if (c[i] === 0x6d && c[i + 1] === 0x70 && c[i + 2] === 0x34 && c[i + 3] === 0x61) return true
+    }
+  }
+  return false
 }
 
 function hx(n: number): string {

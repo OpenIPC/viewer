@@ -4,8 +4,12 @@ using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Persistence;
+using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Settings;
+using OpenIPC.Viewer.Core.Snapshots;
+using OpenIPC.Viewer.Core.Video;
+using OpenIPC.Viewer.Devices.Backchannel;
 using OpenIPC.Viewer.Devices.Discovery;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
@@ -31,6 +35,16 @@ public static class WebBackend
         services.AddSingleton<ICameraRepository, SqliteCameraRepository>();
         services.AddSingleton<IGroupRepository, SqliteGroupRepository>();
         services.AddSingleton<ILayoutRepository, SqliteLayoutRepository>();
+        // The archive the desktop head recorded: listed, played and deleted from
+        // the browser. The web server doesn't record yet, it reads the index.
+        services.AddSingleton<IRecordingRepository, SqliteRecordingRepository>();
+        // Recording started from the browser: its own ffmpeg process per camera,
+        // writing into the same folder and table the desktop head uses.
+        services.AddSingleton<WebRecorder>();
+        // Kept snapshots share the desktop's library: same folder layout, same
+        // table. SnapshotService itself can't be reused (it needs the Video
+        // layer), so SnapshotLibraryApi writes the rows against this repo.
+        services.AddSingleton<ISnapshotRepository, SqliteSnapshotRepository>();
         // Browser-safe config export/import (never serializes camera passwords).
         services.AddSingleton<IConfigBackupService, SqliteConfigBackupService>();
         // CRUD goes through the directory service so credentials land in the
@@ -44,6 +58,10 @@ public static class WebBackend
         // stateless (one short-lived HTTP call per operation), so a singleton is
         // safe and matches the desktop registration in SharedComposition.
         services.AddSingleton<IOnvifClient, SoapOnvifClient>();
+        // Push-to-talk: ffmpeg can't do an ONVIF backchannel, so this opens its
+        // own RTSP session per talker. Stateless between calls, like the ONVIF
+        // client — the session lives for as long as the browser holds the key.
+        services.AddSingleton<IAudioBackchannelClient, RtspBackchannelClient>();
         // Discovery (same source set and aggregator as the desktop dialog) plus
         // the ONVIF probe chain the add flow runs on a chosen candidate.
         services.AddSingleton<OnvifProbeService>();
@@ -53,6 +71,9 @@ public static class WebBackend
         services.AddSingleton<INetworkInterfaceProvider, SystemNetworkInterfaceProvider>();
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+        // The camera-settings panel renders whatever knobs the live config.json
+        // exposes, so it needs the same schema walk the desktop editor uses.
+        services.AddSingleton<IMajesticConfigSchema, MajesticConfigSchema>();
         services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
         services.AddSingleton<IDiscoverySource, OnvifDiscoverySource>();
         services.AddSingleton<IDiscoverySource, MdnsDiscoverySource>();

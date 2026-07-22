@@ -140,6 +140,48 @@ label input, label select { color:var(--text-1); }
 .cell:hover .expand { opacity:1; }
 .cell .expand:hover { background:var(--accent); }
 
+/* Digital zoom: the slot is scaled and dragged, the cell clips it (it already
+   has overflow:hidden). No transition — panning must track the pointer. */
+.cell .video-slot { transform-origin:center center; }
+.cell.zoomed { cursor:grab; }
+.cell.zoomed:active { cursor:grabbing; }
+.cell .zoom-pad { position:absolute; right:8px; top:8px; display:flex; gap:4px;
+  opacity:0; transition:opacity .15s; }
+.cell:hover .zoom-pad, .cell.zoomed .zoom-pad { opacity:1; }
+.cell .zoom-pad button { width:28px; height:28px; padding:0; display:flex;
+  align-items:center; justify-content:center; background:rgba(0,0,0,.55);
+  border:none; border-radius:var(--r-sm); color:#fff; line-height:1; }
+.cell .zoom-pad button:hover:not(:disabled) { background:var(--accent); }
+.cell .zoom-pad button:disabled { opacity:.35; }
+.cell .zoom-level { font-size:11px; font-variant-numeric:tabular-nums; }
+.cell .zoom-pad button:has(.zoom-level) { width:auto; padding:0 8px; }
+
+/* Stills mode: a JPEG in place of the <video>, framed the same way. */
+.cell img.still { position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; background:#000; display:block; }
+
+/* Kiosk: the wall fills the screen, everything else gets out of the way. The
+   grid gets explicit rows so the cells share the height instead of keeping
+   their 16:9 box and leaving a band of background under the wall. */
+/* Fixed rather than sized to the viewport: the mode has to cover the page even
+   when the fullscreen request was refused (embedded/iframed pages), and being
+   fixed makes the fullscreen case identical. */
+.stage.kiosk { position:fixed; inset:0; z-index:20; background:var(--bg0);
+  display:flex; flex-direction:column; padding:8px; box-sizing:border-box; }
+.stage.kiosk .videos { margin-top:0; flex:1; min-height:0; }
+.stage.kiosk .cell { aspect-ratio:auto; height:100%; }
+.stage.kiosk .videos.n4 { grid-template-rows:repeat(2,1fr); }
+.stage.kiosk .videos.n9 { grid-template-rows:repeat(3,1fr); }
+.stage.kiosk .videos.n16 { grid-template-rows:repeat(4,1fr); }
+.stage.kiosk .videos.n25 { grid-template-rows:repeat(5,1fr); }
+.stage.kiosk .pager { justify-content:center; margin-top:8px; }
+/* The kiosk's own controls: dim until pointed at, so a wall left running shows
+   only cameras. */
+.kiosk-bar { display:flex; align-items:center; gap:10px; justify-content:flex-end;
+  padding:0 0 8px; opacity:.15; transition:opacity .15s; }
+.kiosk-bar:hover { opacity:1; }
+.kiosk-bar label { display:flex; align-items:center; gap:6px; font-size:12px; }
+
 /* Login: centered card, no sidebar. */
 .login { max-width:340px; margin:12vh auto 0; padding:24px; }
 .login .card { background:var(--bg2); border:1px solid var(--border-weak);
@@ -190,7 +232,8 @@ label input, label select { color:var(--text-1); }
      of postage stamps is useless. Tiles keep their 16:9 box. */
   .videos.n9, .videos.n16, .videos.n25 { grid-template-columns:repeat(2,1fr); }
   .videos { gap:6px; }
-  .cell .expand { opacity:1; }   /* no hover on touch — always show */
+  .cell .expand, .cell .snap, .cell .listen, .cell .zoom-pad { opacity:1; }   /* no hover on touch — always show */
+  .kiosk-bar { opacity:1; }
 
   /* Wide list tables (the camera list) scroll sideways rather than squashing;
      narrow key/value tables (.details) stack instead — see below. */
@@ -241,3 +284,103 @@ label input, label select { color:var(--text-1); }
 .camera-picker { max-height:200px; overflow-y:auto; margin-top:8px; padding:8px;
   border:1px solid var(--border-weak); border-radius:var(--r-sm); background:var(--bg2);
   display:flex; flex-direction:column; gap:6px; }
+
+/* Snapshot: a second tile affordance next to fullscreen, and the viewer modal. */
+.cell .snap { position:absolute; right:42px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:14px; line-height:1; }
+.cell:hover .snap { opacity:1; }
+.cell .snap:hover { background:var(--accent); }
+.snapshot-modal { max-width:900px; }
+.snapshot-modal img { width:100%; height:auto; border-radius:var(--r-sm); background:#000; display:block; }
+.button-link { display:inline-block; padding:8px 10px; border:1px solid var(--accent);
+  border-radius:var(--r-sm); background:var(--accent); color:#fff; }
+.button-link:hover { background:var(--accent-hover); border-color:var(--accent-hover); text-decoration:none; }
+
+/* Archive player: the selected recording, above the list. */
+.player { margin-bottom:18px; }
+.player video { width:100%; max-height:60vh; background:#000; border-radius:var(--r-md); display:block; }
+
+/* Listen toggle — same affordance row as snapshot/fullscreen, shown only when
+   the stream actually carries an audio track. */
+.cell .listen { position:absolute; right:76px; bottom:8px; opacity:0; transition:opacity .15s;
+  width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); border:none; border-radius:var(--r-sm); color:#fff; font-size:13px; line-height:1; }
+.cell:hover .listen { opacity:1; }
+.cell .listen:hover { background:var(--accent); }
+
+/* Icons sit on the text baseline and take the surrounding colour; a button or
+   link that pairs one with a label gets the gap from .row. */
+.icon { flex:none; }
+button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
+
+/* Archive calendar: a month of days, shaded by how much was recorded. */
+.calendar { margin-bottom:18px; max-width:340px; }
+.calendar-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.calendar-head button { padding:5px 8px; }
+.calendar-month { flex:1; font-weight:500; text-transform:capitalize; }
+.calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.calendar-weekday { font-size:11px; color:var(--text-3); text-align:center; padding-bottom:2px; }
+.calendar-day { position:relative; aspect-ratio:1; padding:0; font-size:12px;
+  background:var(--bg2); border:1px solid transparent; border-radius:var(--r-sm); color:var(--text-3); }
+.calendar-day:disabled { opacity:.35; cursor:default; }
+.calendar-day.has-activity { background:var(--accent-tint); color:var(--text-1); cursor:pointer; }
+.calendar-day.has-activity:hover { border-color:var(--accent); }
+.calendar-day.today { border-color:var(--border-med); }
+.calendar-day.selected { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1 !important; }
+.calendar-dot { position:absolute; left:50%; bottom:4px; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:currentColor; opacity:.7; }
+
+/* Clip export controls under the archive player. */
+.export { flex-wrap:wrap; gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border-weak); }
+.button-link.disabled { opacity:.5; pointer-events:none; }
+
+/* Settings sub-tabs sit under the page title, not in the sidebar. */
+.settings-tabs { margin-bottom:18px; }
+.button-link.ghost { background:var(--bg2); border-color:var(--border-med); color:var(--text-1); }
+.button-link.ghost:hover { background:var(--bg3); border-color:var(--text-3); }
+
+/* Camera settings (Majestic). Dense two-column rows: the panel routinely lists
+   a hundred knobs, so a form-grid layout would be a mile of scrolling. */
+.majestic { border:1px solid var(--border-weak); border-radius:var(--r-md);
+  padding:16px; background:var(--bg1); }
+.majestic h3 { margin:0; font-size:13px; }
+.majestic h4 { margin:12px 0 6px; font-size:12px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:.04em; }
+.majestic .toolbar { margin-bottom:8px; }
+.majestic-block { border-top:1px solid var(--border-weak); padding-top:12px; margin-top:12px; }
+.majestic .filter { width:180px; }
+.fields { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:6px 16px; }
+/* flex-direction is explicit: the global `label` rule stacks its children, and a
+   knob row wants label and control side by side. */
+.field { display:flex; flex-direction:row; align-items:center; gap:8px; font-size:12px; min-height:28px; }
+.field .k { flex:1; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.field input[type=text], .field input[type=number], .field select { width:120px; }
+.field input[type=checkbox] { margin:0; }
+/* An edited-but-unsaved row, so "what am I about to send" is visible at a glance. */
+.field.modified .k { color:var(--accent); font-weight:600; }
+.field .restart { margin-left:4px; color:var(--warning); cursor:help; }
+.metrics td { font-size:12px; font-variant-numeric:tabular-nums; }
+.raw-json { width:100%; font-family:var(--font-mono, monospace); font-size:12px;
+  background:var(--bg0); color:var(--text-1); border:1px solid var(--border-weak);
+  border-radius:var(--r-sm); padding:8px; resize:vertical; }
+@media (max-width:700px) {
+  .fields { grid-template-columns:1fr; }
+  .majestic .filter { width:120px; }
+}
+
+/* Snapshot library: a thumbnail grid that keeps its rows even, and a caption
+   that never pushes the image around. */
+.gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+.shot { padding:0; border:1px solid var(--border-weak); border-radius:var(--r-md);
+  background:var(--bg2); overflow:hidden; display:flex; flex-direction:column; text-align:left; }
+.shot:hover { border-color:var(--accent); }
+.shot img { width:100%; aspect-ratio:16/9; object-fit:cover; background:#000; display:block; }
+.shot .cap { display:flex; flex-direction:column; gap:2px; padding:6px 8px; font-size:11px; }
+.shot .when { color:var(--text-1); font-variant-numeric:tabular-nums; }
+.shot .who { color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Push-to-talk: unmistakable while live, since it is an open microphone into
+   someone else's room. */
+.talk.on { background:var(--danger); border-color:var(--danger); color:#fff; }
+.talk.on:hover { border-color:var(--danger); }

@@ -21,7 +21,18 @@ internal static class LiveFfmpeg
             CreateNoWindow = true,
         };
 
-        var args = new List<string> { "-rtsp_transport", "tcp", "-fflags", "nobuffer", "-i", rtspUrl, "-an" };
+        var args = new List<string> { "-rtsp_transport", "tcp", "-fflags", "nobuffer", "-i", rtspUrl };
+
+        // Audio rides along in the same stream instead of getting its own ffmpeg
+        // session: AAC at 64 kbps is around a percent of the video bitrate, so
+        // carrying it for every viewer is cheaper than a second process for the
+        // one who unmutes — and nobody's picture restarts when they do. Tiles
+        // start muted; the browser needs that for autoplay anyway.
+        //
+        // Always re-encoded rather than copied: cameras emit G.711/PCM/Opus more
+        // often than AAC, and only AAC plays in MSE. With no audio track on the
+        // input ffmpeg simply ignores these.
+        args.AddRange(new[] { "-c:a", "aac", "-b:a", "64k", "-ac", "1" });
         if (transcode)
         {
             // Software H.264 (libopenh264 — the LGPL build has no libx264). Output
@@ -63,6 +74,9 @@ internal static class LiveFfmpeg
     }
 
     // Same bundled-then-PATH resolution as FfmpegSubprocessRecorder.
+    // Also used by the snapshot endpoint, which spawns its own one-shot ffmpeg.
+    public static string ResolveExecutable() => Resolve();
+
     private static string Resolve()
     {
         string? rid = null;

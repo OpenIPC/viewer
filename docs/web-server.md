@@ -12,6 +12,11 @@ LAN. No cloud, no extra services — one admin password and a port.
 * **Find cameras on the network** — ONVIF, mDNS and an opt-in subnet sweep, then
   add what you found without leaving the browser.
 * **PTZ** — pan/tilt/zoom and presets for cameras that support it.
+* **Snapshots** — grab a still from any camera and download it.
+* **Archive** — record a camera from the browser, then browse by calendar, play,
+  download, and export a marked fragment; seeking works because playback is a
+  ranged file response. Both heads write into the same folders and index, so a
+  clip recorded here shows up in the desktop app too.
 * **Users and permissions** — accounts with permission flags and, if you like, a
   per-user subset of cameras.
 * **H.264 over WebSocket** (fMP4 + MSE); H.265 is transcoded on the fly. One
@@ -66,6 +71,7 @@ there is no TLS at this layer; for anything beyond your trusted LAN, put it
 | Env var                       | Meaning                                          |
 |-------------------------------|--------------------------------------------------|
 | `OPENIPC_WEB_ADMIN_PASSWORD`  | Built-in admin password. Unset → random, logged on start. |
+| `OPENIPC_WEB_SEGMENT_SECONDS` | Length of one recording segment. Default 600 (10 min).   |
 
 ---
 
@@ -104,7 +110,7 @@ Out of the box there is one account: the built-in administrator from
 |----------------|---------------------------------------------------------------|
 | `watch live`   | see the camera list and live video                            |
 | `PTZ`          | move the camera and manage its presets                        |
-| `export`       | reserved for archive export                                   |
+| `export`       | cut and download a fragment of a recording                     |
 | `manage`       | everything that changes the installation — cameras, groups, layouts, discovery, backups, sessions, users |
 
 and, optionally, a **subset of cameras**: leave *All cameras* on for full access,

@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type CameraDto, type GroupDto } from '../api'
+import { api, ApiError, type CameraDto, type GroupDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { useAuth } from '../auth'
 import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
 import { PtzPad } from '../components/PtzPad'
+import { MajesticPanel } from '../components/MajesticPanel'
+import { TalkButton } from '../components/TalkButton'
 import { ConfirmModal } from '../components/Modals'
+import { SnapshotModal } from '../components/SnapshotModal'
 
 // Dedicated single-camera view: one large live tile plus the camera's details
 // and actions. This is the natural shape on a phone (you watch one camera at a
@@ -20,11 +24,43 @@ export function Camera() {
   const [groups, setGroups] = useState<GroupDto[]>([])
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [snapshot, setSnapshot] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [recordError, setRecordError] = useState<string | null>(null)
 
   const load = async () => {
     const [cams, grps] = await Promise.all([api.cameras(), api.groups()])
     setCamera(cams.find((c) => c.id === id) ?? null)
     setGroups(grps)
+    // Recording lives on the server, not in this tab: a clip someone else
+    // started must show as running here too.
+    try {
+      setRecording((await api.activeRecordings()).includes(id))
+    } catch {
+      setRecording(false)   // no archive permission — the button stays hidden anyway
+    }
+  }
+
+  const toggleRecording = async () => {
+    setBusy(true)
+    setRecordError(null)
+    try {
+      if (recording) await api.stopRecording(id)
+      else await api.startRecording(id)
+      setRecording(!recording)
+    } catch (e) {
+      // A camera that delivered nothing still stopped recording — say so, and
+      // don't leave the button claiming it's still running.
+      if (e instanceof ApiError && e.code === 'nothing_recorded') {
+        setRecording(false)
+        setRecordError(t('Recording.Nothing'))
+      } else {
+        setRecordError(t('Recording.Failed'))
+      }
+    } finally {
+      setBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -50,10 +86,23 @@ export function Camera() {
   return (
     <div className="wrap" style={{ maxWidth: 1000 }}>
       <div className="toolbar">
-        <Link to="/cameras" className="muted">
-          {t('Live.Back')}
+        <Link to="/cameras" className="muted row">
+          <Icon name="back" /> {t('Live.Back')}
         </Link>
         <h1 style={{ margin: 0, flex: 1 }}>{camera.name}</h1>
+        <button className="row" onClick={() => setSnapshot(true)}>
+          <Icon name="camera" /> {t('Snapshot.Take')}
+        </button>
+        {can('Manage') && (
+          <button
+            className={'row' + (recording ? ' danger' : '')}
+            disabled={busy}
+            onClick={() => void toggleRecording()}
+          >
+            <Icon name={recording ? 'stop' : 'record'} />{' '}
+            {recording ? t('Recording.Stop') : t('Recording.Start')}
+          </button>
+        )}
         {can('Manage') && (
           <>
             <button onClick={() => setEditing(true)}>{t('Cameras.Edit')}</button>
@@ -64,15 +113,38 @@ export function Camera() {
         )}
       </div>
 
+      {recordError && <p className="err">{recordError}</p>}
+
       <div className="videos n1">
         <LiveTile key={camera.id} camera={camera} />
       </div>
+
+      {/* A camera that ONVIF probed and reported no speaker is a definite no;
+          anything else is worth offering, and the press finds out for sure. */}
+      {can('Talk') && !(camera.onvifEnabled && !camera.hasAudioOut) && (
+        <>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Talk.Title')}</h2>
+          <TalkButton cameraId={camera.id} />
+        </>
+      )}
 
       {camera.ptzReady && can('Ptz') && (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Ptz.Title')}</h2>
           <PtzPad cameraId={camera.id} />
         </>
+      )}
+
+      {/* Camera settings are Manage-only on the server (config.json carries the
+          camera's own logins), so don't even offer the panel otherwise. The
+          isMajestic flag is NOT the gate: a hand-added camera doesn't have it
+          until something probes it, which is exactly what the panel's first
+          request does. It renders nothing when the camera turns out not to
+          run Majestic. */}
+      {can('Manage') && (
+        <div style={{ marginTop: 24 }}>
+          <MajesticPanel cameraId={camera.id} />
+        </div>
       )}
 
       <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Camera.Details')}</h2>
@@ -118,6 +190,9 @@ export function Camera() {
             void load()
           }}
         />
+      )}
+      {snapshot && (
+        <SnapshotModal cameraId={camera.id} cameraName={camera.name} onClose={() => setSnapshot(false)} />
       )}
       {deleting && (
         <ConfirmModal

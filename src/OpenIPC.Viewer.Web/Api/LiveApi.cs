@@ -74,24 +74,58 @@ public static class LiveApi
 
     private static async Task PumpAsync(WebSocket socket, LiveSubscription subscription, CancellationToken ct)
     {
+        // A viewer leaving closes the socket, which arrives as a close *frame* —
+        // and a frame is only seen by someone receiving. Without this loop the
+        // send side keeps writing into a socket the browser has already given
+        // up on, so the shared ffmpeg process outlives its last viewer (a grid
+        // switched to stills mode, or a tab navigated away, would leave one
+        // running per camera). We never expect data from the client, so the
+        // first receive to complete means "gone" either way.
+        using var leaving = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var watchClose = WatchForCloseAsync(socket, leaving);
+
         try
         {
-            await foreach (var chunk in subscription.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            await foreach (var chunk in subscription.Reader.ReadAllAsync(leaving.Token).ConfigureAwait(false))
             {
                 if (socket.State != WebSocketState.Open)
                     break;
-                await socket.SendAsync(chunk, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
+                await socket.SendAsync(chunk, WebSocketMessageType.Binary, endOfMessage: true, leaving.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception) { /* socket closed by the viewer — normal */ }
         finally
         {
+            leaving.Cancel();
+            try { await watchClose.ConfigureAwait(false); } catch { /* best effort */ }
             if (socket.State == WebSocketState.Open)
             {
                 try { await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "stream ended", CancellationToken.None); }
                 catch { /* best effort */ }
             }
+        }
+    }
+
+    // Reads until the client closes (or errors), then trips the token so the
+    // send loop stops and the subscription is disposed.
+    private static async Task WatchForCloseAsync(WebSocket socket, CancellationTokenSource leaving)
+    {
+        var scratch = new byte[256];
+        try
+        {
+            while (socket.State == WebSocketState.Open)
+            {
+                var result = await socket.ReceiveAsync(scratch, leaving.Token).ConfigureAwait(false);
+                if (result.MessageType == WebSocketMessageType.Close)
+                    break;
+            }
+        }
+        catch (OperationCanceledException) { /* we're the ones shutting down */ }
+        catch (Exception) { /* connection gone — same outcome */ }
+        finally
+        {
+            try { leaving.Cancel(); } catch (ObjectDisposedException) { /* already torn down */ }
         }
     }
 

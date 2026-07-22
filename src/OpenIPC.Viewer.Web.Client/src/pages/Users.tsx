@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { api, ApiError, type CameraDto, type WebUserDto } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 import { ConfirmModal } from '../components/Modals'
 
 // Web console accounts: who may sign in, what they may do, and which cameras
 // they see. Mirrors the desktop access-config model (permission flags + camera
 // subset) so the two stay conceptually the same product feature.
-const PERMISSIONS = ['ViewLive', 'Ptz', 'Export', 'Manage'] as const
+// Every flag the server knows. ViewArchive was missing here, which quietly made
+// the archive ungrantable to anyone created from the web console.
+const PERMISSIONS = ['ViewLive', 'ViewArchive', 'Ptz', 'Talk', 'Export', 'Manage'] as const
 
 export function Users() {
   const { t } = useI18n()
@@ -35,8 +38,8 @@ export function Users() {
     <div className="wrap" style={{ maxWidth: 900 }}>
       <div className="toolbar">
         <h1 style={{ margin: 0, flex: 1 }}>{t('Users.Title')}</h1>
-        <button className="primary" disabled={!available} onClick={() => setEditing('new')}>
-          {t('Users.Add')}
+        <button className="primary row" disabled={!available} onClick={() => setEditing('new')}>
+          <Icon name="plus" /> {t('Users.Add')}
         </button>
       </div>
 

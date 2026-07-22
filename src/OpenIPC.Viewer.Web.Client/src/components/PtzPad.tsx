@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type PtzPresetDto } from '../api'
 import { useI18n } from '../i18n'
+import { Icon } from './Icon'
 
 // Hold-to-move PTZ controls plus presets.
 //
@@ -125,22 +126,22 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
   return (
     <div className="ptz">
       <div className="ptz-pad">
-        <button {...hold({ panX: -1, tiltY: 1 })} title={t('Ptz.UpLeft')}>↖</button>
-        <button {...hold({ tiltY: 1 })} title={t('Ptz.Up')}>↑</button>
-        <button {...hold({ panX: 1, tiltY: 1 })} title={t('Ptz.UpRight')}>↗</button>
-        <button {...hold({ panX: -1 })} title={t('Ptz.Left')}>←</button>
-        <button onClick={() => void stop()} title={t('Ptz.Stop')}>■</button>
-        <button {...hold({ panX: 1 })} title={t('Ptz.Right')}>→</button>
-        <button {...hold({ panX: -1, tiltY: -1 })} title={t('Ptz.DownLeft')}>↙</button>
-        <button {...hold({ tiltY: -1 })} title={t('Ptz.Down')}>↓</button>
-        <button {...hold({ panX: 1, tiltY: -1 })} title={t('Ptz.DownRight')}>↘</button>
+        <button {...hold({ panX: -1, tiltY: 1 })} title={t('Ptz.UpLeft')}><Icon name="arrowUpLeft" size={18} /></button>
+        <button {...hold({ tiltY: 1 })} title={t('Ptz.Up')}><Icon name="chevronUp" size={18} /></button>
+        <button {...hold({ panX: 1, tiltY: 1 })} title={t('Ptz.UpRight')}><Icon name="arrowUpRight" size={18} /></button>
+        <button {...hold({ panX: -1 })} title={t('Ptz.Left')}><Icon name="chevronLeft" size={18} /></button>
+        <button onClick={() => void stop()} title={t('Ptz.Stop')}><Icon name="stop" size={18} /></button>
+        <button {...hold({ panX: 1 })} title={t('Ptz.Right')}><Icon name="chevronRight" size={18} /></button>
+        <button {...hold({ panX: -1, tiltY: -1 })} title={t('Ptz.DownLeft')}><Icon name="arrowDownLeft" size={18} /></button>
+        <button {...hold({ tiltY: -1 })} title={t('Ptz.Down')}><Icon name="chevronDown" size={18} /></button>
+        <button {...hold({ panX: 1, tiltY: -1 })} title={t('Ptz.DownRight')}><Icon name="arrowDownRight" size={18} /></button>
       </div>
 
       <div className="ptz-side">
         <div className="ptz-zoom">
-          <button {...hold({ zoom: 1 })} title={t('Ptz.ZoomIn')}>＋</button>
+          <button {...hold({ zoom: 1 })} title={t('Ptz.ZoomIn')}><Icon name="plus" size={18} /></button>
           <span className="muted">{t('Ptz.Zoom')}</span>
-          <button {...hold({ zoom: -1 })} title={t('Ptz.ZoomOut')}>－</button>
+          <button {...hold({ zoom: -1 })} title={t('Ptz.ZoomOut')}><Icon name="minus" size={18} /></button>
         </div>
 
         <label>
@@ -177,7 +178,7 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
                   )
                 }
               >
-                ×
+                <Icon name="x" size={13} />
               </button>
             </span>
           ))}
