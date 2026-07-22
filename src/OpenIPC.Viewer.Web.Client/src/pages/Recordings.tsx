@@ -5,6 +5,7 @@ import { useI18n } from '../i18n'
 import { Icon } from '../components/Icon'
 import { ConfirmModal } from '../components/Modals'
 import { ArchiveCalendar, dayRange, monthRange } from '../components/ArchiveCalendar'
+import { ArchiveTabs } from '../components/ArchiveTabs'
 
 // The recorded archive: what the desktop head wrote, listed newest-first and
 // played in place. Playback is a plain <video> against a ranged endpoint, so
@@ -66,8 +67,10 @@ export function Recordings() {
 
   return (
     <div className="wrap" style={{ maxWidth: 1000 }}>
+      <h1>{t('Nav.Recordings')}</h1>
+      <ArchiveTabs />
       <div className="toolbar">
-        <h1 style={{ margin: 0, flex: 1 }}>{t('Recordings.Title')}</h1>
+        <span style={{ flex: 1 }} />
         <select value={cameraId} onChange={(e) => setCameraId(e.target.value)}>
           <option value="">{t('Recordings.AllCameras')}</option>
           {cameras.map((c) => (

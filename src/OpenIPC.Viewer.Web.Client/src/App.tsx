@@ -10,6 +10,7 @@ import { Discovery } from './pages/Discovery'
 import { Users } from './pages/Users'
 import { RequireManage, Settings, SettingsIndex } from './pages/Settings'
 import { Recordings } from './pages/Recordings'
+import { Snapshots } from './pages/Snapshots'
 import { Groups } from './pages/Groups'
 import { System } from './pages/System'
 
@@ -34,6 +35,7 @@ export function App() {
         <Route path="/camera/:id" element={<Camera />} />
         <Route path="/grid" element={<Grid />} />
         <Route path="/recordings" element={<Recordings />} />
+        <Route path="/snapshots" element={<Snapshots />} />
         <Route
           path="/discovery"
           element={

@@ -368,3 +368,14 @@ button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
   .fields { grid-template-columns:1fr; }
   .majestic .filter { width:120px; }
 }
+
+/* Snapshot library: a thumbnail grid that keeps its rows even, and a caption
+   that never pushes the image around. */
+.gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+.shot { padding:0; border:1px solid var(--border-weak); border-radius:var(--r-md);
+  background:var(--bg2); overflow:hidden; display:flex; flex-direction:column; text-align:left; }
+.shot:hover { border-color:var(--accent); }
+.shot img { width:100%; aspect-ratio:16/9; object-fit:cover; background:#000; display:block; }
+.shot .cap { display:flex; flex-direction:column; gap:2px; padding:6px 8px; font-size:11px; }
+.shot .when { color:var(--text-1); font-variant-numeric:tabular-nums; }
+.shot .who { color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

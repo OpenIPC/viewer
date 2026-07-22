@@ -74,6 +74,18 @@ export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
 
+// A snapshot kept in the shared library (same rows the desktop browser reads).
+export type SnapshotDto = {
+  id: string
+  cameraId: string
+  cameraName: string | null
+  takenAt: string
+  width: number
+  height: number
+  hasThumb: boolean
+  source: string
+}
+
 // A Majestic config.json, flattened by the server into whatever scalar knobs the
 // live config actually exposes — the schema drifts between firmware builds, so
 // nothing here is a fixed field list.
@@ -263,6 +275,23 @@ export const api = {
   // otherwise one ffmpeg pull). Used as an <img> src and as a download target,
   // so it's a URL rather than a fetch wrapper.
   snapshotUrl: (id: string) => `/api/v1/cameras/${id}/snapshot`,
+
+  // Keep a still: captured the same way as the preview above, but written into
+  // the shared library so the desktop gallery sees it too.
+  saveSnapshot: (cameraId: string) => req<SnapshotDto>('POST', `/api/v1/cameras/${cameraId}/snapshots`),
+  snapshots: (q: { cameraId?: string; offset?: number; limit?: number } = {}) => {
+    const p = new URLSearchParams()
+    if (q.cameraId) p.set('cameraId', q.cameraId)
+    if (q.offset) p.set('offset', String(q.offset))
+    if (q.limit) p.set('limit', String(q.limit))
+    const qs = p.toString()
+    return req<{ total: number; offset: number; limit: number; items: SnapshotDto[] }>(
+      'GET', '/api/v1/snapshots' + (qs ? '?' + qs : ''))
+  },
+  // A URL rather than a fetch: these are <img> sources and download targets.
+  snapshotImageUrl: (id: string, thumb = false, download = false) =>
+    `/api/v1/snapshots/${id}/image` + (thumb ? '?thumb=true' : download ? '?download=true' : ''),
+  deleteSnapshot: (id: string) => req<void>('DELETE', `/api/v1/snapshots/${id}`),
 
   // PTZ. Movement is stateless on the server: each move carries a self-stop
   // timeout, so the caller must repeat it while a direction is held (see PtzPad)

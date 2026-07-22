@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Majestic;
 using OpenIPC.Viewer.Core.Services;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Web.Auth;
 using static OpenIPC.Viewer.Web.Api.ApiHelpers;
 
@@ -54,8 +55,7 @@ public static class SnapshotApi
             var credentials = await dir.GetCredentialsAsync(camera.Id, ct);
             var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web.Snapshot");
 
-            var jpeg = await TryMajesticAsync(ctx, camera, credentials, logger, ct)
-                ?? await TryFfmpegAsync(camera, credentials, logger, ct);
+            var (jpeg, _) = await CaptureAsync(ctx, camera, credentials, logger, ct);
 
             if (jpeg is null || jpeg.Length == 0)
                 return Results.Json(new { error = "snapshot_failed" }, statusCode: StatusCodes.Status502BadGateway);
@@ -65,6 +65,23 @@ public static class SnapshotApi
             ctx.Response.Headers.CacheControl = "no-store";
             return Results.File(jpeg, "image/jpeg");
         });
+    }
+
+    // One capture path for both callers — the transient still above and the
+    // kept one in SnapshotLibraryApi — so the library never ends up with a
+    // different (worse) picture than the preview the viewer just approved. The
+    // source travels with the bytes because the row records it: an HD-always
+    // snapshot must never claim it came off the substream.
+    internal static async Task<(byte[]? Jpeg, SnapshotSource Source)> CaptureAsync(
+        HttpContext ctx, Camera camera, CameraCredentials? credentials, ILogger logger, CancellationToken ct)
+    {
+        var majestic = await TryMajesticAsync(ctx, camera, credentials, logger, ct);
+        if (majestic is { Length: > 0 })
+            return (majestic, SnapshotSource.HttpSnapshot);
+
+        // ffmpeg pulls one keyframe off the mainstream — the same thing the
+        // desktop calls OpenedStream.
+        return (await TryFfmpegAsync(camera, credentials, logger, ct), SnapshotSource.OpenedStream);
     }
 
     private static async Task<byte[]?> TryMajesticAsync(

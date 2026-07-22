@@ -7,6 +7,7 @@ using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Settings;
+using OpenIPC.Viewer.Core.Snapshots;
 using OpenIPC.Viewer.Devices.Discovery;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
@@ -38,6 +39,10 @@ public static class WebBackend
         // Recording started from the browser: its own ffmpeg process per camera,
         // writing into the same folder and table the desktop head uses.
         services.AddSingleton<WebRecorder>();
+        // Kept snapshots share the desktop's library: same folder layout, same
+        // table. SnapshotService itself can't be reused (it needs the Video
+        // layer), so SnapshotLibraryApi writes the rows against this repo.
+        services.AddSingleton<ISnapshotRepository, SqliteSnapshotRepository>();
         // Browser-safe config export/import (never serializes camera passwords).
         services.AddSingleton<IConfigBackupService, SqliteConfigBackupService>();
         // CRUD goes through the directory service so credentials land in the
