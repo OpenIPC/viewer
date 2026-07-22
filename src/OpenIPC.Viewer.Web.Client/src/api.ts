@@ -58,6 +58,10 @@ export type RecordingDto = {
   playable: boolean
 }
 
+// One dot on the archive calendar. Deliberately minimal: the browser groups
+// these into days in its own time zone.
+export type CalendarPointDto = { startedAt: string; sizeBytes: number }
+
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
@@ -142,6 +146,12 @@ export class ApiError extends Error {
   }
 }
 
+// Drops empty values so the URL only carries the filters that are actually set.
+function query(params: Record<string, string | undefined>): string {
+  const pairs = Object.entries(params).filter(([, v]) => v)
+  return pairs.length ? '?' + new URLSearchParams(pairs as [string, string][]).toString() : ''
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -192,8 +202,10 @@ export const api = {
 
   // The recorded archive. Playback is a ranged file response, so the URL goes
   // straight into a <video> and the browser does its own seeking.
-  recordings: (cameraId?: string) =>
-    req<RecordingDto[]>('GET', '/api/v1/recordings' + (cameraId ? `?cameraId=${cameraId}` : '')),
+  recordings: (filter: { cameraId?: string; from?: string; to?: string } = {}) =>
+    req<RecordingDto[]>('GET', '/api/v1/recordings' + query(filter)),
+  recordingCalendar: (filter: { cameraId?: string; from?: string; to?: string } = {}) =>
+    req<CalendarPointDto[]>('GET', '/api/v1/recordings/calendar' + query(filter)),
   recordingStreamUrl: (id: string, download = false) =>
     `/api/v1/recordings/${id}/stream` + (download ? '?download=true' : ''),
   deleteRecording: (id: string) => req<void>('DELETE', `/api/v1/recordings/${id}`),

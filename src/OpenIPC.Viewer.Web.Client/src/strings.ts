@@ -191,6 +191,11 @@ export const EN: Dict = {
   'Recording.Nothing': 'The camera sent nothing — no clip was saved.',
   'Recording.Failed': 'Could not start recording.',
 
+  'Archive.PrevMonth': 'Previous month',
+  'Archive.NextMonth': 'Next month',
+  'Archive.ClearDay': 'Whole archive',
+  'Archive.EmptyDay': 'Nothing recorded on this day.',
+
   'Recordings.Title': 'Archive',
   'Recordings.AllCameras': 'All cameras',
   'Recordings.Empty': 'Nothing recorded yet. Recording is started from the desktop app.',
@@ -391,6 +396,11 @@ export const RU: Dict = {
   'Recording.Active': 'идёт запись',
   'Recording.Nothing': 'Камера ничего не передала — запись не сохранена.',
   'Recording.Failed': 'Не удалось начать запись.',
+
+  'Archive.PrevMonth': 'Предыдущий месяц',
+  'Archive.NextMonth': 'Следующий месяц',
+  'Archive.ClearDay': 'Весь архив',
+  'Archive.EmptyDay': 'В этот день ничего не записано.',
 
   'Recordings.Title': 'Архив',
   'Recordings.AllCameras': 'Все камеры',

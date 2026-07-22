@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { api, type CameraDto, type RecordingDto } from '../api'
+import { api, type CalendarPointDto, type CameraDto, type RecordingDto } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { Icon } from '../components/Icon'
 import { ConfirmModal } from '../components/Modals'
+import { ArchiveCalendar, dayRange, monthRange } from '../components/ArchiveCalendar'
 
 // The recorded archive: what the desktop head wrote, listed newest-first and
 // played in place. Playback is a plain <video> against a ranged endpoint, so
@@ -14,22 +15,31 @@ export function Recordings() {
   const [items, setItems] = useState<RecordingDto[] | null>(null)
   const [cameras, setCameras] = useState<CameraDto[]>([])
   const [cameraId, setCameraId] = useState('')
+  const [month, setMonth] = useState(() => new Date())
+  const [day, setDay] = useState<string | null>(null)
+  const [points, setPoints] = useState<CalendarPointDto[]>([])
   const [playing, setPlaying] = useState<RecordingDto | null>(null)
   const [deleting, setDeleting] = useState<RecordingDto | null>(null)
 
-  const load = async (filter: string) => {
-    const [list, cams] = await Promise.all([
-      api.recordings(filter || undefined),
+  // The list shows the selected day (or everything when none is picked); the
+  // calendar always shows the whole displayed month, so the dots stay put while
+  // you click around inside it.
+  const load = async () => {
+    const range = day ? dayRange(day) : {}
+    const [list, dots, cams] = await Promise.all([
+      api.recordings({ cameraId: cameraId || undefined, ...range }),
+      api.recordingCalendar({ cameraId: cameraId || undefined, ...monthRange(month) }),
       cameras.length ? Promise.resolve(cameras) : api.cameras(),
     ])
     setItems(list)
+    setPoints(dots)
     setCameras(cams)
   }
 
   useEffect(() => {
-    void load(cameraId)
+    void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraId])
+  }, [cameraId, day, month])
 
   if (items === null) return <div className="spin">{t('Common.Loading')}</div>
 
@@ -46,6 +56,17 @@ export function Recordings() {
           ))}
         </select>
       </div>
+
+      <ArchiveCalendar
+        month={month}
+        points={points}
+        selected={day}
+        onPickMonth={(next) => {
+          setMonth(next)
+          setDay(null)   // a day from the old month would filter to nothing
+        }}
+        onPickDay={setDay}
+      />
 
       {playing && (
         <div className="player">
@@ -65,7 +86,7 @@ export function Recordings() {
       )}
 
       {items.length === 0 ? (
-        <p className="muted">{t('Recordings.Empty')}</p>
+        <p className="muted">{day ? t('Archive.EmptyDay') : t('Recordings.Empty')}</p>
       ) : (
         <table className="list">
           <thead>
@@ -125,7 +146,7 @@ export function Recordings() {
             setDeleting(null)
             if (playing?.id === target.id) setPlaying(null)
             await api.deleteRecording(target.id)
-            await load(cameraId)
+            await load()
           }}
           onCancel={() => setDeleting(null)}
         />

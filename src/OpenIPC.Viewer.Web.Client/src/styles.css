@@ -270,3 +270,20 @@ label input, label select { color:var(--text-1); }
    link that pairs one with a label gets the gap from .row. */
 .icon { flex:none; }
 button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
+
+/* Archive calendar: a month of days, shaded by how much was recorded. */
+.calendar { margin-bottom:18px; max-width:340px; }
+.calendar-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.calendar-head button { padding:5px 8px; }
+.calendar-month { flex:1; font-weight:500; text-transform:capitalize; }
+.calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.calendar-weekday { font-size:11px; color:var(--text-3); text-align:center; padding-bottom:2px; }
+.calendar-day { position:relative; aspect-ratio:1; padding:0; font-size:12px;
+  background:var(--bg2); border:1px solid transparent; border-radius:var(--r-sm); color:var(--text-3); }
+.calendar-day:disabled { opacity:.35; cursor:default; }
+.calendar-day.has-activity { background:var(--accent-tint); color:var(--text-1); cursor:pointer; }
+.calendar-day.has-activity:hover { border-color:var(--accent); }
+.calendar-day.today { border-color:var(--border-med); }
+.calendar-day.selected { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1 !important; }
+.calendar-dot { position:absolute; left:50%; bottom:4px; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:currentColor; opacity:.7; }

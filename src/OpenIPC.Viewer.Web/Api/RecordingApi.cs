@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -30,7 +31,8 @@ public static class RecordingApi
 {
     public static void MapRecordingEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/v1/recordings", async (string? cameraId, int? limit, HttpContext ctx, CancellationToken ct) =>
+        app.MapGet("/api/v1/recordings", async (
+            string? cameraId, string? from, string? to, int? limit, HttpContext ctx, CancellationToken ct) =>
         {
             if (ctx.Deny(WebPermission.ViewArchive) is { } denied)
                 return denied;
@@ -46,11 +48,15 @@ public static class RecordingApi
                 filter = new CameraId(guid);
             }
 
+            if (!TryParseRange(from, to, out var since, out var until))
+                return ValidationError("from/to must be ISO-8601 timestamps");
+
             var names = await LoadCameraNamesAsync(ctx, ct);
             var recordings = (await repo.ListAsync(filter, ct))
                 // Same rule as everywhere else: a camera outside the caller's
                 // subset doesn't exist for them, and neither does its archive.
                 .Where(r => ctx.CanSeeCamera(r.CameraId.ToString()))
+                .Where(r => InRange(r.StartedAt, since, until))
                 .OrderByDescending(r => r.StartedAt)
                 .Take(limit is > 0 and <= 500 ? limit.Value : 200)
                 .Select(r => Describe(r, names))
@@ -76,6 +82,44 @@ public static class RecordingApi
             return download == true
                 ? Results.File(stream, "video/mp4", Path.GetFileName(path), enableRangeProcessing: true)
                 : Results.File(stream, "video/mp4", enableRangeProcessing: true);
+        });
+
+        // Just the timestamps, for drawing a calendar.
+        //
+        // Aggregation happens in the browser, not here: which day a recording
+        // belongs to depends on the VIEWER's time zone, and a web client may sit
+        // in a different one than the server. Core's CalendarActivity does the
+        // same job for the desktop, where the two are the same machine — its own
+        // comment warns that mixing zones is the classic bug, so the boundary is
+        // drawn where the answer is unambiguous.
+        app.MapGet("/api/v1/recordings/calendar", async (
+            string? cameraId, string? from, string? to, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (ctx.Deny(WebPermission.ViewArchive) is { } denied)
+                return denied;
+            var repo = ctx.RequestServices.GetService<IRecordingRepository>();
+            if (repo is null)
+                return BackendUnavailable();
+
+            CameraId? filter = null;
+            if (!string.IsNullOrEmpty(cameraId))
+            {
+                if (!Guid.TryParse(cameraId, out var guid))
+                    return ValidationError("invalid camera id");
+                filter = new CameraId(guid);
+            }
+            if (!TryParseRange(from, to, out var since, out var until))
+                return ValidationError("from/to must be ISO-8601 timestamps");
+
+            var days = (await repo.ListAsync(filter, ct))
+                .Where(r => ctx.CanSeeCamera(r.CameraId.ToString()))
+                .Where(r => InRange(r.StartedAt, since, until))
+                .OrderBy(r => r.StartedAt)
+                .Take(CalendarPointCap)
+                .Select(r => new { startedAt = r.StartedAt, sizeBytes = r.SizeBytes })
+                .ToList();
+
+            return Results.Json(days);
         });
 
         // Start / stop, plus who is recording right now so the UI can show it
@@ -170,6 +214,33 @@ public static class RecordingApi
             return Results.NoContent();
         });
     }
+
+    // A month of a busy install is still small; the cap only stops a pathological
+    // range from serialising the entire archive.
+    private const int CalendarPointCap = 5000;
+
+    private static bool TryParseRange(string? from, string? to, out DateTime? since, out DateTime? until)
+    {
+        since = until = null;
+        if (!string.IsNullOrEmpty(from))
+        {
+            if (!DateTime.TryParse(from, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                return false;
+            since = parsed;
+        }
+        if (!string.IsNullOrEmpty(to))
+        {
+            if (!DateTime.TryParse(to, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                return false;
+            until = parsed;
+        }
+        return true;
+    }
+
+    // Inclusive lower bound, exclusive upper — so a caller can ask for one day
+    // with [midnight, next midnight) and not double-count the boundary.
+    private static bool InRange(DateTime startedAtUtc, DateTime? since, DateTime? until) =>
+        (since is null || startedAtUtc >= since) && (until is null || startedAtUtc < until);
 
     // Credentials live in the secrets store, not in the stored URI.
     private static string BuildRtspUrl(Uri baseUri, CameraCredentials? credentials)
