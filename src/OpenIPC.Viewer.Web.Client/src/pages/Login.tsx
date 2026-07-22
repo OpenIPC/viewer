@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { ApiError } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { Logo } from '../components/Logo'
 
 export function Login() {
   const { login } = useAuth()
@@ -27,7 +28,10 @@ export function Login() {
 
   return (
     <div className="login">
-      <h1 style={{ textAlign: 'center' }}>OpenIPC Viewer</h1>
+      <div className="login-brand">
+        <Logo size={56} />
+        <h1>OpenIPC Viewer</h1>
+      </div>
       <div className="card">
         <p className="muted" style={{ marginTop: 0 }}>
           {t('Login.Subtitle')}

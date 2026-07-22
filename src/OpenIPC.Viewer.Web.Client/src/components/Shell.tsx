@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { Logo } from './Logo'
 import type { ReactNode } from 'react'
 
 // The persistent app frame: fixed left sidebar + routed content. Markup/skin
@@ -20,7 +21,7 @@ export function Shell() {
     <div className="shell">
       <nav className="sidebar">
         <div className="brand">
-          <span className="dot" /> OpenIPC
+          <Logo size={20} /> OpenIPC
         </div>
 
         <NavItem to="/grid" label={t('Nav.Grid')}>

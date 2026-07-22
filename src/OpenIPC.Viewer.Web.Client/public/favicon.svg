@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Browser-tab icon: the OpenIPC aperture mark on the brand indigo tile,
+       same geometry as src/components/Logo.tsx / the desktop app icon. -->
+  <rect width="100" height="100" rx="22" fill="#5B6CD9"/>
+  <g fill="none" stroke="#fff" stroke-width="9" transform="translate(50 50) scale(0.78) translate(-50 -50)">
+    <path d="M33,29 L5,50 L33,71" stroke-linejoin="round"/>
+    <path d="M67,29 L95,50 L67,71" stroke-linejoin="round"/>
+    <path d="M37,27 C43,12 57,12 63,27" stroke-linecap="round"/>
+    <path d="M37,73 C43,88 57,88 63,73" stroke-linecap="round"/>
+    <circle cx="50" cy="50" r="13" fill="#fff" stroke="none"/>
+  </g>
+</svg>
