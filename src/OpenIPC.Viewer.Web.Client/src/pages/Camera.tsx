@@ -7,6 +7,7 @@ import { useAuth } from '../auth'
 import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
 import { PtzPad } from '../components/PtzPad'
+import { MajesticPanel } from '../components/MajesticPanel'
 import { ConfirmModal } from '../components/Modals'
 import { SnapshotModal } from '../components/SnapshotModal'
 
@@ -122,6 +123,18 @@ export function Camera() {
           <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Ptz.Title')}</h2>
           <PtzPad cameraId={camera.id} />
         </>
+      )}
+
+      {/* Camera settings are Manage-only on the server (config.json carries the
+          camera's own logins), so don't even offer the panel otherwise. The
+          isMajestic flag is NOT the gate: a hand-added camera doesn't have it
+          until something probes it, which is exactly what the panel's first
+          request does. It renders nothing when the camera turns out not to
+          run Majestic. */}
+      {can('Manage') && (
+        <div style={{ marginTop: 24 }}>
+          <MajesticPanel cameraId={camera.id} />
+        </div>
       )}
 
       <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Camera.Details')}</h2>

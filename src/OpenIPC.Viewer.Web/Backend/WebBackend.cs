@@ -60,6 +60,9 @@ public static class WebBackend
         services.AddSingleton<INetworkInterfaceProvider, SystemNetworkInterfaceProvider>();
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
         services.AddSingleton<IMajesticClient, MajesticHttpClient>();
+        // The camera-settings panel renders whatever knobs the live config.json
+        // exposes, so it needs the same schema walk the desktop editor uses.
+        services.AddSingleton<IMajesticConfigSchema, MajesticConfigSchema>();
         services.AddSingleton<IDiscoveryService, WsDiscoveryService>();
         services.AddSingleton<IDiscoverySource, OnvifDiscoverySource>();
         services.AddSingleton<IDiscoverySource, MdnsDiscoverySource>();

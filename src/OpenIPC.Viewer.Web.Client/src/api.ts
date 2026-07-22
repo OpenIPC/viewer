@@ -74,6 +74,27 @@ export type GroupDto = { id: number; name: string; sortOrder: number }
 
 export type PtzPresetDto = { token: string; name: string }
 
+// A Majestic config.json, flattened by the server into whatever scalar knobs the
+// live config actually exposes — the schema drifts between firmware builds, so
+// nothing here is a fixed field list.
+export type MajesticFieldDto = {
+  path: string
+  section: string
+  key: string
+  kind: 'string' | 'bool' | 'int' | 'number' | 'enum'
+  value: string
+  options: string[] | null
+  // Changing this one restarts the video pipeline (the tile will blink).
+  restart: boolean
+}
+
+export type MajesticDto = {
+  info: { model: string | null; firmware: string | null; chip: string | null; uptime: string | null } | null
+  nightMode: 'unknown' | 'day' | 'night' | 'auto'
+  sections: { name: string; fields: MajesticFieldDto[] }[]
+  rawJson: string
+}
+
 export type LayoutDto = {
   id: number
   name: string
@@ -256,6 +277,20 @@ export const api = {
     req<void>('POST', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}/goto`),
   ptzDeletePreset: (id: string, token: string) =>
     req<void>('DELETE', `/api/v1/cameras/${id}/ptz/presets/${encodeURIComponent(token)}`),
+
+  // Camera settings (Majestic config.json). Manage-only on the server, reads
+  // included: the config carries the camera's own logins.
+  majestic: (id: string) => req<MajesticDto>('GET', `/api/v1/cameras/${id}/majestic`),
+  // Only changed fields travel; the server re-reads the camera's config and
+  // applies them onto it, so a stale tab can't revert someone else's edit.
+  majesticApply: (id: string, edits: { path: string; value: string }[]) =>
+    req<{ applied: number; restart: boolean }>('POST', `/api/v1/cameras/${id}/majestic/config`, { edits }),
+  majesticRaw: (id: string, json: string) =>
+    req<void>('POST', `/api/v1/cameras/${id}/majestic/raw`, { json }),
+  majesticNight: (id: string, mode: 'day' | 'night' | 'auto') =>
+    req<void>('POST', `/api/v1/cameras/${id}/majestic/night`, { mode }),
+  majesticMetrics: (id: string) =>
+    req<{ name: string; value: number }[]>('GET', `/api/v1/cameras/${id}/majestic/metrics`),
 
   system: () =>
     req<{ version: string; cameras: number; groups: number; sessions: number; streams: number }>(

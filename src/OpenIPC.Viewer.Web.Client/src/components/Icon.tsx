@@ -43,6 +43,12 @@ const PATHS: Record<string, ReactNode> = {
   ),
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,
+  refresh: (
+    <>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </>
+  ),
   chevronUp: <path d="M5 15l7-7 7 7" />,
   chevronDown: <path d="M5 9l7 7 7-7" />,
   arrowUpLeft: <path d="M17 17L7 7M7 7v7M7 7h7" />,
