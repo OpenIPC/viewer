@@ -8,6 +8,8 @@ using OpenIPC.Viewer.Core.Recording;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Settings;
 using OpenIPC.Viewer.Core.Snapshots;
+using OpenIPC.Viewer.Core.Video;
+using OpenIPC.Viewer.Devices.Backchannel;
 using OpenIPC.Viewer.Devices.Discovery;
 using OpenIPC.Viewer.Devices.Majestic;
 using OpenIPC.Viewer.Devices.Onvif;
@@ -56,6 +58,10 @@ public static class WebBackend
         // stateless (one short-lived HTTP call per operation), so a singleton is
         // safe and matches the desktop registration in SharedComposition.
         services.AddSingleton<IOnvifClient, SoapOnvifClient>();
+        // Push-to-talk: ffmpeg can't do an ONVIF backchannel, so this opens its
+        // own RTSP session per talker. Stateless between calls, like the ONVIF
+        // client — the session lives for as long as the browser holds the key.
+        services.AddSingleton<IAudioBackchannelClient, RtspBackchannelClient>();
         // Discovery (same source set and aggregator as the desktop dialog) plus
         // the ONVIF probe chain the add flow runs on a chosen candidate.
         services.AddSingleton<OnvifProbeService>();

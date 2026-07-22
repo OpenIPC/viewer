@@ -8,7 +8,9 @@ import { ConfirmModal } from '../components/Modals'
 // Web console accounts: who may sign in, what they may do, and which cameras
 // they see. Mirrors the desktop access-config model (permission flags + camera
 // subset) so the two stay conceptually the same product feature.
-const PERMISSIONS = ['ViewLive', 'Ptz', 'Export', 'Manage'] as const
+// Every flag the server knows. ViewArchive was missing here, which quietly made
+// the archive ungrantable to anyone created from the web console.
+const PERMISSIONS = ['ViewLive', 'ViewArchive', 'Ptz', 'Talk', 'Export', 'Manage'] as const
 
 export function Users() {
   const { t } = useI18n()

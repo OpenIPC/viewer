@@ -8,6 +8,7 @@ import { LiveTile } from '../components/LiveTile'
 import { CameraEditor } from '../components/CameraEditor'
 import { PtzPad } from '../components/PtzPad'
 import { MajesticPanel } from '../components/MajesticPanel'
+import { TalkButton } from '../components/TalkButton'
 import { ConfirmModal } from '../components/Modals'
 import { SnapshotModal } from '../components/SnapshotModal'
 
@@ -117,6 +118,15 @@ export function Camera() {
       <div className="videos n1">
         <LiveTile key={camera.id} camera={camera} />
       </div>
+
+      {/* A camera that ONVIF probed and reported no speaker is a definite no;
+          anything else is worth offering, and the press finds out for sure. */}
+      {can('Talk') && !(camera.onvifEnabled && !camera.hasAudioOut) && (
+        <>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 24 }}>{t('Talk.Title')}</h2>
+          <TalkButton cameraId={camera.id} />
+        </>
+      )}
 
       {camera.ptzReady && can('Ptz') && (
         <>

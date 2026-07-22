@@ -183,6 +183,7 @@ public static class WebServer
         app.MapLayoutEndpoints();
         app.MapLiveEndpoints();
         app.MapPtzEndpoints();
+        app.MapTalkEndpoints();
         app.MapMajesticEndpoints();
         app.MapSnapshotEndpoints();
         app.MapSnapshotLibraryEndpoints();

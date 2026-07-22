@@ -17,6 +17,11 @@ public enum WebPermission
     // Everything that changes the installation: camera/group/layout CRUD,
     // discovery, config import/export, sessions, users.
     Manage = 16,
+    // Speaking through the camera's speaker. Its own flag rather than a reuse:
+    // it is neither "change the installation" nor PTZ, and it is the one action
+    // here that reaches people standing in front of the camera — worth being
+    // able to grant and withhold on its own.
+    Talk = 32,
 
-    All = ViewLive | ViewArchive | Ptz | Export | Manage,
+    All = ViewLive | ViewArchive | Ptz | Export | Manage | Talk,
 }

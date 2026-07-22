@@ -16,7 +16,7 @@ type Auth = {
   logout: () => Promise<void>
 }
 
-export type Permission = 'ViewLive' | 'ViewArchive' | 'Ptz' | 'Export' | 'Manage'
+export type Permission = 'ViewLive' | 'ViewArchive' | 'Ptz' | 'Export' | 'Manage' | 'Talk'
 
 const Ctx = createContext<Auth | null>(null)
 

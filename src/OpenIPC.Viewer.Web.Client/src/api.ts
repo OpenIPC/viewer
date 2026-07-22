@@ -321,6 +321,12 @@ export const api = {
   majesticMetrics: (id: string) =>
     req<{ name: string; value: number }[]>('GET', `/api/v1/cameras/${id}/majestic/metrics`),
 
+  // Can this camera be talked to, and is someone already doing it? A real RTSP
+  // probe, so it costs a round-trip to the camera — the UI asks on press, not
+  // on page load.
+  talkProbe: (id: string) =>
+    req<{ supported: boolean | null; busy: boolean }>('GET', `/api/v1/cameras/${id}/talk`),
+
   system: () =>
     req<{ version: string; cameras: number; groups: number; sessions: number; streams: number }>(
       'GET',

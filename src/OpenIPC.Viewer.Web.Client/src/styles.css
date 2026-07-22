@@ -379,3 +379,8 @@ button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
 .shot .cap { display:flex; flex-direction:column; gap:2px; padding:6px 8px; font-size:11px; }
 .shot .when { color:var(--text-1); font-variant-numeric:tabular-nums; }
 .shot .who { color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Push-to-talk: unmistakable while live, since it is an open microphone into
+   someone else's room. */
+.talk.on { background:var(--danger); border-color:var(--danger); color:#fff; }
+.talk.on:hover { border-color:var(--danger); }
