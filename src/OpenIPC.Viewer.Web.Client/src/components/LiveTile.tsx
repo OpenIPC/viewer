@@ -1,5 +1,6 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import type { CameraDto } from '../api'
+import { useDigitalZoom } from '../hooks/useDigitalZoom'
 import { useLiveTile } from '../hooks/useLiveTile'
 import { useI18n } from '../i18n'
 import { Icon } from './Icon'
@@ -29,20 +30,24 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
   const { t } = useI18n()
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
   const [snapshot, setSnapshot] = useState(false)
-  const cellRef = useRef<HTMLDivElement>(null)
+  const [cell, setCell] = useState<HTMLDivElement | null>(null)
   const { status, session } = useLiveTile(slot, camera.id)
   const { kind, label } = statusKind(status)
+  const zoom = useDigitalZoom(cell)
 
   const toggleFullscreen = () => {
-    const el = cellRef.current
-    if (!el) return
+    if (!cell) return
     if (document.fullscreenElement) void document.exitFullscreen()
-    else void el.requestFullscreen?.()
+    else void cell.requestFullscreen?.()
   }
 
   return (
-    <div className="cell" ref={cellRef} onDoubleClick={toggleFullscreen}>
-      <div className="video-slot" ref={setSlot} />
+    <div
+      className={'cell' + (zoom.zoomed ? ' zoomed' : '')}
+      ref={setCell}
+      onDoubleClick={toggleFullscreen}
+    >
+      <div className="video-slot" ref={setSlot} style={{ transform: zoom.transform }} />
       {kind === 'connecting' && (
         <div className="loading">
           <span className="spinner" />
@@ -53,6 +58,22 @@ export const LiveTile = memo(function LiveTile({ camera }: { camera: CameraDto }
         {label}
       </span>
       <span className="label">{camera.name}</span>
+      {/* Zoom controls: the wheel does this too, but a wall is often driven by
+          touch, where there is no wheel. Shown zoomed-in regardless of hover so
+          the way out is always visible. */}
+      <div className="zoom-pad">
+        {zoom.zoomed && (
+          <button title={t('Tile.ZoomReset')} onClick={zoom.reset}>
+            <span className="zoom-level">{zoom.zoom.toFixed(1)}×</span>
+          </button>
+        )}
+        <button title={t('Tile.ZoomOut')} onClick={zoom.zoomOut} disabled={!zoom.zoomed}>
+          <Icon name="minus" size={15} />
+        </button>
+        <button title={t('Tile.ZoomIn')} onClick={zoom.zoomIn}>
+          <Icon name="plus" size={15} />
+        </button>
+      </div>
       {session?.hasAudio && (
         <button
           className="listen"
