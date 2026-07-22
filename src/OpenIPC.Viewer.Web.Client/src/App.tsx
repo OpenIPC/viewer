@@ -8,6 +8,7 @@ import { Camera } from './pages/Camera'
 import { Grid } from './pages/Grid'
 import { Discovery } from './pages/Discovery'
 import { Users } from './pages/Users'
+import { RequireManage, Settings, SettingsIndex } from './pages/Settings'
 import { Recordings } from './pages/Recordings'
 import { Groups } from './pages/Groups'
 import { System } from './pages/System'
@@ -33,10 +34,32 @@ export function App() {
         <Route path="/camera/:id" element={<Camera />} />
         <Route path="/grid" element={<Grid />} />
         <Route path="/recordings" element={<Recordings />} />
-        <Route path="/discovery" element={<Discovery />} />
-        <Route path="/groups" element={<Groups />} />
-        <Route path="/system" element={<System />} />
-        <Route path="/users" element={<Users />} />
+        <Route
+          path="/discovery"
+          element={
+            <RequireManage>
+              <Discovery />
+            </RequireManage>
+          }
+        />
+        {/* Configuration lives under /settings; the old flat paths still
+            resolve so existing links and bookmarks don't break. */}
+        <Route path="/settings" element={<Settings />}>
+          <Route index element={<SettingsIndex />} />
+          <Route path="groups" element={<Groups />} />
+          <Route
+            path="users"
+            element={
+              <RequireManage>
+                <Users />
+              </RequireManage>
+            }
+          />
+          <Route path="system" element={<System />} />
+        </Route>
+        <Route path="/groups" element={<Navigate to="/settings/groups" replace />} />
+        <Route path="/users" element={<Navigate to="/settings/users" replace />} />
+        <Route path="/system" element={<Navigate to="/settings/system" replace />} />
         <Route path="*" element={<Navigate to="/cameras" replace />} />
       </Route>
     </Routes>

@@ -71,6 +71,7 @@ there is no TLS at this layer; for anything beyond your trusted LAN, put it
 | Env var                       | Meaning                                          |
 |-------------------------------|--------------------------------------------------|
 | `OPENIPC_WEB_ADMIN_PASSWORD`  | Built-in admin password. Unset → random, logged on start. |
+| `OPENIPC_WEB_SEGMENT_SECONDS` | Length of one recording segment. Default 600 (10 min).   |
 
 ---
 

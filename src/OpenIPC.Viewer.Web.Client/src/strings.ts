@@ -16,6 +16,7 @@ export const EN: Dict = {
   'Nav.Discovery': 'Discovery',
   'Nav.Recordings': 'Archive',
   'Nav.Users': 'Users',
+  'Nav.Settings': 'Settings',
   'Nav.System': 'System',
   'Nav.SignOut': 'Sign out',
 
@@ -228,6 +229,7 @@ export const RU: Dict = {
   'Nav.Discovery': 'Поиск',
   'Nav.Recordings': 'Архив',
   'Nav.Users': 'Пользователи',
+  'Nav.Settings': 'Настройки',
   'Nav.System': 'Система',
   'Nav.SignOut': 'Выход',
 

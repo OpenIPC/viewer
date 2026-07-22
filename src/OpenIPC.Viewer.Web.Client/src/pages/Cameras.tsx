@@ -46,9 +46,16 @@ export function Cameras() {
       <div className="toolbar">
         <h1 style={{ margin: 0, flex: 1 }}>{t('Cameras.Title')}</h1>
         {can('Manage') && (
-          <button className="primary row" onClick={() => setEditing(null)}>
-            <Icon name="plus" /> {t('Cameras.Add')}
-          </button>
+          <>
+            {/* Finding cameras on the network is a way to add one, so it sits
+                next to Add rather than in its own nav entry. */}
+            <Link to="/discovery" className="row button-link ghost">
+              <Icon name="search" /> {t('Nav.Discovery')}
+            </Link>
+            <button className="primary row" onClick={() => setEditing(null)}>
+              <Icon name="plus" /> {t('Cameras.Add')}
+            </button>
+          </>
         )}
       </div>
 

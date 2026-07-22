@@ -25,9 +25,28 @@ namespace OpenIPC.Viewer.Web.Api;
 //
 // Stopping sends "q" on stdin rather than killing the process: an MP4 needs its
 // trailer written, and a killed ffmpeg leaves a file no player will open.
+//
+// Long recordings are cut into segments (like the desktop's 10-minute chunks):
+// a night-long single file is painful to download, to seek, and to lose — one
+// corrupt tail would take the whole night with it. ffmpeg's segment muxer closes
+// each part properly on its own, so every finished segment is playable even if
+// the server dies mid-recording.
 public sealed class WebRecorder : IAsyncDisposable
 {
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(5);
+
+    // Matches the desktop's RecordingOptions.SegmentDuration. Overridable so an
+    // operator can trade file count against file size (and so this is testable
+    // without waiting ten minutes).
+    private static readonly TimeSpan SegmentDuration = ResolveSegmentDuration();
+
+    private static TimeSpan ResolveSegmentDuration()
+    {
+        var raw = Environment.GetEnvironmentVariable("OPENIPC_WEB_SEGMENT_SECONDS");
+        return int.TryParse(raw, out var seconds) && seconds is > 0 and <= 3600
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.FromMinutes(10);
+    }
 
     private readonly IRecordingRepository _repo;
     private readonly IFileSystem _fs;
@@ -58,7 +77,11 @@ public sealed class WebRecorder : IAsyncDisposable
             Slug(camera.Name),
             DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"cam_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+        // ffmpeg fills in the %03d; the first segment's name is predictable, which
+        // is what gets indexed up front.
+        var baseName = $"cam_{DateTime.Now:yyyyMMdd_HHmmss}";
+        var pattern = Path.Combine(dir, baseName + "_%03d.mp4");
+        var path = Path.Combine(dir, baseName + "_000.mp4");
 
         var psi = new ProcessStartInfo(LiveFfmpeg.ResolveExecutable())
         {
@@ -74,8 +97,13 @@ public sealed class WebRecorder : IAsyncDisposable
                      // Copy, never re-encode: recording must not cost CPU per camera,
                      // and the archive should hold what the camera actually sent.
                      "-c", "copy",
-                     "-movflags", "+faststart",
-                     path,
+                     "-f", "segment",
+                     "-segment_time", ((int)SegmentDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture),
+                     // Each part starts at zero, so every segment plays as its own
+                     // file instead of pretending to begin hours in.
+                     "-reset_timestamps", "1",
+                     "-segment_format", "mp4",
+                     pattern,
                  })
         {
             psi.ArgumentList.Add(arg);
@@ -99,7 +127,7 @@ public sealed class WebRecorder : IAsyncDisposable
         // Indexed while running, so a server that dies mid-recording still leaves
         // a row pointing at the partial file instead of an orphan on disk.
         await _repo.AddAsync(recording, ct);
-        _active[cameraId] = new ActiveRecording(process, recording);
+        _active[cameraId] = new ActiveRecording(process, recording, baseName, dir);
         _logger.LogInformation("Recording {Camera} to {Path}", camera.Name, path);
         return recording;
     }
@@ -132,22 +160,65 @@ public sealed class WebRecorder : IAsyncDisposable
             active.Process.Dispose();
         }
 
-        var file = new FileInfo(active.Recording.FilePath);
-        var size = file.Exists ? file.Length : 0;
-        if (size == 0)
+        return await ReconcileSegmentsAsync(active, DateTime.UtcNow, ct);
+    }
+
+    // Turns whatever ffmpeg actually wrote into archive rows.
+    //
+    // Only the first segment is indexed at start (its name is predictable), so
+    // the rest are added here, and the first row is updated with its real size.
+    // Timestamps come from the segment index rather than the file's mtime: mtime
+    // is when writing FINISHED, and the archive is browsed by when footage began.
+    private async Task<Recording?> ReconcileSegmentsAsync(
+        ActiveRecording active, DateTime stoppedAt, CancellationToken ct)
+    {
+        var segments = Directory
+            .GetFiles(active.Directory, active.BaseName + "_*.mp4")
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToList();
+
+        Recording? first = null;
+        for (var i = 0; i < segments.Count; i++)
         {
-            // The camera never delivered anything (offline, or ffmpeg died before
-            // the first packet). An empty file is not an archive entry — drop both
-            // rather than leave a row that plays nothing.
-            _logger.LogWarning("Recording of {Path} produced no data; discarding it", active.Recording.FilePath);
-            await _repo.RemoveAsync(active.Recording.Id, ct);
-            try { if (file.Exists) file.Delete(); } catch (IOException) { /* leave the stub */ }
-            return null;
+            var info = new FileInfo(segments[i]);
+            var isFirst = string.Equals(info.FullName, active.Recording.FilePath, StringComparison.OrdinalIgnoreCase);
+
+            if (!info.Exists || info.Length == 0)
+            {
+                // A trailing empty part is normal when the stop lands right on a
+                // segment boundary; an empty first part means the camera gave
+                // nothing at all. Neither belongs in the archive.
+                if (isFirst) await _repo.RemoveAsync(active.Recording.Id, ct);
+                try { if (info.Exists) info.Delete(); } catch (IOException) { /* leave it */ }
+                continue;
+            }
+
+            var startedAt = active.Recording.StartedAt + i * SegmentDuration;
+            var endedAt = i + 1 < segments.Count
+                ? active.Recording.StartedAt + (i + 1) * SegmentDuration
+                : stoppedAt;
+
+            var row = isFirst
+                ? active.Recording with { EndedAt = endedAt, SizeBytes = info.Length }
+                : new Recording(
+                    Id: RecordingId.New(),
+                    CameraId: active.Recording.CameraId,
+                    FilePath: info.FullName,
+                    StartedAt: startedAt,
+                    EndedAt: endedAt,
+                    SizeBytes: info.Length,
+                    Codec: null,
+                    HasMotion: false);
+
+            if (isFirst) await _repo.UpdateAsync(row, ct);
+            else await _repo.AddAsync(row, ct);
+
+            first ??= row;
         }
 
-        var finished = active.Recording with { EndedAt = DateTime.UtcNow, SizeBytes = size };
-        await _repo.UpdateAsync(finished, ct);
-        return finished;
+        if (first is null)
+            _logger.LogWarning("Recording under {Base} produced no data; discarding it", active.BaseName);
+        return first;
     }
 
     // A stopping server should not leave half-written files behind.
@@ -173,5 +244,5 @@ public sealed class WebRecorder : IAsyncDisposable
         return chars.Count == 0 ? "camera" : new string(chars.ToArray());
     }
 
-    private sealed record ActiveRecording(Process Process, Recording Recording);
+    private sealed record ActiveRecording(Process Process, Recording Recording, string BaseName, string Directory);
 }

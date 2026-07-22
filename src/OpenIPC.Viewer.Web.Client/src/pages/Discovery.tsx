@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, type CameraDraftDto, type DiscoveredDeviceDto, type ScanDto } from '../api'
+import { Link } from 'react-router-dom'
 import { useI18n } from '../i18n'
+import { Icon } from '../components/Icon'
 
 // Find cameras on the LAN and add them without leaving the browser.
 //
@@ -74,6 +76,9 @@ export function Discovery() {
   return (
     <div className="wrap" style={{ maxWidth: 900 }}>
       <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+        <Link to="/cameras" className="muted row">
+          <Icon name="back" /> {t('Nav.Cameras')}
+        </Link>
         <h1 style={{ margin: 0, flex: 1 }}>{t('Discovery.Title')}</h1>
         <label className="row" style={{ flexDirection: 'row', gap: 6 }}>
           <input type="checkbox" checked={deepScan} disabled={running}

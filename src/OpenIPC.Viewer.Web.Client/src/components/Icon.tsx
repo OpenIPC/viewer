@@ -13,6 +13,12 @@ const PATHS: Record<string, ReactNode> = {
   x: <path d="M6 6l12 12M18 6L6 18" />,
   record: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />,
   back: <path d="M19 12H5M12 19l-7-7 7-7" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </>
+  ),
   play: <path d="M6 4l14 8-14 8V4z" fill="currentColor" stroke="none" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none" />,
   download: <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />,

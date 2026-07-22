@@ -291,3 +291,8 @@ button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
 /* Clip export controls under the archive player. */
 .export { flex-wrap:wrap; gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border-weak); }
 .button-link.disabled { opacity:.5; pointer-events:none; }
+
+/* Settings sub-tabs sit under the page title, not in the sidebar. */
+.settings-tabs { margin-bottom:18px; }
+.button-link.ghost { background:var(--bg2); border-color:var(--border-med); color:var(--text-1); }
+.button-link.ghost:hover { background:var(--bg3); border-color:var(--text-3); }
