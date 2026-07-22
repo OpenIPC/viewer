@@ -191,6 +191,11 @@ export const EN: Dict = {
   'Recording.Nothing': 'The camera sent nothing — no clip was saved.',
   'Recording.Failed': 'Could not start recording.',
 
+  'Export.MarkIn': 'Mark in',
+  'Export.MarkOut': 'Mark out',
+  'Export.Save': 'Export clip',
+  'Export.Precise': 'exact frame (re-encodes)',
+
   'Archive.PrevMonth': 'Previous month',
   'Archive.NextMonth': 'Next month',
   'Archive.ClearDay': 'Whole archive',
@@ -396,6 +401,11 @@ export const RU: Dict = {
   'Recording.Active': 'идёт запись',
   'Recording.Nothing': 'Камера ничего не передала — запись не сохранена.',
   'Recording.Failed': 'Не удалось начать запись.',
+
+  'Export.MarkIn': 'Начало',
+  'Export.MarkOut': 'Конец',
+  'Export.Save': 'Сохранить фрагмент',
+  'Export.Precise': 'точный кадр (перекодирование)',
 
   'Archive.PrevMonth': 'Предыдущий месяц',
   'Archive.NextMonth': 'Следующий месяц',

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Recording;
@@ -32,7 +33,8 @@ public static class RecordingApi
     public static void MapRecordingEndpoints(this WebApplication app)
     {
         app.MapGet("/api/v1/recordings", async (
-            string? cameraId, string? from, string? to, int? limit, HttpContext ctx, CancellationToken ct) =>
+            string? cameraId, string? from, string? to, int? offset, int? limit,
+            HttpContext ctx, CancellationToken ct) =>
         {
             if (ctx.Deny(WebPermission.ViewArchive) is { } denied)
                 return denied;
@@ -52,17 +54,27 @@ public static class RecordingApi
                 return ValidationError("from/to must be ISO-8601 timestamps");
 
             var names = await LoadCameraNamesAsync(ctx, ct);
-            var recordings = (await repo.ListAsync(filter, ct))
+            var matching = (await repo.ListAsync(filter, ct))
                 // Same rule as everywhere else: a camera outside the caller's
                 // subset doesn't exist for them, and neither does its archive.
                 .Where(r => ctx.CanSeeCamera(r.CameraId.ToString()))
                 .Where(r => InRange(r.StartedAt, since, until))
                 .OrderByDescending(r => r.StartedAt)
-                .Take(limit is > 0 and <= 500 ? limit.Value : 200)
-                .Select(r => Describe(r, names))
                 .ToList();
 
-            return Results.Json(recordings);
+            // Paged rather than capped: the old 200-row ceiling silently hid the
+            // rest of the archive, which is worse than making the client ask for
+            // the next page. Total travels with the page so the UI can say where
+            // it is.
+            var take = limit is > 0 and <= MaxPageSize ? limit.Value : DefaultPageSize;
+            var skip = offset is > 0 ? offset.Value : 0;
+            return Results.Json(new
+            {
+                total = matching.Count,
+                offset = skip,
+                limit = take,
+                items = matching.Skip(skip).Take(take).Select(r => Describe(r, names)).ToList(),
+            });
         });
 
         app.MapGet("/api/v1/recordings/{id}/stream", async (
@@ -190,6 +202,41 @@ public static class RecordingApi
             return Results.Json(new { id = stopped.Id.ToString(), sizeBytes = stopped.SizeBytes });
         });
 
+        // Cut a fragment out of a recording and hand it back as a file.
+        //
+        // Nothing is stored: the clip is what the person asked for, and keeping a
+        // copy on the server would grow the archive behind their back. Output is
+        // fragmented MP4 straight down the response, because a pipe can't be
+        // rewound to write a normal trailer.
+        app.MapGet("/api/v1/recordings/{id}/export", async (
+            string id, double? start, double? end, bool? precise, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (ctx.Deny(WebPermission.Export) is { } denied)
+                return denied;
+            var (recording, error) = await ResolveAsync(ctx, id, ct);
+            if (error is not null)
+                return error;
+            if (!File.Exists(recording!.FilePath))
+                return Results.Json(new { error = "file_missing" }, statusCode: StatusCodes.Status410Gone);
+
+            var from = Math.Max(0, start ?? 0);
+            var to = end ?? 0;
+            if (to <= from)
+                return ValidationError("end must be greater than start");
+            var duration = Math.Min(to - from, MaxExportSeconds);
+
+            var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("OpenIPC.Web.Export");
+            var name = Path.GetFileNameWithoutExtension(recording.FilePath)
+                + $"_{(int)from}-{(int)(from + duration)}.mp4";
+
+            var clip = await ClipAsync(recording.FilePath, from, duration, precise == true, logger, ct);
+            if (clip is null || clip.Length == 0)
+                return Results.Json(new { error = "export_failed" }, statusCode: StatusCodes.Status502BadGateway);
+
+            Audit(ctx, "recording.export", $"{recording.Id} {(int)from}+{(int)duration}s");
+            return Results.File(clip, "video/mp4", name);
+        });
+
         app.MapDelete("/api/v1/recordings/{id}", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
             // Deleting footage is destructive and irreversible — management only,
@@ -213,6 +260,67 @@ public static class RecordingApi
             Audit(ctx, "recording.delete", recording.Id);
             return Results.NoContent();
         });
+    }
+
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 200;
+    // An hour is plenty for "send me this bit"; without a ceiling a stray request
+    // could ask the server to re-encode an entire day.
+    private const double MaxExportSeconds = 3600;
+
+    // Same two ffmpeg shapes the desktop's clip exporter uses: a fast stream copy
+    // that can only start on a keyframe (so the cut lands at or before the asked
+    // point), or a re-encode when the person wants the exact frame.
+    private static async Task<byte[]?> ClipAsync(
+        string sourcePath, double start, double duration, bool precise, ILogger logger, CancellationToken ct)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(LiveFfmpeg.ResolveExecutable())
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        var startSec = start.ToString("0.###", CultureInfo.InvariantCulture);
+        var durSec = duration.ToString("0.###", CultureInfo.InvariantCulture);
+        void Arg(params string[] args) { foreach (var a in args) psi.ArgumentList.Add(a); }
+
+        Arg("-hide_banner");
+        if (precise)
+        {
+            // Seek after opening so the re-encode starts on the exact frame.
+            Arg("-i", sourcePath, "-ss", startSec, "-t", durSec,
+                "-c:v", "libopenh264", "-b:v", "2M", "-c:a", "copy");
+        }
+        else
+        {
+            Arg("-ss", startSec, "-i", sourcePath, "-t", durSec, "-c", "copy");
+        }
+        // empty_moov/frag_keyframe: the header can't be rewritten on a pipe.
+        Arg("-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1");
+
+        System.Diagnostics.Process? proc = null;
+        try
+        {
+            proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null)
+                return null;
+            _ = LiveFfmpeg.DrainStderrAsync(proc, logger);
+            using var buffer = new MemoryStream();
+            await proc.StandardOutput.BaseStream.CopyToAsync(buffer, ct);
+            await proc.WaitForExitAsync(ct);
+            return buffer.ToArray();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Clip export of {Path} failed", sourcePath);
+            return null;
+        }
+        finally
+        {
+            try { if (proc is { HasExited: false }) proc.Kill(entireProcessTree: true); } catch { /* gone */ }
+            proc?.Dispose();
+        }
     }
 
     // A month of a busy install is still small; the cap only stops a pathological

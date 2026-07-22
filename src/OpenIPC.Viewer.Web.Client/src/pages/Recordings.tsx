@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type CalendarPointDto, type CameraDto, type RecordingDto } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -18,28 +18,49 @@ export function Recordings() {
   const [month, setMonth] = useState(() => new Date())
   const [day, setDay] = useState<string | null>(null)
   const [points, setPoints] = useState<CalendarPointDto[]>([])
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
   const [playing, setPlaying] = useState<RecordingDto | null>(null)
+  const [playhead, setPlayhead] = useState(0)
+  const [clipStart, setClipStart] = useState(0)
+  const [clipEnd, setClipEnd] = useState<number | null>(null)
+  const [precise, setPrecise] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [deleting, setDeleting] = useState<RecordingDto | null>(null)
 
   // The list shows the selected day (or everything when none is picked); the
   // calendar always shows the whole displayed month, so the dots stay put while
   // you click around inside it.
-  const load = async () => {
+  const load = async (pageIndex = page) => {
     const range = day ? dayRange(day) : {}
-    const [list, dots, cams] = await Promise.all([
-      api.recordings({ cameraId: cameraId || undefined, ...range }),
+    const [result, dots, cams] = await Promise.all([
+      api.recordings({
+        cameraId: cameraId || undefined,
+        ...range,
+        offset: pageIndex * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      }),
       api.recordingCalendar({ cameraId: cameraId || undefined, ...monthRange(month) }),
       cameras.length ? Promise.resolve(cameras) : api.cameras(),
     ])
-    setItems(list)
+    setItems(result.items)
+    setTotal(result.total)
     setPoints(dots)
     setCameras(cams)
   }
 
+  // Changing WHAT is being looked at starts over at the first page; paging
+  // through the same selection does not.
   useEffect(() => {
-    void load()
+    setPage(0)
+    void load(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraId, day, month])
+
+  useEffect(() => {
+    void load(page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   if (items === null) return <div className="spin">{t('Common.Loading')}</div>
 
@@ -70,7 +91,13 @@ export function Recordings() {
 
       {playing && (
         <div className="player">
-          <video src={api.recordingStreamUrl(playing.id)} controls autoPlay />
+          <video
+            ref={videoRef}
+            src={api.recordingStreamUrl(playing.id)}
+            controls
+            autoPlay
+            onTimeUpdate={(e) => setPlayhead(e.currentTarget.currentTime)}
+          />
           <div className="row" style={{ justifyContent: 'space-between', marginTop: 8 }}>
             <span className="muted">
               {playing.cameraName ?? '—'} · {formatStart(playing.startedAt)}
@@ -82,6 +109,32 @@ export function Recordings() {
               <button onClick={() => setPlaying(null)}>{t('Common.Close')}</button>
             </span>
           </div>
+
+          {can('Export') && (
+            <div className="export row">
+              {/* Marks come from the playhead: scrub to the moment and press the
+                  button. Typing timecodes would be worse everywhere, phones most. */}
+              <button onClick={() => setClipStart(playhead)}>{t('Export.MarkIn')}</button>
+              <button onClick={() => setClipEnd(playhead)}>{t('Export.MarkOut')}</button>
+              <span className="muted mono">
+                {formatClock(clipStart)} &ndash; {clipEnd === null ? '--:--' : formatClock(clipEnd)}
+              </span>
+              <label className="row" style={{ flexDirection: 'row', gap: 6 }}>
+                <input type="checkbox" checked={precise} onChange={(e) => setPrecise(e.target.checked)} />
+                {t('Export.Precise')}
+              </label>
+              <a
+                className={'button-link row' + (clipEnd !== null && clipEnd > clipStart ? '' : ' disabled')}
+                href={
+                  clipEnd !== null && clipEnd > clipStart
+                    ? api.recordingExportUrl(playing.id, clipStart, clipEnd, precise)
+                    : undefined
+                }
+              >
+                <Icon name="download" /> {t('Export.Save')}
+              </a>
+            </div>
+          )}
         </div>
       )}
 
@@ -115,7 +168,15 @@ export function Recordings() {
                 <td className="muted">{formatSize(r.sizeBytes)}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {r.playable ? (
-                    <button className="row" onClick={() => setPlaying(r)}>
+                    <button
+                      className="row"
+                      onClick={() => {
+                        setPlaying(r)
+                        setPlayhead(0)
+                        setClipStart(0)
+                        setClipEnd(null)
+                      }}
+                    >
                       <Icon name="play" size={13} /> {t('Recordings.Play')}
                     </button>
                   ) : (
@@ -133,6 +194,24 @@ export function Recordings() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {total > PAGE_SIZE && (
+        <div className="pager">
+          <button disabled={page === 0} title={t('Grid.PrevPage')} onClick={() => setPage(page - 1)}>
+            <Icon name="chevronLeft" size={14} />
+          </button>
+          <span className="muted">
+            {page * PAGE_SIZE + 1}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)} / {total}
+          </span>
+          <button
+            disabled={(page + 1) * PAGE_SIZE >= total}
+            title={t('Grid.NextPage')}
+            onClick={() => setPage(page + 1)}
+          >
+            <Icon name="chevronRight" size={14} />
+          </button>
+        </div>
       )}
 
       {deleting && (
@@ -153,6 +232,15 @@ export function Recordings() {
       )}
     </div>
   )
+}
+
+const PAGE_SIZE = 50
+
+// mm:ss for the in/out marks: a clip offset is seconds into one file, not a date.
+function formatClock(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 function formatStart(iso: string): string {

@@ -60,6 +60,14 @@ export type RecordingDto = {
 
 // One dot on the archive calendar. Deliberately minimal: the browser groups
 // these into days in its own time zone.
+// A page of the archive: the rows plus where they sit in the whole set.
+export type RecordingPageDto = {
+  total: number
+  offset: number
+  limit: number
+  items: RecordingDto[]
+}
+
 export type CalendarPointDto = { startedAt: string; sizeBytes: number }
 
 export type GroupDto = { id: number; name: string; sortOrder: number }
@@ -147,9 +155,11 @@ export class ApiError extends Error {
 }
 
 // Drops empty values so the URL only carries the filters that are actually set.
-function query(params: Record<string, string | undefined>): string {
-  const pairs = Object.entries(params).filter(([, v]) => v)
-  return pairs.length ? '?' + new URLSearchParams(pairs as [string, string][]).toString() : ''
+function query(params: Record<string, string | number | undefined>): string {
+  const pairs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => [k, String(v)] as [string, string])
+  return pairs.length ? '?' + new URLSearchParams(pairs).toString() : ''
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -202,8 +212,20 @@ export const api = {
 
   // The recorded archive. Playback is a ranged file response, so the URL goes
   // straight into a <video> and the browser does its own seeking.
-  recordings: (filter: { cameraId?: string; from?: string; to?: string } = {}) =>
-    req<RecordingDto[]>('GET', '/api/v1/recordings' + query(filter)),
+  recordings: (filter: { cameraId?: string; from?: string; to?: string; offset?: number; limit?: number } = {}) =>
+    req<RecordingPageDto>(
+      'GET',
+      '/api/v1/recordings' +
+        query({
+          ...filter,
+          offset: filter.offset ? String(filter.offset) : undefined,
+          limit: filter.limit ? String(filter.limit) : undefined,
+        }),
+    ),
+  // Cut of a recording, as a download URL (start/end are seconds into the file).
+  recordingExportUrl: (id: string, start: number, end: number, precise: boolean) =>
+    `/api/v1/recordings/${id}/export?start=${start.toFixed(2)}&end=${end.toFixed(2)}` +
+    (precise ? '&precise=true' : ''),
   recordingCalendar: (filter: { cameraId?: string; from?: string; to?: string } = {}) =>
     req<CalendarPointDto[]>('GET', '/api/v1/recordings/calendar' + query(filter)),
   recordingStreamUrl: (id: string, download = false) =>

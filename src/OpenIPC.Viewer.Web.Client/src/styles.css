@@ -287,3 +287,7 @@ button.row, a.row { display:inline-flex; align-items:center; gap:6px; }
 .calendar-day.selected { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1 !important; }
 .calendar-dot { position:absolute; left:50%; bottom:4px; transform:translateX(-50%);
   width:4px; height:4px; border-radius:50%; background:currentColor; opacity:.7; }
+
+/* Clip export controls under the archive player. */
+.export { flex-wrap:wrap; gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border-weak); }
+.button-link.disabled { opacity:.5; pointer-events:none; }
