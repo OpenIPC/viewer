@@ -82,6 +82,7 @@ public sealed class PtzControllerStepTests
         Assert.Equal(0.08f, velocity.Zoom, 4);   // step × speed
         Assert.Equal(0f, velocity.PanX);
         Assert.NotNull(timeout);                 // self-stopping, always
+        Assert.Equal(1, client.Stops);           // ...and stopped explicitly, for firmware that ignores Timeout
     }
 
     // A camera that declared neither a relative nor a continuous space for the
@@ -116,6 +117,7 @@ public sealed class PtzControllerStepTests
         public List<PtzVelocity> RelativeMoves { get; } = new();
         public List<(PtzVelocity Velocity, TimeSpan? Timeout)> ContinuousMoves { get; } = new();
         public int CapabilityReads;
+        public int Stops;
 
         public Task RelativeMoveAsync(OnvifEndpoint endpoint, string profileToken, PtzVelocity step, float speed, CancellationToken ct)
         {
@@ -140,7 +142,11 @@ public sealed class PtzControllerStepTests
         public Task<OnvifDeviceInfo> GetDeviceInformationAsync(OnvifEndpoint endpoint, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<MediaProfile>> GetProfilesAsync(OnvifEndpoint endpoint, CancellationToken ct) => throw new NotSupportedException();
         public Task<Uri> GetStreamUriAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct) => throw new NotSupportedException();
-        public Task StopPtzAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct) => Task.CompletedTask;
+        public Task StopPtzAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct)
+        {
+            Stops++;
+            return Task.CompletedTask;
+        }
         public Task<IReadOnlyList<PtzPreset>> GetPresetsAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct) => throw new NotSupportedException();
         public Task GotoPresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct) => throw new NotSupportedException();
         public Task<string> SetPresetAsync(OnvifEndpoint endpoint, string profileToken, string name, CancellationToken ct) => throw new NotSupportedException();

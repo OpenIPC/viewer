@@ -606,6 +606,16 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [RelayCommand]
     private void TogglePtzOverlay() => IsPtzOverlayVisible = !IsPtzOverlayVisible;
 
+    // The keypad's middle key: stops whatever is moving, joystick sweep or a
+    // step whose camera ignored its timeout.
+    [RelayCommand]
+    private async Task StopPtzAsync()
+    {
+        if (Ptz is null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await Ptz.StopAsync(cts.Token).ConfigureAwait(true);
+    }
+
     // One nudge per press. The direction is a string so the eight arrows and
     // the two zoom buttons are one command with a parameter in XAML rather than
     // ten near-identical commands.
@@ -1296,11 +1306,21 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         var port = _camera.OnvifPort ?? 80;
         var endpoint = OnvifEndpoint.FromHost(_camera.Host, port, creds);
         Ptz = new PtzController(_onvif, endpoint, _camera.OnvifProfileToken!);
-        // Best-effort: a camera that cannot describe itself gets the
-        // continuous-only profile, which is what every camera was assumed to be
-        // before this asked.
-        PtzCapabilities = await Ptz.GetCapabilitiesAsync(ct).ConfigureAwait(true);
+        // The capability probe is several sequential SOAP calls; a camera that
+        // half-answers must not stall the presets (or the Majestic setup queued
+        // behind this), so it runs in the background. Until it lands the pad
+        // shows every key, as it did before capabilities existed.
+        _ = LoadPtzCapabilitiesAsync(Ptz, ct);
         await ReloadPresetsAsync(ct).ConfigureAwait(true);
+    }
+
+    // Best-effort: a camera that cannot describe itself gets the continuous-only
+    // profile (GetCapabilitiesAsync never throws).
+    private async Task LoadPtzCapabilitiesAsync(PtzController ptz, CancellationToken ct)
+    {
+        var caps = await ptz.GetCapabilitiesAsync(ct).ConfigureAwait(true);
+        if (ReferenceEquals(Ptz, ptz))
+            PtzCapabilities = caps;
     }
 
     private async Task ReloadPresetsAsync(CancellationToken ct)

@@ -148,6 +148,16 @@ public sealed class PtzController : IAsyncDisposable
                     fallbackPanTilt ? step.TiltY * speed : 0f,
                     fallbackZoom ? step.Zoom * speed : 0f),
                 StepFallbackDuration, ct).ConfigureAwait(false);
+
+            // And an explicit Stop once the step is up: plenty of firmware
+            // ignores Timeout on ContinuousMove, and cameras without RelativeMove
+            // are the ones most likely to have the sloppier stack.
+            try { await Task.Delay(StepFallbackDuration, ct).ConfigureAwait(false); }
+            finally
+            {
+                try { await _client.StopPtzAsync(_endpoint, _profileToken, CancellationToken.None).ConfigureAwait(false); }
+                catch { /* camera may already be idle — some firmwares drop the socket on Stop */ }
+            }
         }
     }
 

@@ -111,7 +111,7 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
     api
       .ptzCapabilities(cameraId)
       .then((c) => { if (!cancelled) setCaps(c) })
-      // A camera that will not describe itself keeps the plain Stop button.
+      // A camera that will not describe itself gets no Home button.
       .catch(() => { if (!cancelled) setCaps(null) })
     return () => { cancelled = true }
   }, [cameraId])
@@ -208,16 +208,9 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
         <button {...hold({ tiltY: 1 })} title={t('Ptz.Up')}><Icon name="chevronUp" size={18} /></button>
         <button {...hold({ panX: 1, tiltY: 1 })} title={t('Ptz.UpRight')}><Icon name="arrowUpRight" size={18} /></button>
         <button {...hold({ panX: -1 })} title={t('Ptz.Left')}><Icon name="chevronLeft" size={18} /></button>
-        {caps?.home ? (
-          <button
-            onClick={() => void api.ptzHome(cameraId, speed).catch(() => setError(t('Ptz.Error')))}
-            title={t('Ptz.Home')}
-          >
-            <Icon name="home" size={18} />
-          </button>
-        ) : (
-          <button onClick={() => void stop()} title={t('Ptz.Stop')}><Icon name="stop" size={18} /></button>
-        )}
+        {/* Stop stays in the middle whatever the camera supports: it is the
+            escape hatch for a move that did not stop when it should have. */}
+        <button onClick={() => void stop()} title={t('Ptz.Stop')}><Icon name="stop" size={18} /></button>
         <button {...hold({ panX: 1 })} title={t('Ptz.Right')}><Icon name="chevronRight" size={18} /></button>
         <button {...hold({ panX: -1, tiltY: -1 })} title={t('Ptz.DownLeft')}><Icon name="arrowDownLeft" size={18} /></button>
         <button {...hold({ tiltY: -1 })} title={t('Ptz.Down')}><Icon name="chevronDown" size={18} /></button>
@@ -232,6 +225,17 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
           <span className="muted">{t('Ptz.Zoom')}</span>
           <button {...hold({ zoom: -1 })} title={t('Ptz.ZoomOut')}><Icon name="minus" size={18} /></button>
         </div>
+        )}
+
+        {caps?.home && (
+          <button
+            className="row"
+            style={{ alignSelf: 'flex-start', gap: 6 }}
+            onClick={() => void api.ptzHome(cameraId, speed).catch(() => setError(t('Ptz.Error')))}
+            title={t('Ptz.Home')}
+          >
+            <Icon name="home" size={18} /> {t('Ptz.Home')}
+          </button>
         )}
 
         <label>

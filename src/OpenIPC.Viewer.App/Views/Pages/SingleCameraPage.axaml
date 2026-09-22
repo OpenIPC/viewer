@@ -159,32 +159,37 @@
 
         <!-- Step pad. The joystick above is for sweeping a scene; this is for
              framing one — a fixed nudge per press, which is the only way to
-             land on a doorway at full zoom. Home sits in the middle, where
-             every NVR keypad puts it. -->
+             land on a doorway at full zoom. Stop sits in the middle; home
+             and "set home" share the row below when the camera has one. -->
         <Border Background="#90000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right">
           <StackPanel Spacing="8">
-            <UniformGrid Rows="3" Columns="3" IsVisible="{Binding CanStepPanTilt}">
-              <Button Classes="ptz-step" Content="↖" CommandParameter="upleft"
+            <!-- Explicit cells rather than a UniformGrid: a UniformGrid skips
+                 hidden children, so any hidden key would slide the rest of
+                 the arrows into the wrong places. -->
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto,Auto"
+                  IsVisible="{Binding CanStepPanTilt}">
+              <Button Grid.Row="0" Grid.Column="0" Classes="ptz-step" Content="↖" CommandParameter="upleft"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="↑" CommandParameter="up"
+              <Button Grid.Row="0" Grid.Column="1" Classes="ptz-step" Content="↑" CommandParameter="up"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="↗" CommandParameter="upright"
+              <Button Grid.Row="0" Grid.Column="2" Classes="ptz-step" Content="↗" CommandParameter="upright"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="←" CommandParameter="left"
+              <Button Grid.Row="1" Grid.Column="0" Classes="ptz-step" Content="←" CommandParameter="left"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step ptz-home" Content="⌂"
-                      Command="{Binding GoHomeCommand}"
-                      IsVisible="{Binding SupportsHome}"
-                      ToolTip.Tip="{Binding [Ptz.Home], Source={x:Static svc:Localizer.Instance}}" />
-              <Button Classes="ptz-step" Content="→" CommandParameter="right"
+              <!-- Stop in the middle whatever the camera supports, same as the
+                   web pad: the escape hatch for a move that did not stop. -->
+              <Button Grid.Row="1" Grid.Column="1" Classes="ptz-step ptz-home" Content="■" FontSize="12"
+                      Command="{Binding StopPtzCommand}"
+                      ToolTip.Tip="{Binding [Ptz.Stop], Source={x:Static svc:Localizer.Instance}}" />
+              <Button Grid.Row="1" Grid.Column="2" Classes="ptz-step" Content="→" CommandParameter="right"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="↙" CommandParameter="downleft"
+              <Button Grid.Row="2" Grid.Column="0" Classes="ptz-step" Content="↙" CommandParameter="downleft"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="↓" CommandParameter="down"
+              <Button Grid.Row="2" Grid.Column="1" Classes="ptz-step" Content="↓" CommandParameter="down"
                       Command="{Binding StepCommand}" />
-              <Button Classes="ptz-step" Content="↘" CommandParameter="downright"
+              <Button Grid.Row="2" Grid.Column="2" Classes="ptz-step" Content="↘" CommandParameter="downright"
                       Command="{Binding StepCommand}" />
-            </UniformGrid>
+            </Grid>
 
             <Grid ColumnDefinitions="*,*" IsVisible="{Binding CanStepZoom}">
               <Button Grid.Column="0" Classes="ptz-step" Content="−" CommandParameter="zoomout"
@@ -201,12 +206,17 @@
               <Slider Minimum="0.1" Maximum="1.0" Value="{Binding PtzSpeed, Mode=TwoWay}" Width="132" />
             </StackPanel>
 
-            <Button Classes="outlined"
-                    Content="{Binding [Ptz.SetHome], Source={x:Static svc:Localizer.Instance}}"
-                    Command="{Binding SetHomeCommand}"
-                    IsVisible="{Binding SupportsSetHome}"
-                    FontSize="{StaticResource FontSizeXs}"
-                    HorizontalAlignment="Stretch" />
+            <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding SupportsHome}">
+              <Button Grid.Column="0" Classes="ptz-step" Content="⌂"
+                      Command="{Binding GoHomeCommand}"
+                      ToolTip.Tip="{Binding [Ptz.Home], Source={x:Static svc:Localizer.Instance}}" />
+              <Button Grid.Column="1" Classes="outlined"
+                      Content="{Binding [Ptz.SetHome], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding SetHomeCommand}"
+                      IsVisible="{Binding SupportsSetHome}"
+                      FontSize="{StaticResource FontSizeXs}"
+                      Margin="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+            </Grid>
           </StackPanel>
         </Border>
 
