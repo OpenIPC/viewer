@@ -76,12 +76,13 @@ public static class PtzApi
                 // Seed the controller with cached capabilities so a step is one
                 // SOAP call, not a capability discovery per press; the cache
                 // fills from whichever request needed the answer first.
-                CapabilitiesCache.TryGetValue(id, out var known);
+                var key = CacheKey(id, target!.Value);
+                CapabilitiesCache.TryGetValue(key, out var known);
                 var controller = new PtzController(
-                    target!.Value.Client, target.Value.Endpoint, target.Value.ProfileToken, known);
+                    target.Value.Client, target.Value.Endpoint, target.Value.ProfileToken, known);
                 await controller.StepAsync(step, Speed(body?.Speed), ct);
                 if (known is null)
-                    CapabilitiesCache[id] = await controller.GetCapabilitiesAsync(ct);
+                    CapabilitiesCache[key] = await controller.GetCapabilitiesAsync(ct);
             });
         });
 
@@ -110,7 +111,7 @@ public static class PtzApi
             {
                 var caps = await target!.Value.Client.GetPtzCapabilitiesAsync(
                     target.Value.Endpoint, target.Value.ProfileToken, ct);
-                CapabilitiesCache[id] = caps;
+                CapabilitiesCache[CacheKey(id, target.Value)] = caps;
                 return Results.Json(new
                 {
                     relativePanTilt = caps.SupportsRelativePanTilt,
@@ -121,12 +122,13 @@ public static class PtzApi
                     fieldOfView = caps.RelativeIsFieldOfView,
                 });
             }
-            catch (Exception)
+            catch (Exception) when (!ct.IsCancellationRequested)
             {
                 // Continuous-only is the safe answer, and the one every PTZ
                 // camera can honour; the pad keeps its hold-to-sweep keys and
-                // gains nothing it cannot verify.
-                CapabilitiesCache[id] = PtzCapabilities.ContinuousOnly;
+                // gains nothing it cannot verify. An aborted request is not an
+                // answer, so it never reaches the cache.
+                CapabilitiesCache[CacheKey(id, target!.Value)] = PtzCapabilities.ContinuousOnly;
                 return Results.Json(new
                 {
                     relativePanTilt = false,
@@ -202,11 +204,16 @@ public static class PtzApi
         });
     }
 
-    // Capabilities are a property of the hardware, so one answer per camera per
-    // process is right; /capabilities refreshes the entry whenever the pad asks
-    // again (every mount), which also covers a camera swapped behind an id.
+    // Capabilities are a property of the hardware behind an endpoint and
+    // profile, so that — not the camera id alone — is the key: editing a
+    // camera's host, port or profile must not let the old device's answer pick
+    // the movement for the new one. /capabilities also refreshes the entry
+    // whenever the pad asks again (every mount).
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, PtzCapabilities> CapabilitiesCache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    private static string CacheKey(string id, PtzTarget target) =>
+        $"{id}\u0000{target.Endpoint.DeviceServiceUri}\u0000{target.ProfileToken}";
 
     // Everything a PTZ call needs: the ONVIF transport plus the camera's endpoint
     // and media profile. Credentials come from the secrets store, never the API.

@@ -306,10 +306,11 @@ public sealed class SoapOnvifClient : IOnvifClient
             options = await CallAuthedAsync(ptz, endpoint, $"{Tptz}/GetConfigurationOptions", reqBody, ct)
                 .ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             // Optional operation. A camera that will not describe itself gets
             // the profile this app assumed of every camera before it asked.
+            // A cancelled probe is not an answer and propagates instead.
             return PtzCapabilities.ContinuousOnly;
         }
 
@@ -376,7 +377,7 @@ public sealed class SoapOnvifClient : IOnvifClient
             return (XmlBool(Descendant(node, "HomeSupported")?.Value),
                     XmlBool(Attr(node, "FixedHomePosition")));
         }
-        catch (Exception)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             return (false, false);
         }
@@ -480,7 +481,7 @@ public sealed class SoapOnvifClient : IOnvifClient
             var caps = Descendant(body, "Capabilities");
             return caps is not null && XmlBool(Attr(caps, "MoveStatus"));
         }
-        catch (Exception)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             return false;
         }
@@ -576,15 +577,16 @@ public sealed class SoapOnvifClient : IOnvifClient
             ? ($"{Trt}/GetProfiles", $"<trt:GetProfiles xmlns:trt=\"{Trt}\"/>", "GetProfilesResponse")
             : ($"{Tptz}/GetNodes", $"<tptz:GetNodes xmlns:tptz=\"{Tptz}\"/>", "GetNodesResponse");
 
-        // CallAuthedAsync ran GetCapabilities just before, so the shift and the
-        // SOAP dialect are both known. A plain CallAsync skips the fault retry,
-        // and retryable: false skips the dialect retry — either would only
-        // double the cost of every wrong candidate, and a wrong path answering
-        // garbage must not teach the host the wrong dialect.
+        // CallAuthedAsync ran GetCapabilities just before, so the shift is known;
+        // a plain CallAsync skips its fault retry, which here would only double
+        // the cost of every wrong candidate. The dialect retry stays on: a
+        // service can sit on another port than the device service and speak
+        // another SOAP version, and this read is where that gets learned — so
+        // a mutation, which never retries, finds it already known.
         _shiftByHost.TryGetValue(endpoint.DeviceServiceUri.Host, out var shift);
         try
         {
-            var response = await CallAsync(service, action, body, endpoint.Credentials, shift, retryable: false, ct).ConfigureAwait(false);
+            var response = await CallAsync(service, action, body, endpoint.Credentials, shift, retryable: true, ct).ConfigureAwait(false);
             return response.Name.LocalName == expected;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

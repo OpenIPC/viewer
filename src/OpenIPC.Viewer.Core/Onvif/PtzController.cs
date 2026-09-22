@@ -85,7 +85,8 @@ public sealed class PtzController : IAsyncDisposable
 
     // Read once and kept: the answer is a property of the camera, and the UI
     // asks it on every render to decide which buttons exist. A camera that
-    // cannot answer gets the continuous-only profile.
+    // cannot answer gets the continuous-only profile; a cancelled probe throws
+    // and caches nothing, so it cannot strip controls from later calls.
     public async Task<PtzCapabilities> GetCapabilitiesAsync(CancellationToken ct)
     {
         if (_capabilities is { } cached) return cached;
@@ -95,7 +96,7 @@ public sealed class PtzController : IAsyncDisposable
         {
             caps = await _client.GetPtzCapabilitiesAsync(_endpoint, _profileToken, ct).ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
             caps = PtzCapabilities.ContinuousOnly;
         }

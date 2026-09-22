@@ -1315,12 +1315,19 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     }
 
     // Best-effort: a camera that cannot describe itself gets the continuous-only
-    // profile (GetCapabilitiesAsync never throws).
+    // profile. The only thing that throws is cancellation — leaving the page.
     private async Task LoadPtzCapabilitiesAsync(PtzController ptz, CancellationToken ct)
     {
-        var caps = await ptz.GetCapabilitiesAsync(ct).ConfigureAwait(true);
-        if (ReferenceEquals(Ptz, ptz))
-            PtzCapabilities = caps;
+        try
+        {
+            var caps = await ptz.GetCapabilitiesAsync(ct).ConfigureAwait(true);
+            if (ReferenceEquals(Ptz, ptz))
+                PtzCapabilities = caps;
+        }
+        catch (OperationCanceledException)
+        {
+            // Page deactivated mid-probe; the next activation asks again.
+        }
     }
 
     private async Task ReloadPresetsAsync(CancellationToken ct)

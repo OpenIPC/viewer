@@ -43,6 +43,14 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
   // 'sweeping' (continuous move running), 'idle'.
   const press = useRef<'idle' | 'pending' | 'sweeping'>('idle')
   const holdTimer = useRef<number | null>(null)
+  // The pointer that owns the current press. A second finger on another arrow
+  // is ignored until the first lets go — otherwise its release would stop,
+  // cancel or step the first finger's movement.
+  const pressPointer = useRef<number | null>(null)
+  // Steps run one after another. On a camera without RelativeMove each one is
+  // a timed move followed by a Stop, and overlapping them would let an earlier
+  // tap's Stop cut a later one short.
+  const stepQueue = useRef<Promise<unknown>>(Promise.resolve())
 
   const loadPresets = useCallback(async () => {
     try {
@@ -70,14 +78,16 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
   // keypad makes, and the only way to land on a doorway at full zoom.
   const step = useCallback(
     (dir: Dir) => {
-      void api
-        .ptzStep(cameraId, {
-          panX: (dir.panX ?? 0) * STEP,
-          tiltY: (dir.tiltY ?? 0) * STEP,
-          zoom: (dir.zoom ?? 0) * STEP,
-          speed: speedRef.current,
-        })
-        .catch(() => setError(t('Ptz.Error')))
+      const send = () =>
+        api
+          .ptzStep(cameraId, {
+            panX: (dir.panX ?? 0) * STEP,
+            tiltY: (dir.tiltY ?? 0) * STEP,
+            zoom: (dir.zoom ?? 0) * STEP,
+            speed: speedRef.current,
+          })
+          .catch(() => setError(t('Ptz.Error')))
+      stepQueue.current = stepQueue.current.then(send)
     },
     [cameraId, t],
   )
@@ -108,6 +118,9 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
 
   useEffect(() => {
     let cancelled = false
+    // Back to "not known yet" first: until this camera answers, the previous
+    // camera's capabilities must not pick step versus sweep for it.
+    setCaps(null)
     api
       .ptzCapabilities(cameraId)
       .then((c) => { if (!cancelled) setCaps(c) })
@@ -122,6 +135,9 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
     return () => {
       if (timer.current !== null) window.clearInterval(timer.current)
       if (holdTimer.current !== null) window.clearTimeout(holdTimer.current)
+      holdTimer.current = null
+      press.current = 'idle'
+      pressPointer.current = null
       void api.ptzStop(cameraId).catch(() => undefined)
     }
   }, [cameraId, loadPresets])
@@ -129,7 +145,9 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
   // A release inside the tap window sends one step; a longer press swept, so
   // it sends one stop. The two never race because the sweep does not start
   // until the window has passed.
-  const endPress = (dir: Dir | null) => {
+  const endPress = (pointerId: number, dir: Dir | null) => {
+    if (pointerId !== pressPointer.current) return
+    pressPointer.current = null
     if (holdTimer.current !== null) {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = null
@@ -147,8 +165,12 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
   const hold = (dir: Dir) => ({
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault()
+      if (pressPointer.current !== null) return
+      pressPointer.current = e.pointerId
       e.currentTarget.setPointerCapture(e.pointerId)
       const canStep = dir.zoom ? caps?.relativeZoom : caps?.relativePanTilt
+      // Unknown capabilities keep the old behaviour: every camera could sweep.
+      const canSweep = !caps || (dir.zoom ? caps.continuousZoom : caps.continuousPanTilt)
       if (!canStep) {
         // No step on this axis: the hold-to-sweep behaviour, immediately, as
         // before capabilities existed.
@@ -157,15 +179,18 @@ export function PtzPad({ cameraId }: { cameraId: string }) {
         return
       }
       press.current = 'pending'
+      // A relative-only camera cannot sweep, so a long press is still one
+      // step on release rather than a continuous move it never offered.
+      if (!canSweep) return
       holdTimer.current = window.setTimeout(() => {
         press.current = 'sweeping'
         holdTimer.current = null
         start(dir)
       }, TAP_MS)
     },
-    onPointerUp: () => endPress(dir),
-    onPointerCancel: () => endPress(null),
-    onLostPointerCapture: () => endPress(null),
+    onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => endPress(e.pointerId, dir),
+    onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => endPress(e.pointerId, null),
+    onLostPointerCapture: (e: React.PointerEvent<HTMLButtonElement>) => endPress(e.pointerId, null),
   })
 
   const savePreset = async () => {

@@ -59,6 +59,8 @@ public sealed class OnvifTextTests
     [Theory]
     [InlineData("\u00C2\u00A9")]
     [InlineData("\u00C2\u00B0C")]
+    [InlineData("\u00C3\u2014")]   // Windows-1252 reading of "×" (C3 97): a symbol among the letters
+    [InlineData("\u00C3\u00B7")]   // "÷" (C3 B7)
     public void ASymbolOnlyDecode_IsAmbiguousAndLeftAlone(string name) =>
         Assert.Equal(name, OnvifText.RepairMojibake(name));
 

@@ -58,9 +58,10 @@ public static class OnvifText
         {
             // Outside Latin-1: proof. A Latin-1 letter (0xC0–0xFF): also
             // proof — its mangled form is a pair no one types on purpose.
-            // Symbols (©, °, ±) decide nothing.
+            // Symbols (©, °, ±, and the × ÷ that sit among the letters)
+            // decide nothing.
             if (c > '\u00FF') return decoded;
-            if (c is >= '\u00C0' and <= '\u00FF') return decoded;
+            if (c >= '\u00C0' && char.IsLetter(c)) return decoded;
         }
 
         return value;
