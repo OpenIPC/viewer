@@ -58,6 +58,89 @@ public static class PtzApi
                 target!.Value.Client.StopPtzAsync(target.Value.Endpoint, target.Value.ProfileToken, ct));
         });
 
+        // One nudge — the browser equivalent of the desktop step pad. Unlike
+        // /move this needs no refresh loop and no stop: RelativeMove is a single
+        // request the camera runs to completion, and PtzController falls back to
+        // a short self-stopping move on cameras that declare a continuous space.
+        app.MapPost("/api/v1/cameras/{id}/ptz/step", async (
+            string id, PtzMoveRequest? body, HttpContext ctx, CancellationToken ct) =>
+        {
+            var (target, error) = await TryResolveAsync(ctx, id, ct);
+            if (error is not null)
+                return error;
+
+            var step = new PtzVelocity(Clamp(body?.PanX), Clamp(body?.TiltY), Clamp(body?.Zoom));
+
+            return await InvokeAsync(ctx, "step", async () =>
+            {
+                // Seed the controller with cached capabilities so a step is one
+                // SOAP call, not a capability discovery per press; the cache
+                // fills from whichever request needed the answer first.
+                var key = CacheKey(id, target!.Value);
+                CapabilitiesCache.TryGetValue(key, out var known);
+                var controller = new PtzController(
+                    target.Value.Client, target.Value.Endpoint, target.Value.ProfileToken, known);
+                await controller.StepAsync(step, Speed(body?.Speed), ct);
+                if (known is null)
+                    CapabilitiesCache[key] = await controller.GetCapabilitiesAsync(ct);
+            });
+        });
+
+        app.MapPost("/api/v1/cameras/{id}/ptz/home", async (
+            string id, PtzMoveRequest? body, HttpContext ctx, CancellationToken ct) =>
+        {
+            var (target, error) = await TryResolveAsync(ctx, id, ct);
+            if (error is not null)
+                return error;
+
+            return await InvokeAsync(ctx, "home", () =>
+                target!.Value.Client.GotoHomeAsync(
+                    target.Value.Endpoint, target.Value.ProfileToken, Speed(body?.Speed), ct));
+        });
+
+        // What the camera can do, so the browser hides the buttons it would only
+        // fail with — the same question the desktop head asks once per camera.
+        app.MapGet("/api/v1/cameras/{id}/ptz/capabilities", async (
+            string id, HttpContext ctx, CancellationToken ct) =>
+        {
+            var (target, error) = await TryResolveAsync(ctx, id, ct);
+            if (error is not null)
+                return error;
+
+            try
+            {
+                var caps = await target!.Value.Client.GetPtzCapabilitiesAsync(
+                    target.Value.Endpoint, target.Value.ProfileToken, ct);
+                CapabilitiesCache[CacheKey(id, target.Value)] = caps;
+                return Results.Json(new
+                {
+                    relativePanTilt = caps.SupportsRelativePanTilt,
+                    relativeZoom = caps.SupportsRelativeZoom,
+                    continuousPanTilt = caps.SupportsContinuousPanTilt,
+                    continuousZoom = caps.SupportsContinuousZoom,
+                    home = caps.SupportsHome,
+                    fieldOfView = caps.RelativeIsFieldOfView,
+                });
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // Continuous-only is the safe answer, and the one every PTZ
+                // camera can honour; the pad keeps its hold-to-sweep keys and
+                // gains nothing it cannot verify. An aborted request is not an
+                // answer, so it never reaches the cache.
+                CapabilitiesCache[CacheKey(id, target!.Value)] = PtzCapabilities.ContinuousOnly;
+                return Results.Json(new
+                {
+                    relativePanTilt = false,
+                    relativeZoom = false,
+                    continuousPanTilt = true,
+                    continuousZoom = true,
+                    home = false,
+                    fieldOfView = false,
+                });
+            }
+        });
+
         app.MapGet("/api/v1/cameras/{id}/ptz/presets", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
             var (target, error) = await TryResolveAsync(ctx, id, ct);
@@ -120,6 +203,17 @@ public static class PtzApi
             });
         });
     }
+
+    // Capabilities are a property of the hardware behind an endpoint and
+    // profile, so that — not the camera id alone — is the key: editing a
+    // camera's host, port or profile must not let the old device's answer pick
+    // the movement for the new one. /capabilities also refreshes the entry
+    // whenever the pad asks again (every mount).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, PtzCapabilities> CapabilitiesCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static string CacheKey(string id, PtzTarget target) =>
+        $"{id}\u0000{target.Endpoint.DeviceServiceUri}\u0000{target.ProfileToken}";
 
     // Everything a PTZ call needs: the ONVIF transport plus the camera's endpoint
     // and media profile. Credentials come from the secrets store, never the API.
@@ -187,6 +281,11 @@ public static class PtzApi
     private static IResult PtzUnavailable() =>
         Results.Json(new { error = "ptz_unavailable" }, statusCode: StatusCodes.Status409Conflict);
 
+    // Steps and home carry a speed of their own; a continuous move carries its
+    // speed inside the velocity instead.
+    private static float Speed(float? requested) =>
+        requested is { } s && !float.IsNaN(s) ? Math.Clamp(s, 0.1f, 1f) : 0.6f;
+
     private static float Clamp(float? value) =>
         value is not { } v || float.IsNaN(v) ? 0f : Math.Clamp(v, -1f, 1f);
 
@@ -201,6 +300,6 @@ public static class PtzApi
 
 // Axes are ONVIF-normalized [-1, 1]; TimeoutMs is the self-stop window the camera
 // applies when the next refresh doesn't arrive.
-internal sealed record PtzMoveRequest(float? PanX, float? TiltY, float? Zoom, int? TimeoutMs);
+internal sealed record PtzMoveRequest(float? PanX, float? TiltY, float? Zoom, int? TimeoutMs, float? Speed);
 
 internal sealed record PtzPresetRequest(string? Name);

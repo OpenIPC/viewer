@@ -133,6 +133,37 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     [ObservableProperty] private string? _snapshotPath;
     [ObservableProperty] private PtzController? _ptz;
+
+    // What this camera's PTZ node can actually do, read once when the page
+    // opens. Null until then, and the buttons that depend on it stay hidden
+    // rather than failing when pressed.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SupportsHome))]
+    [NotifyPropertyChangedFor(nameof(SupportsSetHome))]
+    [NotifyPropertyChangedFor(nameof(CanStepPanTilt))]
+    [NotifyPropertyChangedFor(nameof(CanStepZoom))]
+    private PtzCapabilities? _ptzCapabilities;
+
+    // Move speed for steps, presets and home — the same 0..1 the joystick uses.
+    // 0.6 is brisk without overshooting on a fast dome.
+    [ObservableProperty] private double _ptzSpeed = 0.6;
+
+    public bool SupportsHome => PtzCapabilities?.SupportsHome ?? false;
+
+    public bool SupportsSetHome => PtzCapabilities?.SupportsSetHome ?? false;
+
+    // Until the capabilities have loaded the keys stay visible — that is the
+    // pre-capability behaviour, and hiding them for the split second of the
+    // probe would make the panel flicker.
+    public bool CanStepPanTilt => PtzCapabilities is not { } c || c.CanStepPanTilt;
+
+    public bool CanStepZoom => PtzCapabilities is not { } c || c.CanStepZoom;
+
+    // How far one press of an arrow moves, normalized. On a camera that reports
+    // its relative space in field-of-view units this is a sixth of the frame —
+    // small enough to frame a doorway, large enough that a press feels like it
+    // did something.
+    private const float PtzStepSize = 0.16f;
     [ObservableProperty] private string _newPresetName = "";
 
     // Majestic state. IsMajestic gates the whole config panel; MajesticConfig
@@ -574,6 +605,90 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
     [RelayCommand]
     private void TogglePtzOverlay() => IsPtzOverlayVisible = !IsPtzOverlayVisible;
+
+    // The keypad's middle key: stops whatever is moving, joystick sweep or a
+    // step whose camera ignored its timeout.
+    [RelayCommand]
+    private async Task StopPtzAsync()
+    {
+        if (Ptz is null) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await Ptz.StopAsync(cts.Token).ConfigureAwait(true);
+    }
+
+    // One nudge per press. The direction is a string so the eight arrows and
+    // the two zoom buttons are one command with a parameter in XAML rather than
+    // ten near-identical commands.
+    [RelayCommand]
+    private async Task StepAsync(string? direction)
+    {
+        if (Ptz is null || string.IsNullOrEmpty(direction)) return;
+
+        var step = direction switch
+        {
+            "up" => new PtzVelocity(0, PtzStepSize, 0),
+            "down" => new PtzVelocity(0, -PtzStepSize, 0),
+            "left" => new PtzVelocity(-PtzStepSize, 0, 0),
+            "right" => new PtzVelocity(PtzStepSize, 0, 0),
+            "upleft" => new PtzVelocity(-PtzStepSize, PtzStepSize, 0),
+            "upright" => new PtzVelocity(PtzStepSize, PtzStepSize, 0),
+            "downleft" => new PtzVelocity(-PtzStepSize, -PtzStepSize, 0),
+            "downright" => new PtzVelocity(PtzStepSize, -PtzStepSize, 0),
+            "zoomin" => new PtzVelocity(0, 0, PtzStepSize),
+            "zoomout" => new PtzVelocity(0, 0, -PtzStepSize),
+            _ => PtzVelocity.Zero,
+        };
+        if (step.Equals(PtzVelocity.Zero)) return;
+
+        try
+        {
+            await Ptz.StepAsync(step, (float)PtzSpeed, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PTZ step {Direction} failed for {CameraId}", direction, _camera.Id);
+        }
+    }
+
+    [RelayCommand]
+    private async Task GoHomeAsync()
+    {
+        if (Ptz is null) return;
+        try
+        {
+            await Ptz.GoHomeAsync((float)PtzSpeed, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Home is optional, and a camera may advertise PTZ and still refuse
+            // it. Log it rather than hiding the button on every camera because
+            // some cannot.
+            _logger.LogWarning(ex, "PTZ home failed for {CameraId}", _camera.Id);
+        }
+    }
+
+    // Overwriting the home position is not undoable from here, so it asks.
+    [RelayCommand]
+    private async Task SetHomeAsync()
+    {
+        if (Ptz is null) return;
+
+        var confirmed = await _dialogs.ConfirmAsync(
+            Localizer.Instance["Ptz.SetHome.Title"],
+            Localizer.Instance["Ptz.SetHome.Message"],
+            confirmLabel: Localizer.Instance["Ptz.SetHome"],
+            cancelLabel: Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+        if (!confirmed) return;
+
+        try
+        {
+            await Ptz.SetHomeAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PTZ set-home failed for {CameraId}", _camera.Id);
+        }
+    }
 
     [RelayCommand]
     private void ResetZoom() => ZoomLevel = MinZoom;
@@ -1191,7 +1306,28 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         var port = _camera.OnvifPort ?? 80;
         var endpoint = OnvifEndpoint.FromHost(_camera.Host, port, creds);
         Ptz = new PtzController(_onvif, endpoint, _camera.OnvifProfileToken!);
+        // The capability probe is several sequential SOAP calls; a camera that
+        // half-answers must not stall the presets (or the Majestic setup queued
+        // behind this), so it runs in the background. Until it lands the pad
+        // shows every key, as it did before capabilities existed.
+        _ = LoadPtzCapabilitiesAsync(Ptz, ct);
         await ReloadPresetsAsync(ct).ConfigureAwait(true);
+    }
+
+    // Best-effort: a camera that cannot describe itself gets the continuous-only
+    // profile. The only thing that throws is cancellation — leaving the page.
+    private async Task LoadPtzCapabilitiesAsync(PtzController ptz, CancellationToken ct)
+    {
+        try
+        {
+            var caps = await ptz.GetCapabilitiesAsync(ct).ConfigureAwait(true);
+            if (ReferenceEquals(Ptz, ptz))
+                PtzCapabilities = caps;
+        }
+        catch (OperationCanceledException)
+        {
+            // Page deactivated mid-probe; the next activation asks again.
+        }
     }
 
     private async Task ReloadPresetsAsync(CancellationToken ct)

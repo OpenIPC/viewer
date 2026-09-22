@@ -222,4 +222,26 @@ public sealed class OnvifCoreClient : IOnvifClient
             try { co.Abort(); } catch { /* swallow */ }
         }
     }
+
+    // The PTZ operations added for capability-driven stepping are implemented
+    // only by SoapOnvifClient, which is what DI resolves; this WCF path is the
+    // superseded one kept for reference. Throwing beats a silent no-op, which
+    // would look like a camera that ignores its buttons.
+    public Task<PtzCapabilities> GetPtzCapabilitiesAsync(
+        OnvifEndpoint endpoint, string profileToken, CancellationToken ct) =>
+        throw new NotSupportedException("PTZ capabilities require SoapOnvifClient.");
+
+    public Task RelativeMoveAsync(
+        OnvifEndpoint endpoint, string profileToken, PtzVelocity step, float speed, CancellationToken ct) =>
+        throw new NotSupportedException("RelativeMove requires SoapOnvifClient.");
+
+    public Task<PtzStatus> GetPtzStatusAsync(
+        OnvifEndpoint endpoint, string profileToken, CancellationToken ct) =>
+        throw new NotSupportedException("GetStatus requires SoapOnvifClient.");
+
+    public Task GotoHomeAsync(OnvifEndpoint endpoint, string profileToken, float speed, CancellationToken ct) =>
+        throw new NotSupportedException("GotoHomePosition requires SoapOnvifClient.");
+
+    public Task SetHomeAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct) =>
+        throw new NotSupportedException("SetHomePosition requires SoapOnvifClient.");
 }

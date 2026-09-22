@@ -20,6 +20,8 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   play: <path d="M6 4l14 8-14 8V4z" fill="currentColor" stroke="none" />,
+  // House: the PTZ home position, in the middle of the pad where a keypad puts it.
+  home: <path d="M3 10.5 12 3l9 7.5M6 9.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none" />,
   download: <path d="M12 3v12M7 11l5 5 5-5M4 21h16" />,
   camera: (

@@ -72,6 +72,17 @@ export type CalendarPointDto = { startedAt: string; sizeBytes: number }
 
 export type GroupDto = { id: number; name: string; sortOrder: number }
 
+// What this camera's PTZ node can do, so the pad hides buttons it would only
+// fail with.
+export type PtzCapabilitiesDto = {
+  relativePanTilt: boolean
+  relativeZoom: boolean
+  continuousPanTilt: boolean
+  continuousZoom: boolean
+  home: boolean
+  fieldOfView: boolean
+}
+
 export type PtzPresetDto = { token: string; name: string }
 
 // A snapshot kept in the shared library (same rows the desktop browser reads).
@@ -302,6 +313,13 @@ export const api = {
   // and send stop on release. A camera that never gets the stop halts on its own.
   ptzMove: (id: string, v: { panX?: number; tiltY?: number; zoom?: number; timeoutMs?: number }) =>
     req<void>('POST', `/api/v1/cameras/${id}/ptz/move`, v),
+  // One nudge: no hold loop and no stop, the camera runs it to completion.
+  ptzStep: (id: string, v: { panX?: number; tiltY?: number; zoom?: number; speed?: number }) =>
+    req<void>('POST', `/api/v1/cameras/${id}/ptz/step`, v),
+  ptzHome: (id: string, speed: number) =>
+    req<void>('POST', `/api/v1/cameras/${id}/ptz/home`, { speed }),
+  ptzCapabilities: (id: string) =>
+    req<PtzCapabilitiesDto>('GET', `/api/v1/cameras/${id}/ptz/capabilities`),
   ptzStop: (id: string) => req<void>('POST', `/api/v1/cameras/${id}/ptz/stop`),
   ptzPresets: (id: string) => req<PtzPresetDto[]>('GET', `/api/v1/cameras/${id}/ptz/presets`),
   ptzSavePreset: (id: string, name: string) =>
