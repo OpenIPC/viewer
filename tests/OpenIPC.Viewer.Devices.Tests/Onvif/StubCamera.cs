@@ -15,7 +15,8 @@ internal sealed record StubRequest(
     string Body,
     string? ContentType,
     string? SoapAction,
-    string? Authorization)
+    string? Authorization,
+    string Path = "/")
 {
     public bool IsSoap12 =>
         (ContentType ?? "").Contains("application/soap+xml", StringComparison.OrdinalIgnoreCase);
@@ -81,7 +82,8 @@ internal sealed class StubCamera : IDisposable
                     body,
                     ctx.Request.ContentType,
                     ctx.Request.Headers["SOAPAction"],
-                    ctx.Request.Headers["Authorization"]);
+                    ctx.Request.Headers["Authorization"],
+                    ctx.Request.Url?.AbsolutePath ?? "/");
                 _requests.Enqueue(request);
 
                 var (payload, status) = respond(request);

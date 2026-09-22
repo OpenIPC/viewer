@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIPC.Viewer.Core.Entities;
+using OpenIPC.Viewer.Core.Onvif;
 using OpenIPC.Viewer.Devices.Onvif;
 
 namespace OpenIPC.Viewer.Devices.Tests.Onvif;
@@ -166,7 +167,95 @@ public sealed class SoapOnvifClientInteropTests
         Assert.Equal(1, camera.Requests.Count(r => r.Is("SetPreset")));
     }
 
+    // gSOAP — what most ONVIF firmware is built on — doesn't always stay silent
+    // when handed an envelope version it wasn't built for: it says so with a
+    // VersionMismatch fault. That fault is the one that means "ask again in the
+    // other dialect", not "the camera refused".
+    [Fact]
+    public async Task AVersionMismatchFault_IsRetriedAsSoap11()
+    {
+        using var camera = StubCamera.Start(req => req.IsSoap12
+            ? (Envelope12(
+                "<s:Fault xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">" +
+                "<s:Code><s:Value>s:VersionMismatch</s:Value></s:Code>" +
+                "<s:Reason><s:Text>SOAP version mismatch or invalid SOAP message</s:Text></s:Reason>" +
+                "</s:Fault>"), 500)
+            : (Envelope11(Capabilities()), 200));
+
+        var caps = await NewClient().GetCapabilitiesAsync(camera.Endpoint(null), CancellationToken.None);
+
+        Assert.NotNull(caps.MediaServiceUri);
+        Assert.Contains(camera.Requests, r => r.Is("GetCapabilities") && r.IsSoap11);
+    }
+
+    // A wrong password is the most common failure there is, and it rarely
+    // arrives as a fault — an HTML error page with a 401 is typical. It must be
+    // named as a login problem, not as "ONVIF is switched off".
+    [Fact]
+    public async Task ARefusedLogin_IsNamedAsSuch()
+    {
+        using var camera = StubCamera.Start(_ => ("<html><body>401 Unauthorized</body></html>", 401));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewClient().GetCapabilitiesAsync(
+                camera.Endpoint(new CameraCredentials("admin", "wrong")), CancellationToken.None));
+
+        Assert.Contains("username and password", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Issue #67, end to end: a YooSee-style firmware that advertises every
+    // XAddr one section down and only answers each service at its own path.
+    // The client must find the real PTZ service and send the move there.
+    [Fact]
+    public async Task ShiftedXAddrs_AreProvedBeforeUse()
+    {
+        StubCamera? camera = null;
+        camera = StubCamera.Start(req =>
+        {
+            var at = $"http://127.0.0.1:{camera!.Port}";
+            if (req.Is("GetSystemDateAndTime") || req.Is("GetCapabilities"))
+                return req.Path == "/onvif/device_service"
+                    ? (Envelope12(ShiftedCapabilities(at)), 200)
+                    : (string.Empty, 404);
+            if (req.Is("GetNodes"))
+                return req.Path == "/onvif/ptz_service"
+                    ? (Envelope12("<tptz:GetNodesResponse xmlns:tptz=\"http://www.onvif.org/ver20/ptz/wsdl\"/>"), 200)
+                    : (string.Empty, 404);
+            if (req.Is("ContinuousMove"))
+                return req.Path == "/onvif/ptz_service"
+                    ? (Envelope12("<tptz:ContinuousMoveResponse xmlns:tptz=\"http://www.onvif.org/ver20/ptz/wsdl\"/>"), 200)
+                    : (string.Empty, 404);
+            return (string.Empty, 404);
+        });
+        using var _ = camera;
+
+        var client = NewClient();
+        var endpoint = camera.Endpoint(null);
+        await client.ContinuousMoveAsync(endpoint, "IPCProfilesToken0", new PtzVelocity(1f, 0f, 0f), null, CancellationToken.None);
+        await client.ContinuousMoveAsync(endpoint, "IPCProfilesToken0", new PtzVelocity(1f, 0f, 0f), null, CancellationToken.None);
+
+        var moves = camera.Requests.Where(r => r.Is("ContinuousMove")).ToList();
+        Assert.Equal(2, moves.Count);
+        Assert.All(moves, m => Assert.Equal("/onvif/ptz_service", m.Path));
+        // The verdict is cached: the second move neither re-reads the
+        // capabilities nor re-proves the service.
+        Assert.Equal(1, camera.Requests.Count(r => r.Is("GetCapabilities")));
+    }
+
     // --- helpers ------------------------------------------------------------
+
+    // Verbatim layout from the A'Gold CAM-10 report: every section's XAddr is
+    // the next section's path, and DeviceIO carries an address the camera
+    // no longer has.
+    private static string ShiftedCapabilities(string at) =>
+        "<tds:GetCapabilitiesResponse xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" " +
+        "xmlns:tt=\"http://www.onvif.org/ver10/schema\"><tds:Capabilities>" +
+        $"<tt:Device><tt:XAddr>{at}/onvif/device_service</tt:XAddr></tt:Device>" +
+        $"<tt:Events><tt:XAddr>{at}/onvif/media_service</tt:XAddr></tt:Events>" +
+        $"<tt:Media><tt:XAddr>{at}/onvif/ptz_service</tt:XAddr></tt:Media>" +
+        $"<tt:PTZ><tt:XAddr>{at}/onvif/deviceio_service</tt:XAddr></tt:PTZ>" +
+        "<tt:Extension><tt:DeviceIO><tt:XAddr>http://10.0.0.7:5000/onvif/deviceio_service</tt:XAddr></tt:DeviceIO></tt:Extension>" +
+        "</tds:Capabilities></tds:GetCapabilitiesResponse>";
 
     private static string Capabilities(string mediaXAddr = "http://127.0.0.1:1/onvif/media") =>
         "<tds:GetCapabilitiesResponse xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" " +

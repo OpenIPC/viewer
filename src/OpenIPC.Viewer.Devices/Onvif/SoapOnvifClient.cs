@@ -61,7 +61,7 @@ public sealed class SoapOnvifClient : IOnvifClient
     // answered a read-only call of its own service (see ResolveServiceAsync).
     private readonly ConcurrentDictionary<string, Uri> _serviceByDevice = new(StringComparer.OrdinalIgnoreCase);
 
-    // Hosts that turned out to speak SOAP 1.1 only. Learned from the retry the
+    // Addresses (host:port) that turned out to speak SOAP 1.1 only. Learned from the retry the
     // first time a host answers 1.2 with nothing usable, then used as the first
     // choice — so the discovery costs one extra request per host, ever, and a
     // state-changing call is never the one doing the discovering.
@@ -286,8 +286,6 @@ public sealed class SoapOnvifClient : IOnvifClient
         await CallAuthedAsync(ptz, endpoint, $"{Tptz}/RemovePreset", reqBody, ct, retryable: false).ConfigureAwait(false);
     }
 
-    // --- Transport ----------------------------------------------------------
-
     // --- PTZ capability, steps and home ------------------------------------
 
     public async Task<PtzCapabilities> GetPtzCapabilitiesAsync(
@@ -316,7 +314,11 @@ public sealed class SoapOnvifClient : IOnvifClient
         }
 
         var spaces = Descendant(options, "Spaces");
-        var relativePanTilt = spaces is null ? null : Descendant(spaces, "RelativePanTiltTranslationSpace");
+        // Cameras often declare both the generic translation space and the FOV
+        // one; the FOV one is what makes a step feel the same at any zoom.
+        var relativeSpaces = spaces?.Descendants()
+            .Where(e => e.Name.LocalName == "RelativePanTiltTranslationSpace").ToList();
+        var relativePanTilt = relativeSpaces?.FirstOrDefault(IsFovSpace) ?? relativeSpaces?.FirstOrDefault();
         var relativeZoom = spaces is null ? null : Descendant(spaces, "RelativeZoomTranslationSpace");
         var absoluteZoom = spaces is null ? null : Descendant(spaces, "AbsoluteZoomPositionSpace");
         var continuousPanTilt = spaces is null ? null : Descendant(spaces, "ContinuousPanTiltVelocitySpace");
@@ -325,8 +327,7 @@ public sealed class SoapOnvifClient : IOnvifClient
         // A space URI ending in TranslationSpaceFov means a step is a fraction
         // of the current field of view, so one press covers the same part of
         // the picture at any zoom.
-        var fov = relativePanTilt is not null
-            && (Value(relativePanTilt, "URI") ?? "").Contains("TranslationSpaceFov", StringComparison.OrdinalIgnoreCase);
+        var fov = relativePanTilt is not null && IsFovSpace(relativePanTilt);
 
         // Home is not advertised among the spaces; the node knows. A camera
         // that cannot answer gets no home button rather than one that fails.
@@ -380,6 +381,9 @@ public sealed class SoapOnvifClient : IOnvifClient
             return (false, false);
         }
     }
+
+    private static bool IsFovSpace(XElement space) =>
+        (Value(space, "URI") ?? "").Contains("TranslationSpaceFov", StringComparison.OrdinalIgnoreCase);
 
     // xs:boolean allows both spellings.
     private static bool XmlBool(string? value) =>
@@ -474,8 +478,7 @@ public sealed class SoapOnvifClient : IOnvifClient
             var body = await CallAuthedAsync(ptz, endpoint, $"{Tptz}/GetServiceCapabilities",
                 $"<tptz:GetServiceCapabilities xmlns:tptz=\"{Tptz}\"/>", ct).ConfigureAwait(false);
             var caps = Descendant(body, "Capabilities");
-            return caps is not null
-                && string.Equals(Attr(caps, "MoveStatus"), "true", StringComparison.OrdinalIgnoreCase);
+            return caps is not null && XmlBool(Attr(caps, "MoveStatus"));
         }
         catch (Exception)
         {
@@ -513,6 +516,8 @@ public sealed class SoapOnvifClient : IOnvifClient
 
     private static float? ParseFloat(string? text) =>
         float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
+
+    // --- Transport ----------------------------------------------------------
 
     private enum ServiceKind { Media, Ptz }
 
@@ -571,13 +576,15 @@ public sealed class SoapOnvifClient : IOnvifClient
             ? ($"{Trt}/GetProfiles", $"<trt:GetProfiles xmlns:trt=\"{Trt}\"/>", "GetProfilesResponse")
             : ($"{Tptz}/GetNodes", $"<tptz:GetNodes xmlns:tptz=\"{Tptz}\"/>", "GetNodesResponse");
 
-        // CallAuthedAsync ran GetCapabilities just before, so the shift is known;
-        // a plain CallAsync skips its fault-retry, which here would only double
-        // the cost of every wrong candidate.
+        // CallAuthedAsync ran GetCapabilities just before, so the shift and the
+        // SOAP dialect are both known. A plain CallAsync skips the fault retry,
+        // and retryable: false skips the dialect retry — either would only
+        // double the cost of every wrong candidate, and a wrong path answering
+        // garbage must not teach the host the wrong dialect.
         _shiftByHost.TryGetValue(endpoint.DeviceServiceUri.Host, out var shift);
         try
         {
-            var response = await CallAsync(service, action, body, endpoint.Credentials, shift, retryable: true, ct).ConfigureAwait(false);
+            var response = await CallAsync(service, action, body, endpoint.Credentials, shift, retryable: false, ct).ConfigureAwait(false);
             return response.Name.LocalName == expected;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -657,7 +664,8 @@ public sealed class SoapOnvifClient : IOnvifClient
         // Mutations rely on the dialect already learned from this host's
         // earlier read calls (the clock probe at minimum) and fail honestly
         // rather than guessing.
-        var soap12First = !_soap11Hosts.ContainsKey(service.Host);
+        var address = $"{service.Host}:{service.Port}";
+        var soap12First = !_soap11Hosts.ContainsKey(address);
         var (status, text) = await SendAsync(service, action, body, credentials, shift, soap12: soap12First, ct)
             .ConfigureAwait(false);
 
@@ -672,11 +680,16 @@ public sealed class SoapOnvifClient : IOnvifClient
             {
                 // The other dialect is the one this host speaks; remember it in
                 // whichever direction the flip went.
-                if (soap12First) _soap11Hosts[service.Host] = 1;
-                else _soap11Hosts.TryRemove(service.Host, out _);
+                if (soap12First) _soap11Hosts[address] = 1;
+                else _soap11Hosts.TryRemove(address, out _);
             }
         }
 
+        // A refused login usually comes back as an HTML error page or nothing,
+        // not a fault — say so rather than blaming an "empty body".
+        if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && !IsUsable(text))
+            throw new InvalidOperationException(
+                $"ONVIF {action}: the camera refused the login (HTTP {(int)status}). Check the username and password.");
         if (string.IsNullOrWhiteSpace(text)) throw EmptyBody(action, status);
 
         XElement root;
@@ -744,12 +757,18 @@ public sealed class SoapOnvifClient : IOnvifClient
     // for SOAP 1.1 typically answers a 1.2 request with no bytes at all or with
     // an envelope whose Body is empty, and both mean "ask again differently".
     // A fault is a usable answer — a camera that says why it refused is not
-    // asked twice.
+    // asked twice — except VersionMismatch, which is exactly how a gSOAP
+    // firmware built for 1.1 rejects a 1.2 envelope when it doesn't stay silent.
     private static bool IsUsable(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
-        try { return Child(Child(XDocument.Parse(text).Root!, "Body"), null) is not null; }
+        XElement? body;
+        try { body = Child(Child(XDocument.Parse(text).Root!, "Body"), null); }
         catch (Exception) { return false; }
+        if (body is null) return false;
+        if (body.Name.LocalName != "Fault") return true;
+        var code = Descendant(body, "faultcode")?.Value ?? Descendant(body, "Value")?.Value ?? string.Empty;
+        return !code.Contains("VersionMismatch", StringComparison.Ordinal);
     }
 
     // An empty body is what a camera sends when it will not say why. In
