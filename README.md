@@ -19,8 +19,11 @@ Built with .NET 9 / 10 and Avalonia 12.
   VideoToolbox / Android MediaCodec), auto-reconnect, auto SD/HD switching.
 - **Multi-camera grid** — up to 25 streams, tabbed layouts, drag-reorder,
   fullscreen kiosk mode, low-cost "stills" mode (periodic HTTP snapshots).
-- **Single-camera view** — PTZ joystick + presets, telemetry overlay,
-  digital zoom (pinch / Ctrl+wheel), snapshot to disk + share.
+- **Single-camera view** — PTZ joystick for sweeping plus a step keypad for
+  framing (one nudge per press, home position, move speed), presets,
+  telemetry overlay, digital zoom (pinch / Ctrl+wheel), snapshot to disk +
+  share. Which PTZ controls appear is read from the camera, so a device that
+  cannot step or go home is not offered buttons that would fail.
 - **AI detection (local)** — ONNX object detection on-device (person / car /
   animal…), boxes in the grid and single view, auto-record on detection.
   No cloud: the model runs in-process.

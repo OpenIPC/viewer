@@ -7,6 +7,30 @@
              x:Class="OpenIPC.Viewer.App.Views.Pages.SingleCameraPage"
              x:DataType="vm:SingleCameraPageViewModel">
 
+  <UserControl.Styles>
+    <!-- PTZ step keys: square and quiet until hovered, so nine of them read as
+         one keypad rather than nine competing buttons. -->
+    <Style Selector="Button.ptz-step">
+      <Setter Property="Width" Value="42" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Margin" Value="2" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.ptz-step:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="TextElement.Foreground" Value="#101010" />
+    </Style>
+    <Style Selector="Button.ptz-home">
+      <Setter Property="Background" Value="#4DFFFFFF" />
+    </Style>
+  </UserControl.Styles>
+
   <!-- PageScroll: Disabled by default so on desktop/wide the Grid fills the
        viewport and the video row (*) stretches — identical to a plain Grid.
        On phone-width viewports the code-behind switches the video row to a
@@ -132,6 +156,59 @@
                   Margin="0,0,12,48" Spacing="10"
                   IsVisible="{Binding IsPtzPanelVisible}">
         <controls:PtzJoystick Controller="{Binding Ptz}" HorizontalAlignment="Right" />
+
+        <!-- Step pad. The joystick above is for sweeping a scene; this is for
+             framing one — a fixed nudge per press, which is the only way to
+             land on a doorway at full zoom. Home sits in the middle, where
+             every NVR keypad puts it. -->
+        <Border Background="#90000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right">
+          <StackPanel Spacing="8">
+            <UniformGrid Rows="3" Columns="3" IsVisible="{Binding CanStepPanTilt}">
+              <Button Classes="ptz-step" Content="↖" CommandParameter="upleft"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="↑" CommandParameter="up"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="↗" CommandParameter="upright"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="←" CommandParameter="left"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step ptz-home" Content="⌂"
+                      Command="{Binding GoHomeCommand}"
+                      IsVisible="{Binding SupportsHome}"
+                      ToolTip.Tip="{Binding [Ptz.Home], Source={x:Static svc:Localizer.Instance}}" />
+              <Button Classes="ptz-step" Content="→" CommandParameter="right"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="↙" CommandParameter="downleft"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="↓" CommandParameter="down"
+                      Command="{Binding StepCommand}" />
+              <Button Classes="ptz-step" Content="↘" CommandParameter="downright"
+                      Command="{Binding StepCommand}" />
+            </UniformGrid>
+
+            <Grid ColumnDefinitions="*,*" IsVisible="{Binding CanStepZoom}">
+              <Button Grid.Column="0" Classes="ptz-step" Content="−" CommandParameter="zoomout"
+                      Command="{Binding StepCommand}" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="{Binding [Ptz.ZoomOut], Source={x:Static svc:Localizer.Instance}}" />
+              <Button Grid.Column="1" Classes="ptz-step" Content="+" CommandParameter="zoomin"
+                      Command="{Binding StepCommand}" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="{Binding [Ptz.ZoomIn], Source={x:Static svc:Localizer.Instance}}" />
+            </Grid>
+
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding [Ptz.Speed], Source={x:Static svc:Localizer.Instance}}"
+                         FontSize="{StaticResource FontSizeXs}" Foreground="#c8c8c8" />
+              <Slider Minimum="0.1" Maximum="1.0" Value="{Binding PtzSpeed, Mode=TwoWay}" Width="132" />
+            </StackPanel>
+
+            <Button Classes="outlined"
+                    Content="{Binding [Ptz.SetHome], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding SetHomeCommand}"
+                    IsVisible="{Binding SupportsSetHome}"
+                    FontSize="{StaticResource FontSizeXs}"
+                    HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Border>
 
         <Border Background="#90000000" CornerRadius="6" Padding="8" MaxWidth="280">
           <StackPanel Spacing="6">

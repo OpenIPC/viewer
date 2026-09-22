@@ -22,4 +22,23 @@ public interface IOnvifClient
     Task GotoPresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct);
     Task<string> SetPresetAsync(OnvifEndpoint endpoint, string profileToken, string name, CancellationToken ct);
     Task RemovePresetAsync(OnvifEndpoint endpoint, string profileToken, string presetToken, CancellationToken ct);
+
+    // Read once per camera: which move modes this node implements and the
+    // ranges it declares. Sending a value outside a declared range is the usual
+    // reason a move is silently clamped or refused.
+    Task<PtzCapabilities> GetPtzCapabilitiesAsync(
+        OnvifEndpoint endpoint, string profileToken, CancellationToken ct);
+
+    // A step, in normalized [-1, 1] per axis, relative to where the camera is
+    // now — what the arrow buttons send.
+    Task RelativeMoveAsync(
+        OnvifEndpoint endpoint, string profileToken, PtzVelocity step, float speed, CancellationToken ct);
+
+    // Where the camera is pointing, and whether it is still moving.
+    Task<PtzStatus> GetPtzStatusAsync(
+        OnvifEndpoint endpoint, string profileToken, CancellationToken ct);
+
+    Task GotoHomeAsync(OnvifEndpoint endpoint, string profileToken, float speed, CancellationToken ct);
+
+    Task SetHomeAsync(OnvifEndpoint endpoint, string profileToken, CancellationToken ct);
 }
