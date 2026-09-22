@@ -52,6 +52,10 @@ public sealed class SoapOnvifClient : IOnvifClient
     // first authed call, refreshed on an auth fault.
     private readonly ConcurrentDictionary<string, TimeSpan> _shiftByHost = new(StringComparer.OrdinalIgnoreCase);
 
+    // Media/PTZ service URI per device endpoint, cached only once it has
+    // answered a read-only call of its own service (see ResolveServiceAsync).
+    private readonly ConcurrentDictionary<string, Uri> _serviceByDevice = new(StringComparer.OrdinalIgnoreCase);
+
     public SoapOnvifClient(ILogger<SoapOnvifClient> logger)
     {
         _logger = logger;
@@ -71,15 +75,19 @@ public sealed class SoapOnvifClient : IOnvifClient
 
     public async Task<OnvifCapabilities> GetCapabilitiesAsync(OnvifEndpoint endpoint, CancellationToken ct)
     {
+        var caps = await GetCapabilitiesElementAsync(endpoint, ct).ConfigureAwait(false);
+        return new OnvifCapabilities(
+            MediaServiceUri: TryUri(XAddrOf(caps, "Media")),
+            PtzServiceUri: TryUri(XAddrOf(caps, "PTZ")));
+    }
+
+    private async Task<XElement?> GetCapabilitiesElementAsync(OnvifEndpoint endpoint, CancellationToken ct)
+    {
         var body = await CallAuthedAsync(endpoint.DeviceServiceUri, endpoint,
             $"{Tds}/GetCapabilities",
             $"<tds:GetCapabilities xmlns:tds=\"{Tds}\"><tds:Category>All</tds:Category></tds:GetCapabilities>",
             ct).ConfigureAwait(false);
-
-        var caps = Child(body, "Capabilities");
-        return new OnvifCapabilities(
-            MediaServiceUri: TryUri(XAddrOf(caps, "Media")),
-            PtzServiceUri: TryUri(XAddrOf(caps, "PTZ")));
+        return Child(body, "Capabilities");
     }
 
     public async Task<OnvifDeviceInfo> GetDeviceInformationAsync(OnvifEndpoint endpoint, CancellationToken ct)
@@ -211,22 +219,75 @@ public sealed class SoapOnvifClient : IOnvifClient
 
     private enum ServiceKind { Media, Ptz }
 
-    // Media/PTZ calls go to the XAddr from GetCapabilities; fall back to the
-    // device service endpoint (onvif_simple_server often serves all at one URI).
+    // Media/PTZ calls go to the XAddr from GetCapabilities — but only once it has
+    // proven itself: some firmwares advertise the wrong service there (issue #67),
+    // so a candidate must answer a read-only call of its own service first. The
+    // first that does is cached for the endpoint. If none does, fall back to the
+    // advertised XAddr, else the device endpoint (onvif_simple_server often
+    // serves all at one URI), and let the real call report the real error.
     private async Task<Uri> ResolveServiceAsync(OnvifEndpoint endpoint, ServiceKind kind, CancellationToken ct)
     {
+        var key = $"{kind}\u0000{endpoint.DeviceServiceUri}";
+        if (_serviceByDevice.TryGetValue(key, out var known))
+            return known;
+
+        XElement? caps;
         try
         {
-            var caps = await GetCapabilitiesAsync(endpoint, ct).ConfigureAwait(false);
-            var uri = kind == ServiceKind.Media ? caps.MediaServiceUri : caps.PtzServiceUri;
-            if (uri is not null)
-                return uri;
+            caps = await GetCapabilitiesElementAsync(endpoint, ct).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             _logger.LogDebug(ex, "ONVIF capability lookup failed; using device endpoint for {Kind}", kind);
+            return endpoint.DeviceServiceUri;
         }
-        return endpoint.DeviceServiceUri;
+
+        var advertised = TryUri(XAddrOf(caps, kind == ServiceKind.Media ? "Media" : "PTZ"));
+        var all = caps?.Descendants().Where(e => e.Name.LocalName == "XAddr")
+            .Select(e => TryUri(e.Value)).OfType<Uri>().ToList() ?? new List<Uri>();
+        var candidates = kind == ServiceKind.Media
+            ? OnvifServiceCandidates.Media(endpoint.DeviceServiceUri, advertised, all)
+            : OnvifServiceCandidates.Ptz(endpoint.DeviceServiceUri, advertised, all);
+
+        foreach (var candidate in candidates)
+        {
+            if (!await AnswersAsync(candidate, endpoint, kind, ct).ConfigureAwait(false))
+                continue;
+            if (candidate != advertised)
+                _logger.LogInformation("ONVIF {Kind} service answers at {Uri}, not the advertised {Advertised}",
+                    kind, candidate, advertised?.ToString() ?? "(none)");
+            _serviceByDevice[key] = candidate;
+            return candidate;
+        }
+
+        _logger.LogDebug("No ONVIF {Kind} service candidate answered; using {Uri}",
+            kind, advertised ?? endpoint.DeviceServiceUri);
+        return advertised ?? endpoint.DeviceServiceUri;
+    }
+
+    // One cheap read-only call every implementation of the service must support:
+    // GetProfiles for Media, GetNodes for PTZ. The response element has to match,
+    // so a different service that happens to reply doesn't pass for this one.
+    private async Task<bool> AnswersAsync(Uri service, OnvifEndpoint endpoint, ServiceKind kind, CancellationToken ct)
+    {
+        var (action, body, expected) = kind == ServiceKind.Media
+            ? ($"{Trt}/GetProfiles", $"<trt:GetProfiles xmlns:trt=\"{Trt}\"/>", "GetProfilesResponse")
+            : ($"{Tptz}/GetNodes", $"<tptz:GetNodes xmlns:tptz=\"{Tptz}\"/>", "GetNodesResponse");
+
+        // CallAuthedAsync ran GetCapabilities just before, so the shift is known;
+        // a plain CallAsync skips its fault-retry, which here would only double
+        // the cost of every wrong candidate.
+        _shiftByHost.TryGetValue(endpoint.DeviceServiceUri.Host, out var shift);
+        try
+        {
+            var response = await CallAsync(service, action, body, endpoint.Credentials, shift, ct).ConfigureAwait(false);
+            return response.Name.LocalName == expected;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "ONVIF {Kind} candidate {Uri} did not answer", kind, service);
+            return false;
+        }
     }
 
     // Authenticated call with a per-host clock shift; on a fault, refresh the
