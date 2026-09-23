@@ -19,9 +19,11 @@
 #          rather than the rolling `latest` tag. `latest` is rebuilt daily and
 #          only keeps the branches BtbN currently builds: n7.1 was dropped from
 #          it in August 2026 (only master / n8.1 / n9.0 remain), which 404'd this
-#          script and took CI down with it. A dated tag keeps its assets, and the
-#          SHA-256 below makes a silently swapped or truncated archive fail here
-#          instead of at runtime.
+#          script and took CI down with it. Only month-end dated tags are kept
+#          long-term (back to 2024); mid-month ones are pruned within weeks, which
+#          404'd the previous 2026-08-16 pin. 2026-07-31 is the last month-end tag
+#          that still carries n7.1. The SHA-256 below makes a silently swapped or
+#          truncated archive fail here instead of at runtime.
 # Flavor:  lgpl-shared (no GPL components; redistributable alongside the app as
 #          long as the .so remain shared + replaceable — see README "Licensing").
 set -euo pipefail
@@ -29,9 +31,9 @@ set -euo pipefail
 # Overridable together: a different release/asset needs its own checksum, and
 # an empty EXPECTED_SHA256 skips the check (with a warning) rather than failing
 # every override.
-FFMPEG_RELEASE="${FFMPEG_RELEASE:-autobuild-2026-08-16-13-00}"
-ASSET_NAME="${ASSET_NAME:-ffmpeg-n7.1.5-16-g9a4bb2c579-linux64-lgpl-shared-7.1.tar.xz}"
-EXPECTED_SHA256="${EXPECTED_SHA256-05e4cf57a4f8bb63bda8a1a306dbf370c03e305088e7153c02e7761b2c181ec0}"
+FFMPEG_RELEASE="${FFMPEG_RELEASE:-autobuild-2026-07-31-14-10}"
+ASSET_NAME="${ASSET_NAME:-ffmpeg-n7.1.5-12-g1fdbca85aa-linux64-lgpl-shared-7.1.tar.xz}"
+EXPECTED_SHA256="${EXPECTED_SHA256-f5f0ad52c6ee28a222eb10838c231469a10ad325f84063d3bc0aadf08164b3ec}"
 FORCE="${FORCE:-0}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

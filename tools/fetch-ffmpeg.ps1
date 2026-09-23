@@ -9,18 +9,21 @@
   Version pin: n7.1 (matches FFmpeg.AutoGen 7.1.x bindings), taken from a dated
   release rather than the rolling `latest` tag - `latest` only keeps the branches
   BtbN currently builds, and n7.1 was dropped from it in August 2026 (master /
-  n8.1 / n9.0 remain), which 404'd this script. The SHA-256 below turns a swapped
-  or truncated archive into a failure here instead of at runtime.
+  n8.1 / n9.0 remain), which 404'd this script. Only month-end dated tags are
+  kept long-term; mid-month ones get pruned (that 404'd the 2026-08-16 pin), so
+  this uses 2026-07-31, the last month-end tag that still carries n7.1. The
+  SHA-256 below turns a swapped or truncated archive into a failure here
+  instead of at runtime.
   Build flavor: lgpl-shared (no GPL components; safe to redistribute alongside
   a closed-source app provided DLLs remain replaceable).
 #>
 [CmdletBinding()]
 param(
-    [string]$FfmpegRelease  = "autobuild-2026-08-16-13-00",
-    [string]$AssetName      = "ffmpeg-n7.1.5-16-g9a4bb2c579-win64-lgpl-shared-7.1.zip",
+    [string]$FfmpegRelease  = "autobuild-2026-07-31-14-10",
+    [string]$AssetName      = "ffmpeg-n7.1.5-12-g1fdbca85aa-win64-lgpl-shared-7.1.zip",
     # A different release/asset needs its own hash; pass an empty string to skip
     # the check rather than have every override fail.
-    [string]$ExpectedSha256 = "a950596cea0bf9766f169dae6f1e6eb623aa1ccfd2822cd20cd2874b120d4086",
+    [string]$ExpectedSha256 = "0f376f96fb38554ccefb1b2ae9c7c6a7b351f0e60a372b38262c320e8392c5d0",
     [switch]$Force
 )
 
