@@ -44,6 +44,9 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private bool _minimized;
     private bool _suppressSettingsRefresh;
     private bool _startupLayoutApplied;
+    // Serializes tile-order writes: each is a read-modify-write of LayoutTiles,
+    // so two quick drags must not land out of order.
+    private readonly SemaphoreSlim _reorderGate = new(1, 1);
     private CancellationTokenSource? _graceCts;
 
     public string Title => Localizer.Instance["Nav.Live"];
@@ -564,6 +567,13 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
         if (ActiveLayout is not { } a) return;
 
+        // Snapshot before the first await: a layout or page switch while the
+        // repository call is pending replaces Tiles, and its cameras must not be
+        // written into this layout.
+        var layoutId = a.Id;
+        var pageIds = Tiles.Select(t => t.Camera.Id).ToList();
+
+        await _reorderGate.WaitAsync(ct).ConfigureAwait(true);
         try
         {
             // Tiles holds only the current page's visible cameras. Write their new
@@ -571,17 +581,20 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             // member list, so cameras on other pages and beyond the session cap
             // keep their place. Matching by camera id (not by page offset +
             // index) stays correct when a closed tile has left a gap in Tiles.
-            var full = (await _layouts.GetTilesAsync(a.Id, ct).ConfigureAwait(true)).ToList();
-            var pageIds = Tiles.Select(t => t.Camera.Id).ToList();
+            var full = (await _layouts.GetTilesAsync(layoutId, ct).ConfigureAwait(true)).ToList();
             var positions = pageIds.Select(id => full.IndexOf(id)).Where(p => p >= 0).OrderBy(p => p).ToList();
             if (positions.Count != pageIds.Count) return;
             for (var i = 0; i < positions.Count; i++)
                 full[positions[i]] = pageIds[i];
-            await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
+            await _layouts.SetTilesAsync(layoutId, full, ct).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Persisting layout tile order failed");
+        }
+        finally
+        {
+            _reorderGate.Release();
         }
     }
 

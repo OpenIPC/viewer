@@ -8,6 +8,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
@@ -25,6 +26,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly ConfigSyncService _configSync;
     private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
+    private readonly ILogger<SettingsPageViewModel> _logger;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -176,7 +178,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
         ConfigSyncService configSync,
         OpenIPC.Viewer.Core.Notifications.INotificationService notifications,
-        OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts)
+        OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
+        ILogger<SettingsPageViewModel> logger)
     {
         _settings = settings;
         _fs = fs;
@@ -186,6 +189,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         _configSync = configSync;
         _notifications = notifications;
         _layouts = layouts;
+        _logger = logger;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -337,7 +341,12 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     {
         IReadOnlyList<OpenIPC.Viewer.Core.Entities.GridLayout> all;
         try { all = await _layouts.GetAllAsync(CancellationToken.None).ConfigureAwait(true); }
-        catch (Exception) { return; }
+        catch (Exception ex)
+        {
+            // Keep the "last used" fallback so the page still works.
+            _logger.LogWarning(ex, "Loading layouts for the startup-layout picker failed");
+            return;
+        }
 
         _suppressSave = true;
         try
