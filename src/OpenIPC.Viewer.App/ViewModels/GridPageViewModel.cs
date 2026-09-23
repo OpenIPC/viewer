@@ -473,6 +473,17 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate tile for {Camera}", camera.Name); }
         }
 
+        // Kept tiles hold their old index and new ones were appended, so after a
+        // layout switch the cameras the two layouts share showed in the previous
+        // layout's order (#69). Put Tiles back into the layout's stored order.
+        for (var i = 0; i < visible.Count; i++)
+        {
+            var j = -1;
+            for (var k = i; k < Tiles.Count; k++)
+                if (Tiles[k].Camera.Id == visible[i].Id) { j = k; break; }
+            if (j > i) Tiles.Move(j, i);
+        }
+
         // Slots fills the *visual* grid (always LayoutSize²), padding with
         // nulls when MaxConcurrentGridSessions is below the layout capacity.
         var visualCapacity = LayoutSize * LayoutSize;
@@ -513,9 +524,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     // Drag-reorder hook called from GridPage code-behind. Both indices are in
     // the *Tiles* collection (live cameras only — empty Slots placeholders are
-    // not draggable and can't be drop targets). Persists SortOrder = newIndex
-    // for the affected tiles; cameras outside the grid keep their existing
-    // SortOrder (so library ordering only shifts grid-included rows).
+    // not draggable and can't be drop targets). Persists the new order into the
+    // active layout's LayoutTiles positions; other layouts are untouched.
     public async Task MoveTileAsync(int fromIndex, int toIndex, CancellationToken ct)
     {
         if (fromIndex < 0 || fromIndex >= Tiles.Count) return;
@@ -534,20 +544,18 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
         try
         {
-            // Tiles holds only the current page's visible prefix; reorder within
-            // the full member list (offset by the page) so cameras on other pages
-            // and beyond the session cap keep their place.
-            var offset = CurrentPage * LayoutSize * LayoutSize;
-            var from = offset + fromIndex;
-            var to = offset + toIndex;
+            // Tiles holds only the current page's visible cameras. Write their new
+            // order back into the positions those same cameras occupy in the full
+            // member list, so cameras on other pages and beyond the session cap
+            // keep their place. Matching by camera id (not by page offset +
+            // index) stays correct when a closed tile has left a gap in Tiles.
             var full = (await _layouts.GetTilesAsync(a.Id, ct).ConfigureAwait(true)).ToList();
-            if (from < full.Count && to < full.Count)
-            {
-                var moved = full[from];
-                full.RemoveAt(from);
-                full.Insert(to, moved);
-                await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
-            }
+            var pageIds = Tiles.Select(t => t.Camera.Id).ToList();
+            var positions = pageIds.Select(id => full.IndexOf(id)).Where(p => p >= 0).OrderBy(p => p).ToList();
+            if (positions.Count != pageIds.Count) return;
+            for (var i = 0; i < positions.Count; i++)
+                full[positions[i]] = pageIds[i];
+            await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
