@@ -77,6 +77,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         CameraDirectoryService directory,
         SingleCameraPageFactory singleCameraFactory,
         RecordingPlayerPageFactory playerFactory,
+        UserSettingsService userSettings,
         ILogger<MainWindowViewModel> logger)
     {
         Live = live;
@@ -89,7 +90,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         _singleCameraFactory = singleCameraFactory;
         _playerFactory = playerFactory;
         _logger = logger;
-        _currentPage = library;
+        // Settings → Start page (#70): open straight into the live grid if asked.
+        _currentPage = userSettings.Current.StartupPage == "live" ? live : library;
 
         WeakReferenceMessenger.Default.Register<OpenCameraMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);

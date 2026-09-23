@@ -43,6 +43,7 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private bool _minimized;
     private bool _suppressSettingsRefresh;
+    private bool _startupLayoutApplied;
     private CancellationTokenSource? _graceCts;
 
     public string Title => Localizer.Instance["Nav.Live"];
@@ -156,7 +157,28 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         if (_minimized) return;
         _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
         await LoadLayoutsAsync(ct).ConfigureAwait(true);
+        await ApplyStartupLayoutOnceAsync().ConfigureAwait(true);
         await RefreshTilesAsync(ct).ConfigureAwait(true);
+    }
+
+    // Settings → "Start with Live" + a chosen layout (#70): the first grid load
+    // of the session opens that layout instead of the last active one. Once per
+    // session, so switching tabs afterwards sticks. Persisted as the active
+    // layout too, so the library's "in grid" checkboxes follow the same tab.
+    private async Task ApplyStartupLayoutOnceAsync()
+    {
+        if (_startupLayoutApplied) return;
+        _startupLayoutApplied = true;
+
+        var s = _userSettings.Current;
+        if (s.StartupPage != "live" || s.StartupLayoutId == 0) return;
+        var target = Layouts.FirstOrDefault(l => l.Id.Value == s.StartupLayoutId);
+        if (target is null || (ActiveLayout is { } cur && cur.Id == target.Id)) return;
+
+        ActiveLayout = target;
+        LayoutSize = target.GridSize;
+        CurrentPage = 0;
+        await PersistActiveLayoutAsync(target.Id.Value).ConfigureAwait(true);
     }
 
     private async Task LoadLayoutsAsync(CancellationToken ct)

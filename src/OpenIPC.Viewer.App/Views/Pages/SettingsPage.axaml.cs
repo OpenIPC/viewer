@@ -21,7 +21,12 @@ public sealed partial class SettingsPage : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        AttachedToVisualTree += (_, _) => ApplyLayout();
+        AttachedToVisualTree += (_, _) =>
+        {
+            ApplyLayout();
+            // Layouts may have changed on the Live page since the last visit.
+            if (_vm is not null) _ = _vm.LoadStartupLayoutsAsync();
+        };
         SizeChanged += OnSizeChanged;
     }
 
@@ -35,6 +40,7 @@ public sealed partial class SettingsPage : UserControl
             // Hydrate the credential-sync passphrase from the secrets store (async,
             // can't run in the VM's synchronous Load()).
             _ = _vm.LoadConfigSyncSecretAsync();
+            _ = _vm.LoadStartupLayoutsAsync();
             ApplyLayout();
         }
     }
