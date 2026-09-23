@@ -98,7 +98,12 @@ public sealed record UserSettings(
     // Desktop only: refuse to start a second copy of the app — a repeat launch
     // brings the already-running window to the foreground instead (see
     // Desktop/SingleInstanceGuard). Off = any number of copies may run.
-    bool SingleInstance = false)
+    bool SingleInstance = false,
+    // Page shown when the app starts: "library" (default) or "live" (#70).
+    // With "live", StartupLayoutId picks the layout the grid opens on; 0 = the
+    // one that was active when the app was last closed.
+    string StartupPage = "library",
+    int StartupLayoutId = 0)
 {
     public static UserSettings Default => new();
 }

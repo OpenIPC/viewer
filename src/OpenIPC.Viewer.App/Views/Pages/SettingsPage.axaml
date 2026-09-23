@@ -232,6 +232,26 @@
             </ComboBox>
           </Grid>
 
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Appearance.StartPage], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding StartPageOptions}"
+                      SelectedItem="{Binding StartPage, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}"
+                      MinWidth="140" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsStartupLayoutVisible}">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Appearance.StartupLayout], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding StartupLayoutOptions}"
+                      SelectedItem="{Binding StartupLayout, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}"
+                      MinWidth="140" />
+          </Grid>
+
           <CheckBox IsChecked="{Binding ShowSplash}"
                     Content="{Binding [Settings.Appearance.ShowSplash], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />

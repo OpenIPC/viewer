@@ -43,6 +43,10 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private bool _minimized;
     private bool _suppressSettingsRefresh;
+    private bool _startupLayoutApplied;
+    // Serializes tile-order writes: each is a read-modify-write of LayoutTiles,
+    // so two quick drags must not land out of order.
+    private readonly SemaphoreSlim _reorderGate = new(1, 1);
     private CancellationTokenSource? _graceCts;
 
     public string Title => Localizer.Instance["Nav.Live"];
@@ -156,7 +160,28 @@ public sealed partial class GridPageViewModel : ViewModelBase,
         if (_minimized) return;
         _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
         await LoadLayoutsAsync(ct).ConfigureAwait(true);
+        await ApplyStartupLayoutOnceAsync().ConfigureAwait(true);
         await RefreshTilesAsync(ct).ConfigureAwait(true);
+    }
+
+    // Settings → "Start with Live" + a chosen layout (#70): the first grid load
+    // of the session opens that layout instead of the last active one. Once per
+    // session, so switching tabs afterwards sticks. Persisted as the active
+    // layout too, so the library's "in grid" checkboxes follow the same tab.
+    private async Task ApplyStartupLayoutOnceAsync()
+    {
+        if (_startupLayoutApplied) return;
+        _startupLayoutApplied = true;
+
+        var s = _userSettings.Current;
+        if (s.StartupPage != "live" || s.StartupLayoutId == 0) return;
+        var target = Layouts.FirstOrDefault(l => l.Id.Value == s.StartupLayoutId);
+        if (target is null || (ActiveLayout is { } cur && cur.Id == target.Id)) return;
+
+        ActiveLayout = target;
+        LayoutSize = target.GridSize;
+        CurrentPage = 0;
+        await PersistActiveLayoutAsync(target.Id.Value).ConfigureAwait(true);
     }
 
     private async Task LoadLayoutsAsync(CancellationToken ct)
@@ -473,6 +498,17 @@ public sealed partial class GridPageViewModel : ViewModelBase,
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to activate tile for {Camera}", camera.Name); }
         }
 
+        // Kept tiles hold their old index and new ones were appended, so after a
+        // layout switch the cameras the two layouts share showed in the previous
+        // layout's order (#69). Put Tiles back into the layout's stored order.
+        for (var i = 0; i < visible.Count; i++)
+        {
+            var j = -1;
+            for (var k = i; k < Tiles.Count; k++)
+                if (Tiles[k].Camera.Id == visible[i].Id) { j = k; break; }
+            if (j > i) Tiles.Move(j, i);
+        }
+
         // Slots fills the *visual* grid (always LayoutSize²), padding with
         // nulls when MaxConcurrentGridSessions is below the layout capacity.
         var visualCapacity = LayoutSize * LayoutSize;
@@ -513,9 +549,8 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     // Drag-reorder hook called from GridPage code-behind. Both indices are in
     // the *Tiles* collection (live cameras only — empty Slots placeholders are
-    // not draggable and can't be drop targets). Persists SortOrder = newIndex
-    // for the affected tiles; cameras outside the grid keep their existing
-    // SortOrder (so library ordering only shifts grid-included rows).
+    // not draggable and can't be drop targets). Persists the new order into the
+    // active layout's LayoutTiles positions; other layouts are untouched.
     public async Task MoveTileAsync(int fromIndex, int toIndex, CancellationToken ct)
     {
         if (fromIndex < 0 || fromIndex >= Tiles.Count) return;
@@ -532,26 +567,34 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
         if (ActiveLayout is not { } a) return;
 
+        // Snapshot before the first await: a layout or page switch while the
+        // repository call is pending replaces Tiles, and its cameras must not be
+        // written into this layout.
+        var layoutId = a.Id;
+        var pageIds = Tiles.Select(t => t.Camera.Id).ToList();
+
+        await _reorderGate.WaitAsync(ct).ConfigureAwait(true);
         try
         {
-            // Tiles holds only the current page's visible prefix; reorder within
-            // the full member list (offset by the page) so cameras on other pages
-            // and beyond the session cap keep their place.
-            var offset = CurrentPage * LayoutSize * LayoutSize;
-            var from = offset + fromIndex;
-            var to = offset + toIndex;
-            var full = (await _layouts.GetTilesAsync(a.Id, ct).ConfigureAwait(true)).ToList();
-            if (from < full.Count && to < full.Count)
-            {
-                var moved = full[from];
-                full.RemoveAt(from);
-                full.Insert(to, moved);
-                await _layouts.SetTilesAsync(a.Id, full, ct).ConfigureAwait(true);
-            }
+            // Tiles holds only the current page's visible cameras. Write their new
+            // order back into the positions those same cameras occupy in the full
+            // member list, so cameras on other pages and beyond the session cap
+            // keep their place. Matching by camera id (not by page offset +
+            // index) stays correct when a closed tile has left a gap in Tiles.
+            var full = (await _layouts.GetTilesAsync(layoutId, ct).ConfigureAwait(true)).ToList();
+            var positions = pageIds.Select(id => full.IndexOf(id)).Where(p => p >= 0).OrderBy(p => p).ToList();
+            if (positions.Count != pageIds.Count) return;
+            for (var i = 0; i < positions.Count; i++)
+                full[positions[i]] = pageIds[i];
+            await _layouts.SetTilesAsync(layoutId, full, ct).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Persisting layout tile order failed");
+        }
+        finally
+        {
+            _reorderGate.Release();
         }
     }
 

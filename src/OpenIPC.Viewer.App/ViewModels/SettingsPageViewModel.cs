@@ -8,6 +8,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
@@ -24,6 +25,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private readonly ConfigSyncService _configSync;
     private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
+    private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
+    private readonly ILogger<SettingsPageViewModel> _logger;
     private bool _suppressSave;
 
     public string Title => Localizer.Instance["Settings.Title"];
@@ -47,6 +50,17 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty] private bool _showSplash = true;
     [ObservableProperty] private bool _closeToTray;
     [ObservableProperty] private bool _singleInstance;
+
+    // Start page + the layout the live grid opens on (#70). The layout list is
+    // filled async from the repository (LoadStartupLayoutsAsync); option 0 is
+    // "last used".
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStartupLayoutVisible))]
+    private StartPageOption? _startPage;
+    [ObservableProperty] private StartupLayoutOption? _startupLayout;
+    public IReadOnlyList<StartPageOption> StartPageOptions { get; }
+    public System.Collections.ObjectModel.ObservableCollection<StartupLayoutOption> StartupLayoutOptions { get; } = new();
+    public bool IsStartupLayoutVisible => StartPage?.Value == "live";
 
     // Gates the desktop-only toggles (tray) off the shared settings page.
     public bool IsDesktopPlatform { get; } =
@@ -163,7 +177,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         ISshHostKeyStore hostKeys,
         OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
         ConfigSyncService configSync,
-        OpenIPC.Viewer.Core.Notifications.INotificationService notifications)
+        OpenIPC.Viewer.Core.Notifications.INotificationService notifications,
+        OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
+        ILogger<SettingsPageViewModel> logger)
     {
         _settings = settings;
         _fs = fs;
@@ -172,6 +188,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         _backup = backup;
         _configSync = configSync;
         _notifications = notifications;
+        _layouts = layouts;
+        _logger = logger;
 
         var options = new List<NetworkInterfaceOption>
         {
@@ -187,6 +205,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
                     : string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Video.IdleTimeout.Minutes"], m),
                 m))
             .ToList();
+
+        StartPageOptions = new[]
+        {
+            new StartPageOption(Localizer.Instance["Nav.Library"], "library"),
+            new StartPageOption(Localizer.Instance["Nav.Live"], "live"),
+        };
+        StartupLayoutOptions.Add(new StartupLayoutOption(Localizer.Instance["Settings.Appearance.StartupLayout.LastUsed"], 0));
 
         Load();
     }
@@ -218,6 +243,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             ShowSplash = s.ShowSplash;
             CloseToTray = s.CloseToTray;
             SingleInstance = s.SingleInstance;
+            StartPage = StartPageOptions.FirstOrDefault(o => o.Value == s.StartupPage) ?? StartPageOptions[0];
+            StartupLayout = StartupLayoutOptions.FirstOrDefault(o => o.Id == s.StartupLayoutId);
             SshStrictHostKey = s.SshStrictHostKey;
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
@@ -251,6 +278,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
     partial void OnShowSplashChanged(bool value) => Persist();
     partial void OnCloseToTrayChanged(bool value) => Persist();
     partial void OnSingleInstanceChanged(bool value) => Persist();
+    partial void OnStartPageChanged(StartPageOption? value) => Persist();
+    partial void OnStartupLayoutChanged(StartupLayoutOption? value) => Persist();
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
@@ -283,6 +312,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
             ShowSplash = ShowSplash,
             CloseToTray = CloseToTray,
             SingleInstance = SingleInstance,
+            StartupPage = StartPage?.Value ?? "library",
+            // Null until the layout list has loaded — keep the saved choice.
+            StartupLayoutId = StartupLayout?.Id ?? _settings.Current.StartupLayoutId,
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,
@@ -301,6 +333,33 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
         // Fire-and-forget; binding setters are synchronous and any save
         // error is logged inside UpdateAsync.
         _ = _settings.UpdateAsync(next, CancellationToken.None);
+    }
+
+    // Layouts can be added/renamed on the Live page at any time, so the picker
+    // is rebuilt each time the settings page is shown.
+    public async Task LoadStartupLayoutsAsync()
+    {
+        IReadOnlyList<OpenIPC.Viewer.Core.Entities.GridLayout> all;
+        try { all = await _layouts.GetAllAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex)
+        {
+            // Keep the "last used" fallback so the page still works.
+            _logger.LogWarning(ex, "Loading layouts for the startup-layout picker failed");
+            return;
+        }
+
+        _suppressSave = true;
+        try
+        {
+            StartupLayoutOptions.Clear();
+            StartupLayoutOptions.Add(new StartupLayoutOption(Localizer.Instance["Settings.Appearance.StartupLayout.LastUsed"], 0));
+            foreach (var l in all)
+                StartupLayoutOptions.Add(new StartupLayoutOption(l.Name, l.Id.Value));
+            // A deleted layout falls back to "last used" (the grid ignores a stale id too).
+            var id = _settings.Current.StartupLayoutId;
+            StartupLayout = StartupLayoutOptions.FirstOrDefault(o => o.Id == id) ?? StartupLayoutOptions[0];
+        }
+        finally { _suppressSave = false; }
     }
 
     [RelayCommand]
@@ -502,3 +561,8 @@ public sealed record NetworkInterfaceOption(string Display, string Value);
 // Combo item for Settings → Video idle-pause picker. Display is the localized
 // label ("Off" / "10 min"); Minutes is the persisted threshold (0 = off).
 public sealed record IdleTimeoutOption(string Display, int Minutes);
+
+// Combo items for Settings → Appearance start page / startup layout (#70).
+// Value is the persisted UserSettings.StartupPage; Id is the LayoutId (0 = last used).
+public sealed record StartPageOption(string Display, string Value);
+public sealed record StartupLayoutOption(string Display, int Id);
