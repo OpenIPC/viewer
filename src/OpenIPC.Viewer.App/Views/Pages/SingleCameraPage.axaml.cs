@@ -37,12 +37,11 @@ public sealed partial class SingleCameraPage : UserControl
         VideoArea.SetValue(InputElement.IsHoldingEnabledProperty, true);
         VideoArea.SetValue(InputElement.IsHoldWithMouseEnabledProperty, true);
 
+        // Zoom, pan, pinch and double-tap live in ZoomHost; the page keeps the
+        // long-press PTZ toggle and the swipe between cameras.
         VideoArea.Holding += OnVideoHolding;
-        VideoArea.DoubleTapped += OnVideoDoubleTapped;
-        VideoArea.Pinch += OnVideoPinch;
         VideoArea.AddHandler(InputElement.PointerPressedEvent, OnVideoPointerPressed, RoutingStrategies.Tunnel);
         VideoArea.AddHandler(InputElement.PointerReleasedEvent, OnVideoPointerReleased, RoutingStrategies.Tunnel);
-        VideoArea.PointerWheelChanged += OnVideoPointerWheel;
 
         // Push-to-talk: hold the mic button to transmit (Phase 17.6). Pointer-up
         // and pointer-leave both end the transmission so a drag-off can't leave
@@ -69,6 +68,9 @@ public sealed partial class SingleCameraPage : UserControl
             width = OpenIPC.Viewer.App.Services.OverlayDialogPresenter.IsMobile ? 400 : 1000;
 
         var videoRow = RootGrid.RowDefinitions[1];
+        // The phone layout scrolls, so a bare wheel over the video should scroll
+        // the page there rather than zoom.
+        ZoomHost.WheelZoomRequiresModifier = width < MobileBreakpoint;
         if (width < MobileBreakpoint)
         {
             var videoHeight = System.Math.Round(width * 9.0 / 16.0);
@@ -115,26 +117,29 @@ public sealed partial class SingleCameraPage : UserControl
     private void OnVideoHolding(object? sender, HoldingRoutedEventArgs e)
     {
         // Fire on Started — Completed would mean the user has already lifted
-        // and waiting for it makes the toggle feel laggy.
-        if (e.HoldingState == HoldingState.Started)
+        // and waiting for it makes the toggle feel laggy. While zoomed or
+        // selecting, a held press is the start of a pan/marquee, not a toggle.
+        if (e.HoldingState == HoldingState.Started && !ZoomHost.IsZoomed && !ZoomHost.IsRegionSelectArmed)
             Vm?.TogglePtzOverlayCommand.Execute(null);
     }
 
-    private void OnVideoDoubleTapped(object? sender, TappedEventArgs e)
-        => Vm?.ResetZoomCommand.Execute(null);
+    private void OnZoomInClick(object? sender, RoutedEventArgs e) => ZoomHost.ZoomIn();
 
-    private void OnVideoPinch(object? sender, PinchEventArgs e)
-    {
-        // PinchEventArgs.Scale is cumulative since the gesture began —
-        // we use ApplyZoomDelta with the per-event scale ratio. For 9e we
-        // settle for whole-scale application; pan + focal point come later.
-        Vm?.ApplyZoomDelta(e.Scale);
-    }
+    private void OnZoomOutClick(object? sender, RoutedEventArgs e) => ZoomHost.ZoomOut();
+
+    private void OnZoomResetClick(object? sender, RoutedEventArgs e) => ZoomHost.Reset();
 
     private void OnVideoPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         var props = e.GetCurrentPoint(VideoArea).Properties;
         if (!props.IsLeftButtonPressed) return;
+        // A drag on a zoomed picture pans it, and Shift/armed drags draw a zoom
+        // marquee — neither should flip to the next camera.
+        if (ZoomHost.IsZoomed || ZoomHost.IsRegionSelectArmed || (e.KeyModifiers & KeyModifiers.Shift) != 0)
+        {
+            _pressOrigin = null;
+            return;
+        }
         _pressOrigin = e.GetPosition(VideoArea);
         _pressAt = DateTime.UtcNow;
     }
@@ -143,6 +148,9 @@ public sealed partial class SingleCameraPage : UserControl
     {
         if (_pressOrigin is not { } start || Vm is null) { _pressOrigin = null; return; }
         _pressOrigin = null;
+
+        // A pinch that started as a one-finger press ends zoomed — not a swipe.
+        if (ZoomHost.IsZoomed) return;
 
         var elapsed = DateTime.UtcNow - _pressAt;
         if (elapsed > SwipeMaxDuration) return;
@@ -157,15 +165,5 @@ public sealed partial class SingleCameraPage : UserControl
         // Right swipe = "drag forward" = previous camera (gallery convention).
         var direction = dx > 0 ? -1 : +1;
         _ = Vm.NavigateRelativeAsync(direction, CancellationToken.None);
-    }
-
-    private void OnVideoPointerWheel(object? sender, PointerWheelEventArgs e)
-    {
-        // Desktop fallback for pinch — Ctrl + wheel adjusts digital zoom in
-        // discrete steps. Without Ctrl, let the wheel fall through so a
-        // future scroll-based control (timeline, etc.) can still react.
-        if ((e.KeyModifiers & KeyModifiers.Control) == 0) return;
-        Vm?.StepZoom(e.Delta.Y > 0 ? +1 : -1);
-        e.Handled = true;
     }
 }

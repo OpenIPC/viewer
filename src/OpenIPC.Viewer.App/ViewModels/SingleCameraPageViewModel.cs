@@ -224,17 +224,11 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     [ObservableProperty] private bool _isRecording;
     [ObservableProperty] private string _recordingElapsed = "REC 00:00:00";
 
-    // 9e — touch gestures. ZoomLevel drives the ScaleTransform on the video
-    // surface (digital zoom only, 1.0..MaxZoom). IsPtzOverlayVisible is a
-    // toggle hidden behind long-press on narrow viewports — the joystick
-    // takes a chunk of screen real estate that's fine on desktop but should
-    // stay out of the way on a phone until the user explicitly asks.
-    public const double MinZoom = 1.0;
-    public const double MaxZoom = 4.0;
-    public const double ZoomStep = 0.25;
-
-    [ObservableProperty] private double _zoomLevel = MinZoom;
-
+    // 9e — touch gestures. Digital zoom is view-only state owned by the page's
+    // ZoomPanHost. IsPtzOverlayVisible is a toggle hidden behind long-press on
+    // narrow viewports — the joystick takes a chunk of screen real estate
+    // that's fine on desktop but should stay out of the way on a phone until
+    // the user explicitly asks.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPtzPanelVisible))]
     private bool _isPtzOverlayVisible = true;
@@ -688,21 +682,6 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         {
             _logger.LogWarning(ex, "PTZ set-home failed for {CameraId}", _camera.Id);
         }
-    }
-
-    [RelayCommand]
-    private void ResetZoom() => ZoomLevel = MinZoom;
-
-    public void ApplyZoomDelta(double factor)
-    {
-        var next = Math.Clamp(ZoomLevel * factor, MinZoom, MaxZoom);
-        ZoomLevel = next;
-    }
-
-    public void StepZoom(int steps)
-    {
-        var next = Math.Clamp(ZoomLevel + steps * ZoomStep, MinZoom, MaxZoom);
-        ZoomLevel = next;
     }
 
     public async Task NavigateRelativeAsync(int offset, CancellationToken ct)

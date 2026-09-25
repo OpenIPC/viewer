@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
-             xmlns:input="using:Avalonia.Input"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SingleCameraPage"
              x:DataType="vm:SingleCameraPageViewModel">
@@ -28,6 +27,22 @@
     </Style>
     <Style Selector="Button.ptz-home">
       <Setter Property="Background" Value="#4DFFFFFF" />
+    </Style>
+    <!-- Digital-zoom chip buttons: compact, same quiet-until-hover look. -->
+    <Style Selector="Button.zoom-chip">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.zoom-chip:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
   </UserControl.Styles>
 
@@ -67,33 +82,26 @@
     </Grid>
 
     <!-- Video + overlays. ClipToBounds keeps zoomed frames inside this row.
-         RenderTransform binds ZoomLevel from the VM (1.0..4.0 digital zoom).
-         Code-behind attaches Holding / DoubleTapped / Pinch / swipe handlers
-         to this grid. -->
+         ZoomPanHost owns digital zoom: wheel / pinch / double-tap zoom, drag
+         pans, Shift+drag (or the zoom-to-area toggle) zooms to a marquee.
+         Code-behind adds Holding (PTZ toggle) and swipe-to-next-camera on this
+         grid, skipping them while the host is using the pointer. -->
     <Grid Grid.Row="1" Name="VideoArea" ClipToBounds="True">
-      <controls:RtspVideoView Name="VideoView" Session="{Binding Session}"
-                              RenderTransformOrigin="0.5,0.5">
-        <controls:RtspVideoView.RenderTransform>
-          <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}" />
-        </controls:RtspVideoView.RenderTransform>
-        <controls:RtspVideoView.GestureRecognizers>
-          <input:PinchGestureRecognizer />
-        </controls:RtspVideoView.GestureRecognizers>
-      </controls:RtspVideoView>
+      <controls:ZoomPanHost Name="ZoomHost"
+                            ContentAspect="{Binding SourceAspect}"
+                            SourcePixelWidth="{Binding Telemetry.Width, FallbackValue=0}">
+        <controls:RtspVideoView Name="VideoView" Session="{Binding Session}" />
+      </controls:ZoomPanHost>
 
       <!-- AI detection boxes (Phase 15.5) — detection started on the grid tile
            continues here; boxes are normalized so the substream-fed results
-           map onto the mainstream picture. Mirrors the video's zoom transform
-           so boxes stay glued to objects under digital zoom. -->
+           map onto the mainstream picture. Follows the digital zoom through
+           ViewTransform so boxes stay glued to objects at constant stroke. -->
       <controls:DetectionOverlay Detections="{Binding Detections}"
                                  ShowBoxes="{Binding AnalyticsEnabled}"
                                  SourceAspect="{Binding SourceAspect}"
-                                 RenderTransformOrigin="0.5,0.5"
-                                 IsHitTestVisible="False">
-        <controls:DetectionOverlay.RenderTransform>
-          <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}" />
-        </controls:DetectionOverlay.RenderTransform>
-      </controls:DetectionOverlay>
+                                 ViewTransform="{Binding #ZoomHost.ViewTransform}"
+                                 IsHitTestVisible="False" />
 
       <!-- Top-left LIVE badge -->
       <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12"
@@ -103,6 +111,30 @@
               IsVisible="{Binding Session, Converter={x:Static ObjectConverters.IsNotNull}}">
         <TextBlock Text="LIVE" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="White" />
       </Border>
+
+      <!-- Digital zoom chrome, under the LIVE badge while zoomed: minimap of
+           the whole frame (press/drag to move there) and a −/level/+/reset chip. -->
+      <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12,40,12,12"
+                  Spacing="6"
+                  IsVisible="{Binding #ZoomHost.IsZoomed}">
+        <controls:ZoomMinimap Host="{Binding #ZoomHost}" Video="{Binding #VideoView}"
+                              HorizontalAlignment="Left" />
+        <Border HorizontalAlignment="Left" Background="#B0000000" CornerRadius="3" Padding="2">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="zoom-chip" Content="−" Click="OnZoomOutClick"
+                    ToolTip.Tip="{Binding [Viewer.ZoomOut], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBlock Text="{Binding #ZoomHost.Zoom, StringFormat={}{0:0.0}×}"
+                       MinWidth="36" TextAlignment="Center" VerticalAlignment="Center"
+                       FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="White" />
+            <Button Classes="zoom-chip" Content="+" Click="OnZoomInClick"
+                    ToolTip.Tip="{Binding [Viewer.ZoomIn], Source={x:Static svc:Localizer.Instance}}" />
+            <Button Classes="zoom-chip" Click="OnZoomResetClick"
+                    ToolTip.Tip="{Binding [Zoom.Reset], Source={x:Static svc:Localizer.Instance}}">
+              <Path Classes="lucide" Data="{StaticResource IconClose}" Stroke="White" Width="12" Height="12" />
+            </Button>
+          </StackPanel>
+        </Border>
+      </StackPanel>
 
       <!-- Top-right resolution/codec -->
       <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12"
@@ -810,6 +842,20 @@
                  Foreground="{StaticResource TextPrimaryBrush}"
                  IsVisible="{Binding TwoWayAudioUnsupported}"
                  Text="{Binding [CameraPage.Talk.Unsupported], Source={x:Static svc:Localizer.Instance}}" />
+
+      <!-- Digital zoom to a selected area: arms the next drag on the video as
+           a marquee (Shift+drag does the same without the button). -->
+      <ToggleButton IsChecked="{Binding #ZoomHost.IsRegionSelectArmed, Mode=TwoWay}"
+                    Background="Transparent"
+                    BorderBrush="{StaticResource BorderMediumBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10,8"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding [Zoom.Area], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
+              Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+      </ToggleButton>
 
       <Button Command="{Binding ToggleRecordingCommand}"
               IsVisible="{Binding !IsRecording}"

@@ -25,6 +25,13 @@ public sealed partial class RtspVideoView : UserControl
     private WriteableBitmap? _bitmap;
     private IDisposable? _frameSub;
 
+    // The bitmap the latest frame was copied into, for secondary views of the
+    // same picture (the digital-zoom minimap). Read it on the UI thread only.
+    public Bitmap? CurrentFrame => _bitmap;
+
+    // Raised on the UI thread after each frame lands in CurrentFrame.
+    public event EventHandler? FrameRendered;
+
     public RtspVideoView()
     {
         InitializeComponent();
@@ -59,6 +66,7 @@ public sealed partial class RtspVideoView : UserControl
                 Marshal.Copy(frame.Bgra, 0, locked.Address, frame.Stride * frame.Height);
             }
             _image.InvalidateVisual();
+            FrameRendered?.Invoke(this, EventArgs.Empty);
         });
     }
 
