@@ -69,7 +69,26 @@
     <!-- Video surface + overlays (left) + day event list (right) -->
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" b:Adaptive.CompactBelow="620">
       <Grid Grid.Column="0" ClipToBounds="True" Background="Black">
-      <controls:RtspVideoView Session="{Binding VideoSession}" />
+      <!-- Digital zoom, same as the live page: wheel / pinch / double-tap,
+           drag to pan, Shift+drag or the top-right toggle to zoom to an area. -->
+      <controls:ZoomPanHost Name="ZoomHost"
+                            ContentAspect="{Binding #PlayerVideo.FrameAspect}"
+                            SourcePixelWidth="{Binding #PlayerVideo.FrameWidth}">
+        <controls:RtspVideoView Name="PlayerVideo" Session="{Binding VideoSession}" />
+      </controls:ZoomPanHost>
+
+      <controls:ZoomOverlay Host="{Binding #ZoomHost}" Video="{Binding #PlayerVideo}"
+                            HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" />
+
+      <ToggleButton IsChecked="{Binding #ZoomHost.IsRegionSelectArmed, Mode=TwoWay}"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12"
+                    Background="#80000000"
+                    CornerRadius="6"
+                    Padding="8"
+                    ToolTip.Tip="{Binding [Zoom.Area], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
+              Stroke="White" Width="16" Height="16" />
+      </ToggleButton>
 
       <!-- Error strip -->
       <Border HorizontalAlignment="Stretch" VerticalAlignment="Top"

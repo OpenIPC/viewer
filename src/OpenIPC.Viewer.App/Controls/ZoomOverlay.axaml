@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Controls.ZoomOverlay"
+             IsVisible="False">
+
+  <UserControl.Styles>
+    <!-- Compact chip buttons, quiet until hovered. -->
+    <Style Selector="Button.zoom-chip">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.zoom-chip:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- Minimap of the whole frame (press/drag to move there) and a
+       −/level/+/reset chip. Shown only while the host is zoomed in. -->
+  <StackPanel Spacing="6">
+    <controls:ZoomMinimap Name="Minimap" HorizontalAlignment="Left" />
+    <Border HorizontalAlignment="Left" Background="#B0000000" CornerRadius="3" Padding="2">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Classes="zoom-chip" Content="−" Click="OnZoomOutClick"
+                ToolTip.Tip="{Binding [Viewer.ZoomOut], Source={x:Static svc:Localizer.Instance}}" />
+        <TextBlock Name="ZoomLabel"
+                   MinWidth="36" TextAlignment="Center" VerticalAlignment="Center"
+                   FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="White" />
+        <Button Classes="zoom-chip" Content="+" Click="OnZoomInClick"
+                ToolTip.Tip="{Binding [Viewer.ZoomIn], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="zoom-chip" Click="OnZoomResetClick"
+                ToolTip.Tip="{Binding [Zoom.Reset], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconClose}" Stroke="White" Width="12" Height="12" />
+        </Button>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

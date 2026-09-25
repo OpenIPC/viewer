@@ -123,12 +123,6 @@ public sealed partial class SingleCameraPage : UserControl
             Vm?.TogglePtzOverlayCommand.Execute(null);
     }
 
-    private void OnZoomInClick(object? sender, RoutedEventArgs e) => ZoomHost.ZoomIn();
-
-    private void OnZoomOutClick(object? sender, RoutedEventArgs e) => ZoomHost.ZoomOut();
-
-    private void OnZoomResetClick(object? sender, RoutedEventArgs e) => ZoomHost.Reset();
-
     private void OnVideoPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         var props = e.GetCurrentPoint(VideoArea).Properties;

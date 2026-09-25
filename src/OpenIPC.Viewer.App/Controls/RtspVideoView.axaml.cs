@@ -21,6 +21,20 @@ public sealed partial class RtspVideoView : UserControl
         set => SetValue(SessionProperty, value);
     }
 
+    // Decoded frame size, 0 until the first frame. Lets zoom hosts fit the
+    // letterboxed picture without the page's VM having to know it.
+    public static readonly DirectProperty<RtspVideoView, int> FrameWidthProperty =
+        AvaloniaProperty.RegisterDirect<RtspVideoView, int>(nameof(FrameWidth), o => o.FrameWidth);
+
+    public static readonly DirectProperty<RtspVideoView, double> FrameAspectProperty =
+        AvaloniaProperty.RegisterDirect<RtspVideoView, double>(nameof(FrameAspect), o => o.FrameAspect);
+
+    private int _frameWidth;
+    private double _frameAspect;
+
+    public int FrameWidth { get => _frameWidth; private set => SetAndRaise(FrameWidthProperty, ref _frameWidth, value); }
+    public double FrameAspect { get => _frameAspect; private set => SetAndRaise(FrameAspectProperty, ref _frameAspect, value); }
+
     private readonly Image _image;
     private WriteableBitmap? _bitmap;
     private IDisposable? _frameSub;
@@ -81,6 +95,8 @@ public sealed partial class RtspVideoView : UserControl
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
         _image.Source = _bitmap;
+        FrameWidth = width;
+        FrameAspect = height > 0 ? (double)width / height : 0;
     }
 
     protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
