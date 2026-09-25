@@ -499,6 +499,8 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Viewer.ZoomIn"] = "Zoom in",
         ["Viewer.ZoomOut"] = "Zoom out",
+        ["Zoom.Area"] = "Zoom to area — drag over the picture (or Shift+drag)",
+        ["Zoom.Reset"] = "Reset zoom",
         ["Viewer.Fit"] = "Fit",
         ["Viewer.RotateLeft"] = "Rotate left",
         ["Viewer.RotateRight"] = "Rotate right",
@@ -993,6 +995,8 @@ public sealed class Localizer : INotifyPropertyChanged
 
         ["Viewer.ZoomIn"] = "Увеличить",
         ["Viewer.ZoomOut"] = "Уменьшить",
+        ["Zoom.Area"] = "Увеличить область — выделите её на картинке (или Shift+перетаскивание)",
+        ["Zoom.Reset"] = "Сбросить зум",
         ["Viewer.Fit"] = "Вписать",
         ["Viewer.RotateLeft"] = "Повернуть влево",
         ["Viewer.RotateRight"] = "Повернуть вправо",

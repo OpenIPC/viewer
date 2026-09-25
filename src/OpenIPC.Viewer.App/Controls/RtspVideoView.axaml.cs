@@ -21,9 +21,30 @@ public sealed partial class RtspVideoView : UserControl
         set => SetValue(SessionProperty, value);
     }
 
+    // Decoded frame size, 0 until the first frame. Lets zoom hosts fit the
+    // letterboxed picture without the page's VM having to know it.
+    public static readonly DirectProperty<RtspVideoView, int> FrameWidthProperty =
+        AvaloniaProperty.RegisterDirect<RtspVideoView, int>(nameof(FrameWidth), o => o.FrameWidth);
+
+    public static readonly DirectProperty<RtspVideoView, double> FrameAspectProperty =
+        AvaloniaProperty.RegisterDirect<RtspVideoView, double>(nameof(FrameAspect), o => o.FrameAspect);
+
+    private int _frameWidth;
+    private double _frameAspect;
+
+    public int FrameWidth { get => _frameWidth; private set => SetAndRaise(FrameWidthProperty, ref _frameWidth, value); }
+    public double FrameAspect { get => _frameAspect; private set => SetAndRaise(FrameAspectProperty, ref _frameAspect, value); }
+
     private readonly Image _image;
     private WriteableBitmap? _bitmap;
     private IDisposable? _frameSub;
+
+    // The bitmap the latest frame was copied into, for secondary views of the
+    // same picture (the digital-zoom minimap). Read it on the UI thread only.
+    public Bitmap? CurrentFrame => _bitmap;
+
+    // Raised on the UI thread after each frame lands in CurrentFrame.
+    public event EventHandler? FrameRendered;
 
     public RtspVideoView()
     {
@@ -59,6 +80,7 @@ public sealed partial class RtspVideoView : UserControl
                 Marshal.Copy(frame.Bgra, 0, locked.Address, frame.Stride * frame.Height);
             }
             _image.InvalidateVisual();
+            FrameRendered?.Invoke(this, EventArgs.Empty);
         });
     }
 
@@ -73,6 +95,8 @@ public sealed partial class RtspVideoView : UserControl
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
         _image.Source = _bitmap;
+        FrameWidth = width;
+        FrameAspect = height > 0 ? (double)width / height : 0;
     }
 
     protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)

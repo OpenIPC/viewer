@@ -25,6 +25,11 @@ public sealed class DetectionOverlay : Control
     public static readonly StyledProperty<double> SourceAspectProperty =
         AvaloniaProperty.Register<DetectionOverlay, double>(nameof(SourceAspect));
 
+    // Digital zoom (ZoomPanHost.ViewTransform) applied to the box geometry only,
+    // so zoomed boxes follow the picture while strokes and labels keep their size.
+    public static readonly StyledProperty<Matrix> ViewTransformProperty =
+        AvaloniaProperty.Register<DetectionOverlay, Matrix>(nameof(ViewTransform), Matrix.Identity);
+
     // Distinct hues per class id so different objects read apart at a glance.
     private static readonly Color[] Palette =
     {
@@ -36,7 +41,8 @@ public sealed class DetectionOverlay : Control
 
     static DetectionOverlay()
     {
-        AffectsRender<DetectionOverlay>(DetectionsProperty, ShowBoxesProperty, SourceAspectProperty);
+        AffectsRender<DetectionOverlay>(DetectionsProperty, ShowBoxesProperty, SourceAspectProperty,
+            ViewTransformProperty);
     }
 
     public IReadOnlyList<Detection>? Detections
@@ -55,6 +61,12 @@ public sealed class DetectionOverlay : Control
     {
         get => GetValue(SourceAspectProperty);
         set => SetValue(SourceAspectProperty, value);
+    }
+
+    public Matrix ViewTransform
+    {
+        get => GetValue(ViewTransformProperty);
+        set => SetValue(ViewTransformProperty, value);
     }
 
     public override void Render(DrawingContext context)
@@ -76,11 +88,12 @@ public sealed class DetectionOverlay : Control
             var color = Palette[((d.ClassId % Palette.Length) + Palette.Length) % Palette.Length];
             var pen = new Pen(new SolidColorBrush(color), 2);
 
-            var x = contentX + d.X * contentW;
-            var y = contentY + d.Y * contentH;
-            var bw = d.Width * contentW;
-            var bh = d.Height * contentH;
-            var box = new Rect(x, y, bw, bh);
+            var box = new Rect(
+                contentX + d.X * contentW, contentY + d.Y * contentH,
+                d.Width * contentW, d.Height * contentH).TransformToAABB(ViewTransform);
+            if (!box.Intersects(new Rect(0, 0, w, h))) continue; // zoomed off screen
+            var x = box.X;
+            var y = box.Y;
             context.DrawRectangle(null, pen, box);
 
             var label = $"{d.ClassName} {d.Confidence:0.00}";
