@@ -20,4 +20,7 @@ public enum SnapshotSource
 
     /// <summary>Produced by the in-app editor (a saved copy).</summary>
     Edited = 4,
+
+    /// <summary>A frame grabbed from a recording in the archive player.</summary>
+    Recording = 5,
 }

@@ -50,6 +50,11 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     // drains it before each packet read; SeekAsync just overwrites it.
     private long _pendingSeekTicks = NoSeek;
 
+    // Playback speed, and a flag asking the loop to re-anchor its clock so a
+    // rate change continues from the current frame instead of jumping.
+    private double _rate = 1.0;
+    private volatile bool _rebaseClock;
+
     private long _durationTicks;
     private long _positionTicks;
 
@@ -84,6 +89,18 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     public TimeSpan Duration => TimeSpan.FromTicks(Interlocked.Read(ref _durationTicks));
     public TimeSpan Position => TimeSpan.FromTicks(Interlocked.Read(ref _positionTicks));
     public bool IsPaused => _paused;
+
+    public double Rate
+    {
+        get => Volatile.Read(ref _rate);
+        set
+        {
+            var clamped = Math.Clamp(value, 0.25, 16.0);
+            if (Volatile.Read(ref _rate) == clamped) return;
+            Volatile.Write(ref _rate, clamped);
+            _rebaseClock = true;
+        }
+    }
 
     public Task StartAsync(CancellationToken ct)
     {
@@ -386,6 +403,12 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
 
     private void PaceTo(Stopwatch clock, ref bool haveClock, ref double wallOriginSec, ref double mediaOriginSec, double mediaSec, CancellationToken ct)
     {
+        if (_rebaseClock)
+        {
+            _rebaseClock = false;
+            haveClock = false;
+        }
+
         if (!haveClock)
         {
             wallOriginSec = clock.Elapsed.TotalSeconds;
@@ -394,13 +417,14 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
             return;
         }
 
-        var targetWall = wallOriginSec + (mediaSec - mediaOriginSec);
+        var targetWall = wallOriginSec + (mediaSec - mediaOriginSec) / Rate;
         while (!ct.IsCancellationRequested)
         {
             var remaining = targetWall - clock.Elapsed.TotalSeconds;
             if (remaining <= 0.001) break;
-            // Bail out early if a seek arrives so scrubbing stays responsive.
-            if (Interlocked.Read(ref _pendingSeekTicks) != NoSeek) break;
+            // Bail out early if a seek or a speed change arrives so scrubbing
+            // and speed switching stay responsive.
+            if (Interlocked.Read(ref _pendingSeekTicks) != NoSeek || _rebaseClock) break;
             var ms = (int)Math.Min(remaining * 1000, 50);
             if (ms > 0) Thread.Sleep(ms);
         }

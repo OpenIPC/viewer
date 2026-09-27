@@ -85,8 +85,11 @@ public sealed class SnapshotService : ISnapshotService
         Camera camera, IVideoSession? liveSession, StreamQuality? liveQuality, CancellationToken ct)
     {
         var (jpeg, source) = await GrabAsync(camera, liveSession, liveQuality, ct).ConfigureAwait(false);
-        return await SaveAsync(camera, jpeg, source, SnapshotKind.Manual, ct).ConfigureAwait(false);
+        return await SaveAsync(camera.Id, jpeg, source, SnapshotKind.Manual, DateTime.UtcNow, ct).ConfigureAwait(false);
     }
+
+    public Task<Snapshot> SaveFrameAsync(CameraId cameraId, byte[] jpeg, DateTime takenAtUtc, CancellationToken ct) =>
+        SaveAsync(cameraId, jpeg, SnapshotSource.Recording, SnapshotKind.Manual, takenAtUtc, ct);
 
     private async Task<(byte[] Jpeg, SnapshotSource Source)> GrabAsync(
         Camera camera, IVideoSession? liveSession, StreamQuality? liveQuality, CancellationToken ct)
@@ -187,12 +190,11 @@ public sealed class SnapshotService : ISnapshotService
     }
 
     private async Task<Snapshot> SaveAsync(
-        Camera camera, byte[] jpeg, SnapshotSource source, SnapshotKind kind, CancellationToken ct)
+        CameraId cameraId, byte[] jpeg, SnapshotSource source, SnapshotKind kind, DateTime takenAt, CancellationToken ct)
     {
         var id = SnapshotId.New();
-        var takenAt = DateTime.UtcNow;
 
-        var dir = Path.Combine(_fs.SnapshotsDir.FullName, camera.Id.ToString());
+        var dir = Path.Combine(_fs.SnapshotsDir.FullName, cameraId.ToString());
         Directory.CreateDirectory(dir);
         var fileName = takenAt.ToLocalTime().ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture) + ".jpg";
         var path = EnsureUnique(Path.Combine(dir, fileName));
@@ -215,7 +217,7 @@ public sealed class SnapshotService : ISnapshotService
             savedThumb = null;
         }
 
-        var snapshot = new Snapshot(id, camera.Id, takenAt, path, savedThumb, size.Width, size.Height, source, kind);
+        var snapshot = new Snapshot(id, cameraId, takenAt, path, savedThumb, size.Width, size.Height, source, kind);
         await _repo.AddAsync(snapshot, ct).ConfigureAwait(false);
         return snapshot;
     }

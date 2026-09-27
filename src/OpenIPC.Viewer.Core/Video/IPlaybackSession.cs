@@ -22,6 +22,10 @@ public interface IPlaybackSession : IVideoSession
 
     bool IsPaused { get; }
 
+    // Playback speed multiplier (1 = real time). Presentation re-anchors on
+    // change so the playhead doesn't jump.
+    double Rate { get; set; }
+
     IObservable<TimeSpan> PositionChanged { get; }
 
     void Play();

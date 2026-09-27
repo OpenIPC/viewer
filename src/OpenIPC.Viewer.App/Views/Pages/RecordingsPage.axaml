@@ -191,6 +191,7 @@
                       </Grid.ColumnDefinitions>
 
                       <Button Grid.Column="0" Classes="play" Margin="0,0,12,0"
+                              AutomationProperties.Name="{Binding [Recordings.Play], Source={x:Static svc:Localizer.Instance}}"
                               Command="{Binding $parent[ItemsControl].((vm:RecordingsPageViewModel)DataContext).PlayCommand}"
                               CommandParameter="{Binding}"
                               ToolTip.Tip="{Binding [Recordings.Play], Source={x:Static svc:Localizer.Instance}}">

@@ -230,6 +230,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
             _ = DisposeActivePlayerAsync();
             _activePlayer = _playerFactory.Create(message.Recording, message.CameraName);
             _activePlayer.StartAt = message.StartAt;
+            _activePlayer.Rate = message.Rate;
             CurrentPage = _activePlayer;
         }
         catch (Exception ex)
@@ -242,6 +243,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     {
         await DisposeActivePlayerAsync().ConfigureAwait(true);
         CurrentPage = Recordings;
+        if (message.Reload)
+            await Recordings.LoadAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     private async Task DisposeActiveSingleCameraAsync()
