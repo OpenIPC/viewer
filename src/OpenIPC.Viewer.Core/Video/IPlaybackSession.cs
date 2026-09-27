@@ -34,4 +34,9 @@ public interface IPlaybackSession : IVideoSession
     // Seek to the nearest keyframe at or before the requested position, then
     // decode forward to it. Idempotent while seeking is in flight (latest wins).
     Task SeekAsync(TimeSpan position, CancellationToken ct);
+
+    // Pause and move exactly one frame. Forward decodes the next frame; backward
+    // re-seeks to the previous one (keyframe + decode forward), so it costs up
+    // to a GOP of decoding.
+    void StepFrame(bool forward);
 }

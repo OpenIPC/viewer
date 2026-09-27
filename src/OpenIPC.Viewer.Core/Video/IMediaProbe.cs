@@ -16,4 +16,5 @@ public readonly record struct MediaInfo(
     TimeSpan Duration,
     string? Codec,
     int Width,
-    int Height);
+    int Height,
+    bool HasAudio = false);
