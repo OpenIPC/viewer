@@ -12,7 +12,7 @@ using OpenIPC.Viewer.Core.Video;
 namespace OpenIPC.Viewer.Infrastructure.Persistence;
 
 // JSON config export/import (Phase 19.2). Cameras round-trip by GUID (upsert);
-// layouts are appended with their tile membership. Passwords are excluded by
+// layouts upsert by name with their tile membership. Passwords are excluded by
 // default — they live in ISecretsStore — but the network-sync flow (Phase 20)
 // can opt in to carry them ENCRYPTED with a fleet passphrase (see CredentialCipher).
 public sealed class SqliteConfigBackupService : IConfigBackupService
@@ -145,16 +145,33 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
 
         // Only keep tiles for cameras that now exist (avoid orphan rows).
         var present = (await _cameras.GetAllAsync(ct).ConfigureAwait(false)).Select(c => c.Id).ToHashSet();
+        // A layout whose name already exists is updated in place, so re-importing
+        // a backup (or importing onto a fresh install with its own "Default")
+        // doesn't duplicate tabs.
+        var byName = new Dictionary<string, GridLayout>(StringComparer.OrdinalIgnoreCase);
+        foreach (var existing in await _layouts.GetAllAsync(ct).ConfigureAwait(false))
+            byName.TryAdd(existing.Name, existing);
         foreach (var l in root.Layouts)
         {
-            var newId = await _layouts.AddAsync(l.Name, l.GridSize, l.SortOrder, ct).ConfigureAwait(false);
+            LayoutId layoutId;
+            if (byName.TryGetValue(l.Name, out var match))
+            {
+                layoutId = match.Id;
+                if (match.GridSize != l.GridSize)
+                    await _layouts.SetGridSizeAsync(layoutId, l.GridSize, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                layoutId = await _layouts.AddAsync(l.Name, l.GridSize, l.SortOrder, ct).ConfigureAwait(false);
+                byName[l.Name] = new GridLayout(layoutId, l.Name, l.GridSize, l.SortOrder);
+            }
             var tileIds = l.Tiles
                 .Select(s => Guid.TryParse(s, out var g) ? new CameraId(g) : (CameraId?)null)
                 .Where(c => c is { } cid && present.Contains(cid))
                 .Select(c => c!.Value)
                 .ToList();
             if (tileIds.Count > 0)
-                await _layouts.SetTilesAsync(newId, tileIds, ct).ConfigureAwait(false);
+                await _layouts.SetTilesAsync(layoutId, tileIds, ct).ConfigureAwait(false);
         }
 
         return new ConfigImportPreview(added, updated, root.Layouts.Count);
