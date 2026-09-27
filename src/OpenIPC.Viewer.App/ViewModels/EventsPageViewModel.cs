@@ -65,87 +65,14 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
     public bool HasNoMatches => IsLoaded && !IsLoading && _events.Count > 0 && PageItems.Count == 0;
     public bool HasRows => PageItems.Count > 0;
 
-    // --- Camera filter (multi-select picker) -------------------------------------
-    // Every camera, with its event count under the current period + kind. The
-    // picker shows a searchable slice of these; ticked ones filter the list.
-    private readonly List<CameraPickItem> _pickItems = new();
-
-    public ObservableCollection<CameraPickItem> PickerItems { get; } = new();
-    public ObservableCollection<CameraPickItem> SelectedCameras { get; } = new();
-
-    [ObservableProperty] private string _pickerSearch = "";
-
-    // Picker scope: only cameras with events (default) or every camera.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPickerWithEvents))]
-    private bool _pickerShowAll;
-
-    public bool IsPickerWithEvents { get => !PickerShowAll; set => PickerShowAll = !value; }
-
-    // "4 of 83 with events"
-    [ObservableProperty] private string _pickerFooter = "";
-
-    // "Cameras: all" / the single camera's name / "Cameras: 2"
-    [ObservableProperty] private string _cameraButtonLabel = "";
-
-    public bool HasCameraSelection => SelectedCameras.Count > 0;
-
-    partial void OnPickerSearchChanged(string value) => RebuildPicker();
-    partial void OnPickerShowAllChanged(bool value) => RebuildPicker();
-
-    private void OnPickToggled(CameraPickItem item)
-    {
-        if (item.IsSelected && !SelectedCameras.Contains(item)) SelectedCameras.Add(item);
-        else if (!item.IsSelected) SelectedCameras.Remove(item);
-        UpdateCameraButtonLabel();
-        ApplyFilter(resetPage: true);
-    }
-
-    private void UpdateCameraButtonLabel()
-    {
-        CameraButtonLabel = SelectedCameras.Count switch
-        {
-            0 => Localizer.Instance["Events.Cameras.All"],
-            1 => SelectedCameras[0].Name,
-            var n => string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Events.Cameras.CountFormat"], n),
-        };
-        OnPropertyChanged(nameof(HasCameraSelection));
-    }
-
-    [RelayCommand]
-    private void RemoveCamera(CameraPickItem? item)
-    {
-        if (item is not null) item.IsSelected = false; // → OnPickToggled
-    }
-
-    [RelayCommand]
-    private void ClearCameras()
-    {
-        foreach (var item in SelectedCameras.ToList()) item.IsSelected = false;
-    }
+    // Searchable multi-select camera filter (shared with Recordings).
+    public CameraPickerViewModel Cameras { get; } = new("Events.Cameras.WithEvents", "Events.Cameras.FooterFormat");
 
     // Clicking a camera name in a row narrows the list to it.
     [RelayCommand]
     private void AddCameraFilter(EventEpisodeRow? row)
     {
-        if (row is null) return;
-        var item = _pickItems.FirstOrDefault(i => i.Id == row.CameraId);
-        if (item is not null && !item.IsSelected) item.IsSelected = true;
-    }
-
-    // Visible picker rows: search over name / host / group; cameras with events
-    // first by count, unless "all cameras" is on (then alphabetical).
-    private void RebuildPicker()
-    {
-        var q = PickerSearch?.Trim() ?? "";
-        IEnumerable<CameraPickItem> items = _pickItems.Where(i => i.Matches(q));
-        items = PickerShowAll
-            ? items.OrderByDescending(i => i.Count).ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
-            : items.Where(i => i.Count > 0 || i.IsSelected).OrderByDescending(i => i.Count).ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
-        PickerItems.Clear();
-        foreach (var i in items) PickerItems.Add(i);
-        PickerFooter = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Events.Cameras.FooterFormat"],
-            _pickItems.Count(i => i.Count > 0), _pickItems.Count);
+        if (row is not null) Cameras.Select(row.CameraId);
     }
 
     // --- Filters ----------------------------------------------------------------
@@ -255,6 +182,7 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         // them. Both new (open) and finalized events come through Events; we
         // de-dup by Id in OnLiveEvent.
         _liveSub = _ingestion.Events.Subscribe(new EventObserver(this));
+        Cameras.SelectionChanged += () => ApplyFilter(resetPage: true);
     }
 
     public async Task LoadAsync(CancellationToken ct)
@@ -262,19 +190,9 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         var cams = await _cameras.ListAsync(ct).ConfigureAwait(true);
         var groups = (await _cameras.ListGroupsAsync(ct).ConfigureAwait(true)).ToDictionary(g => g.Id, g => g.Name);
         _cameraNames.Clear();
-        var keep = SelectedCameras.Select(i => i.Id).ToHashSet();
-        SelectedCameras.Clear();
-        _pickItems.Clear();
-        foreach (var c in cams)
-        {
-            _cameraNames[c.Id] = c.Name;
-            var group = c.GroupId is { } gid && groups.TryGetValue(gid, out var g) ? g : null;
-            var item = new CameraPickItem(c.Id, c.Name, c.Host, group, OnPickToggled);
-            item.SetSelectedSilently(keep.Contains(c.Id));
-            if (item.IsSelected) SelectedCameras.Add(item);
-            _pickItems.Add(item);
-        }
-        UpdateCameraButtonLabel();
+        foreach (var c in cams) _cameraNames[c.Id] = c.Name;
+        Cameras.SetCameras(cams.Select(c => new CameraPickSource(
+            c.Id, c.Name, c.Host, c.GroupId is { } gid && groups.TryGetValue(gid, out var g) ? g : null)));
         await ReloadAsync(ct).ConfigureAwait(true);
     }
 
@@ -337,21 +255,8 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
 
         // Picker counts ignore the camera selection itself, so unticked cameras
         // still show how busy they are.
-        var counts = ofKind.GroupBy(e => e.CameraId).ToDictionary(g => g.Key, g => g.Count());
-        var max = counts.Count == 0 ? 0 : counts.Values.Max();
-        var countsChanged = false;
-        foreach (var item in _pickItems)
-        {
-            var c = counts.TryGetValue(item.Id, out var n) ? n : 0;
-            if (c != item.Count) countsChanged = true;
-            item.SetCount(c, max);
-        }
-        // Ticking a camera doesn't move counts — leave the open picker alone
-        // then, so the row under the pointer isn't rebuilt mid-click.
-        if (countsChanged || PickerItems.Count == 0) RebuildPicker();
-
-        var selected = SelectedCameras.Select(i => i.Id).ToHashSet();
-        var filtered = selected.Count == 0 ? ofKind : ofKind.Where(e => selected.Contains(e.CameraId)).ToList();
+        Cameras.SetCounts(ofKind.GroupBy(e => e.CameraId).ToDictionary(g => g.Key, g => g.Count()));
+        var filtered = ofKind.Where(e => Cameras.Matches(e.CameraId)).ToList();
         var episodes = GroupBursts ? FoldEpisodes(filtered) : filtered.Select(e => new List<CameraEvent> { e }).ToList();
 
         Summary = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Events.SummaryFormat"],
@@ -462,7 +367,7 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         // (Majestic endpoint TBD; ONVIF PullPoint not in Onvif.Core). This
         // exercises the full ingestion -> repo -> UI path against the first
         // available camera so the plumbing is testable.
-        var target = SelectedCameras.Select(i => (CameraId?)i.Id).FirstOrDefault()
+        var target = Cameras.SelectedCameras.Select(i => (CameraId?)i.Id).FirstOrDefault()
                      ?? _cameraNames.Keys.FirstOrDefault();
         if (target == default)
         {
@@ -501,58 +406,6 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         public void OnError(Exception error) { }
         public void OnCompleted() { }
     }
-}
-
-// One camera in the events picker: its event count under the current period
-// and kind (with a proportional bar), and whether it's part of the filter.
-public sealed partial class CameraPickItem : ObservableObject
-{
-    private const double BarMax = 60;
-
-    private readonly Action<CameraPickItem> _onToggled;
-    private bool _silent;
-
-    public CameraPickItem(CameraId id, string name, string host, string? group, Action<CameraPickItem> onToggled)
-    {
-        Id = id;
-        Name = name;
-        Host = host;
-        Group = group;
-        _onToggled = onToggled;
-    }
-
-    public CameraId Id { get; }
-    public string Name { get; }
-    public string Host { get; }
-    public string? Group { get; }
-
-    [ObservableProperty] private bool _isSelected;
-    [ObservableProperty] private int _count;
-    [ObservableProperty] private double _barWidth;
-
-    partial void OnIsSelectedChanged(bool value)
-    {
-        if (!_silent) _onToggled(this);
-    }
-
-    public void SetSelectedSilently(bool value)
-    {
-        _silent = true;
-        try { IsSelected = value; }
-        finally { _silent = false; }
-    }
-
-    public void SetCount(int count, int max)
-    {
-        Count = count;
-        BarWidth = count == 0 || max == 0 ? 0 : Math.Max(3, BarMax * count / max);
-    }
-
-    internal bool Matches(string query) =>
-        query.Length == 0
-        || Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-        || Host.Contains(query, StringComparison.OrdinalIgnoreCase)
-        || (Group?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
 }
 
 // "5 July · 87" — interleaved into PageItems.

@@ -3,6 +3,7 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              xmlns:pages="using:OpenIPC.Viewer.App.Views.Pages"
              xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingsPage"
@@ -96,15 +97,7 @@
         <!-- Filters: camera, period, motion. Same vocabulary as Snapshots. -->
         <WrapPanel Grid.Row="0" Orientation="Horizontal" ItemSpacing="6" LineSpacing="6"
                    Margin="0,0,0,12">
-          <ComboBox ItemsSource="{Binding CameraOptions}"
-                    SelectedItem="{Binding SelectedCamera, Mode=TwoWay}"
-                    MinWidth="150" VerticalAlignment="Center">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:RecordingCameraOption">
-                <TextBlock Text="{Binding Name}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
+          <controls:CameraPickerView DataContext="{Binding Cameras}" VerticalAlignment="Center" />
           <RadioButton Classes="chip" GroupName="RecPeriod" VerticalAlignment="Center"
                        IsChecked="{Binding IsPeriodAll, Mode=TwoWay}"
                        Content="{Binding [Snapshots.PresetAll], Source={x:Static svc:Localizer.Instance}}" />

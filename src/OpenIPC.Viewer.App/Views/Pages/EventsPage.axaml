@@ -3,6 +3,7 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              x:Class="OpenIPC.Viewer.App.Views.Pages.EventsPage"
              x:DataType="vm:EventsPageViewModel">
 
@@ -65,104 +66,7 @@
     <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,12">
       <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
         <!-- Camera picker: searchable multi-select with per-camera counts. -->
-        <Button AutomationProperties.AutomationId="EventsCameraPicker"
-                Padding="10,6" CornerRadius="6" VerticalAlignment="Center"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Path Classes="lucide" Data="{StaticResource IconVideoCam}"
-                  Stroke="{StaticResource TextSecondaryBrush}" Width="14" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding CameraButtonLabel}" MaxWidth="180" TextTrimming="CharacterEllipsis"
-                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
-            <Path Classes="lucide" Data="{StaticResource IconChevronDown}"
-                  Stroke="{StaticResource TextSecondaryBrush}" Width="10" VerticalAlignment="Center" />
-          </StackPanel>
-          <Button.Flyout>
-            <Flyout Placement="BottomEdgeAlignedLeft">
-              <StackPanel Width="300" Spacing="8">
-                <TextBox Text="{Binding PickerSearch, Mode=TwoWay}"
-                         Classes="clearButton"
-                         VerticalContentAlignment="Center"
-                         PlaceholderText="{Binding [Events.Cameras.Search], Source={x:Static svc:Localizer.Instance}}">
-                  <TextBox.InnerLeftContent>
-                    <Path Classes="lucide" Data="{StaticResource IconSearch}"
-                          Stroke="{StaticResource TextTertiaryBrush}"
-                          Width="14" Height="14" Margin="10,0,0,0" VerticalAlignment="Center" />
-                  </TextBox.InnerLeftContent>
-                </TextBox>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <RadioButton Classes="chip" GroupName="PickerScope"
-                               IsChecked="{Binding IsPickerWithEvents, Mode=TwoWay}"
-                               Content="{Binding [Events.Cameras.WithEvents], Source={x:Static svc:Localizer.Instance}}" />
-                  <RadioButton Classes="chip" GroupName="PickerScope"
-                               IsChecked="{Binding PickerShowAll, Mode=TwoWay}"
-                               Content="{Binding [Events.Cameras.Everything], Source={x:Static svc:Localizer.Instance}}" />
-                </StackPanel>
-                <ScrollViewer MaxHeight="320">
-                  <ItemsControl ItemsSource="{Binding PickerItems}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate DataType="vm:CameraPickItem">
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                  Padding="6,0,4,0" MinHeight="30">
-                          <Grid ColumnDefinitions="*,Auto,Auto">
-                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextPrimaryBrush}" />
-                            <Border Grid.Column="1" Height="4" CornerRadius="2" Margin="8,0"
-                                    Width="{Binding BarWidth}" VerticalAlignment="Center"
-                                    Background="{StaticResource AccentBrush}" Opacity="0.6" />
-                            <TextBlock Grid.Column="2" Text="{Binding Count}" MinWidth="24"
-                                       TextAlignment="Right" VerticalAlignment="Center"
-                                       FontFamily="{StaticResource FontMono}"
-                                       FontSize="{StaticResource FontSizeSm}"
-                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                          </Grid>
-                        </CheckBox>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </ScrollViewer>
-                <Grid ColumnDefinitions="Auto,*">
-                  <Button Classes="row-icon" Padding="6,4"
-                          Command="{Binding ClearCamerasCommand}"
-                          IsEnabled="{Binding HasCameraSelection}"
-                          Content="{Binding [Events.Cameras.Reset], Source={x:Static svc:Localizer.Instance}}"
-                          Foreground="{StaticResource AccentHoverBrush}" />
-                  <TextBlock Grid.Column="1" Text="{Binding PickerFooter}"
-                             HorizontalAlignment="Right" VerticalAlignment="Center"
-                             FontSize="{StaticResource FontSizeSm}"
-                             Foreground="{StaticResource TextTertiaryBrush}" />
-                </Grid>
-              </StackPanel>
-            </Flyout>
-          </Button.Flyout>
-        </Button>
-        <!-- Selected cameras as removable chips. -->
-        <ItemsControl ItemsSource="{Binding SelectedCameras}" VerticalAlignment="Center"
-                      IsVisible="{Binding HasCameraSelection}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:CameraPickItem">
-              <Button Padding="10,3" CornerRadius="999"
-                      Background="{StaticResource AccentTintBrush}"
-                      BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
-                      Command="{Binding $parent[ItemsControl].((vm:EventsPageViewModel)DataContext).RemoveCameraCommand}"
-                      CommandParameter="{Binding}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSizeSm}"
-                             Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                  <Path Classes="lucide" Data="{StaticResource IconClose}"
-                        Stroke="{StaticResource TextSecondaryBrush}" Width="10" Height="10" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <controls:CameraPickerView DataContext="{Binding Cameras}" VerticalAlignment="Center" />
         <RadioButton Classes="chip" GroupName="EventKind" VerticalAlignment="Center"
                      IsChecked="{Binding IsKindAll, Mode=TwoWay}"
                      Content="{Binding [Events.Kind.All], Source={x:Static svc:Localizer.Instance}}" />

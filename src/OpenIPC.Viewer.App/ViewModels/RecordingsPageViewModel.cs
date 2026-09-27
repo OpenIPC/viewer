@@ -68,9 +68,9 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     }
 
     // --- Filters ----------------------------------------------------------------
-    public ObservableCollection<RecordingCameraOption> CameraOptions { get; } = new();
+    // Searchable multi-select camera filter (shared with Events).
+    public CameraPickerViewModel Cameras { get; } = new("Recordings.Cameras.WithRecordings", "Recordings.Cameras.FooterFormat");
 
-    [ObservableProperty] private RecordingCameraOption? _selectedCamera;
     [ObservableProperty] private bool _motionOnly;
 
     [ObservableProperty]
@@ -85,7 +85,6 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     public bool IsPeriod7 { get => Period == RecordingPeriod.Days7; set { if (value) Period = RecordingPeriod.Days7; } }
     public bool IsPeriod30 { get => Period == RecordingPeriod.Days30; set { if (value) Period = RecordingPeriod.Days30; } }
 
-    partial void OnSelectedCameraChanged(RecordingCameraOption? value) => OnCameraOrMotionChanged();
     partial void OnMotionOnlyChanged(bool value) => OnCameraOrMotionChanged();
 
     // Camera / motion also narrow the calendar highlight, so a lit day always
@@ -93,11 +92,11 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
     private void OnCameraOrMotionChanged()
     {
         ApplyFilter(resetPage: true);
-        var cameraId = SelectedCamera?.Id;
+        var cameras = Cameras.SelectedCameras.Select(i => i.Id).ToHashSet();
         var motionOnly = MotionOnly;
-        _ = Calendar.SetRecordingFilterAsync(cameraId is null && !motionOnly
+        _ = Calendar.SetRecordingFilterAsync(cameras.Count == 0 && !motionOnly
             ? null
-            : r => (cameraId is null || r.CameraId == cameraId.Value) && (!motionOnly || r.HasMotion));
+            : r => (cameras.Count == 0 || cameras.Contains(r.CameraId)) && (!motionOnly || r.HasMotion));
     }
 
     // A period and a calendar day don't combine: picking one clears the other.
@@ -225,6 +224,7 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         Calendar = calendar;
         _logger = logger;
         Calendar.DaySelected += OnDaySelected;
+        Cameras.SelectionChanged += OnCameraOrMotionChanged;
     }
 
     private void ApplyFilter(bool resetPage = false)
@@ -237,14 +237,14 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
             RecordingPeriod.Days30 => today.AddDays(-29),
             _ => null,
         };
-        var cameraId = SelectedCamera?.Id;
-
-        var filtered = _allRows.Where(r =>
-                (cameraId is null || r.Recording.CameraId == cameraId.Value)
-                && (!MotionOnly || r.HasMotion)
+        // Picker counts use every filter except the camera one itself.
+        var inScope = _allRows.Where(r =>
+                (!MotionOnly || r.HasMotion)
                 && (since is null || r.StartedAtLocal >= since.Value)
                 && (_dayFilter is null || r.StartedAtLocal.Date == _dayFilter.Value.Date))
             .ToList();
+        Cameras.SetCounts(inScope.GroupBy(r => r.Recording.CameraId).ToDictionary(g => g.Key, g => g.Count()));
+        var filtered = inScope.Where(r => Cameras.Matches(r.Recording.CameraId)).ToList();
 
         Summary = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Recordings.SummaryFormat"],
             filtered.Count, RecordingRowViewModel.FormatSize(filtered.Sum(r => Math.Max(0, r.Recording.SizeBytes))));
@@ -302,6 +302,9 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         {
             var recordings = await _repo.ListAsync(cameraId: null, ct).ConfigureAwait(true);
             var cams = await _cameras.ListAsync(ct).ConfigureAwait(true);
+            var groups = (await _cameras.ListGroupsAsync(ct).ConfigureAwait(true)).ToDictionary(g => g.Id, g => g.Name);
+            Cameras.SetCameras(cams.Select(c => new CameraPickSource(
+                c.Id, c.Name, c.Host, c.GroupId is { } gid && groups.TryGetValue(gid, out var g) ? g : null)));
             var nameById = new Dictionary<CameraId, string>();
             foreach (var c in cams) nameById[c.Id] = c.Name;
 
@@ -311,7 +314,6 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
                 var name = nameById.TryGetValue(r.CameraId, out var n) ? n : Localizer.Instance["Common.Unknown"];
                 _allRows.Add(new RecordingRowViewModel(r, name));
             }
-            RebuildCameraOptions();
             ApplyFilter(resetPage: false);
             IsLoaded = true;
 
@@ -326,24 +328,6 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         {
             IsLoading = false;
         }
-    }
-
-    // Only cameras that actually have recordings; keeps the selection by id.
-    private void RebuildCameraOptions()
-    {
-        var keep = SelectedCamera?.Id;
-        var options = _allRows
-            .GroupBy(r => r.Recording.CameraId)
-            .Select(g => new RecordingCameraOption(g.Key, g.First().CameraName))
-            .OrderBy(o => o.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-
-        CameraOptions.Clear();
-        CameraOptions.Add(new RecordingCameraOption(null, Localizer.Instance["Snapshots.AllCameras"]));
-        foreach (var o in options) CameraOptions.Add(o);
-
-        var match = CameraOptions.FirstOrDefault(o => o.Id == keep) ?? CameraOptions[0];
-        if (!Equals(SelectedCamera, match)) SelectedCamera = match;
     }
 
     [RelayCommand]
@@ -392,7 +376,6 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
 
             await _repo.RemoveAsync(row.Recording.Id, CancellationToken.None).ConfigureAwait(true);
             _allRows.Remove(row);
-            RebuildCameraOptions();
             ApplyFilter(resetPage: false);
         }
         catch (Exception ex)
@@ -401,9 +384,6 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
         }
     }
 }
-
-// Entry of the camera filter; Id null = all cameras.
-public sealed record RecordingCameraOption(CameraId? Id, string Name);
 
 // "Today, 27 September · 3 · 142 MB" — interleaved into PageItems.
 public sealed class RecordingDayHeader
