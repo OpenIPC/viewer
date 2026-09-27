@@ -135,6 +135,10 @@
   <StreamGeometry x:Key="IconRotateCw">M21,12 a9,9 0 1 1 -9,-9 c2.52,0 4.93,1 6.74,2.74 L21,8 M21,3 v5 h-5</StreamGeometry>
   <StreamGeometry x:Key="IconSkipBack">M19,20 L9,12 L19,4 Z M5,19 V5</StreamGeometry>
   <StreamGeometry x:Key="IconSkipForward">M5,4 L15,12 L5,20 Z M19,5 V19</StreamGeometry>
+  <!-- Camera editor. Lucide "eye", "eye-off", "plug". -->
+  <StreamGeometry x:Key="IconEye">M2.062,12.348 a1,1 0 0 1 0,-0.696 a10.75,10.75 0 0 1 19.876,0 a1,1 0 0 1 0,0.696 a10.75,10.75 0 0 1 -19.876,0 M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconEyeOff">M10.733,5.076 a10.744,10.744 0 0 1 11.205,6.575 a1,1 0 0 1 0,0.696 a10.747,10.747 0 0 1 -1.444,2.49 M14.084,14.158 a3,3 0 0 1 -4.242,-4.242 M17.479,17.499 a10.75,10.75 0 0 1 -15.417,-5.151 a1,1 0 0 1 0,-0.696 a10.75,10.75 0 0 1 4.446,-5.143 M2,2 L22,22</StreamGeometry>
+  <StreamGeometry x:Key="IconPlug">M12,22 V17 M9,8 V2 M15,8 V2 M18,8 V13 a4,4 0 0 1 -4,4 H10 a4,4 0 0 1 -4,-4 V8 Z</StreamGeometry>
   <!-- Frame step: a chevron against a bar. IconMinimize is Lucide "minimize". -->
   <StreamGeometry x:Key="IconFrameBack">M17,18 L11,12 L17,6 M7,6 V18</StreamGeometry>
   <StreamGeometry x:Key="IconFrameForward">M7,18 L13,12 L7,6 M17,6 V18</StreamGeometry>

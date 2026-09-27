@@ -514,13 +514,24 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private async Task AddCameraAsync()
     {
         var editor = _editorFactory.CreateForNew();
+        editor.ShowAlternatives = true;
         var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
+        switch (result?.Redirect)
+        {
+            case CameraEditorRedirect.Discover:
+                await DiscoverCameraAsync().ConfigureAwait(true);
+                return;
+            case CameraEditorRedirect.ScanQr:
+                await ScanQrAsync().ConfigureAwait(true);
+                return;
+        }
         if (result?.NewRequest is not { } req)
             return;
 
         try
         {
-            await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            await _directory.SaveDetectedAsync(id, result, CancellationToken.None).ConfigureAwait(true);
             await LoadAsync(CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -570,8 +581,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
                 // Persist HasPtz / ProfileToken / manufacturer info from the probe so
                 // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
                 // Non-ONVIF devices (sweep/mDNS) have no probe — nothing to persist.
-                if (found.Probe is { } probe)
+                // A Connect inside the editor supersedes the discovery probe.
+                if (result.Onvif is null && found.Probe is { } probe)
                     await _directory.SaveOnvifMetadataAsync(id, probe, CancellationToken.None).ConfigureAwait(true);
+                await _directory.SaveDetectedAsync(id, result, CancellationToken.None).ConfigureAwait(true);
                 await LoadAsync(CancellationToken.None).ConfigureAwait(true);
                 knownHosts.Add(req.Host);
             }
@@ -644,7 +657,8 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
 
         try
         {
-            await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
+            await _directory.SaveDetectedAsync(id, result, CancellationToken.None).ConfigureAwait(true);
             await LoadAsync(CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)

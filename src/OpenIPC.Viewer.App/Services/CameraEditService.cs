@@ -41,6 +41,7 @@ public sealed class CameraEditService
         try
         {
             await _directory.UpdateAsync(camera.Id, req, CancellationToken.None).ConfigureAwait(true);
+            await _directory.SaveDetectedAsync(camera.Id, result, CancellationToken.None).ConfigureAwait(true);
             return true;
         }
         catch (Exception ex)
