@@ -5,11 +5,14 @@
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.CameraEditorWindow"
         x:DataType="vm:CameraEditorViewModel"
         Title="{Binding Title}"
-        Width="560" Height="680"
+        Width="540" SizeToContent="Height" MaxHeight="820"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
+        WindowDecorations="BorderOnly"
         Background="{StaticResource Bg1Brush}">
 
+  <!-- No native title bar: the form draws its own dark header (title,
+       close box, drag handle). The OS keeps the border and shadow. -->
   <dialogs:CameraEditorContent Name="InnerContent" />
 
 </Window>

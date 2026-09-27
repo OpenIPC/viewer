@@ -738,10 +738,10 @@
                 ToolTip.Tip="{Binding [CameraPage.Tooltip.Mute], Source={x:Static svc:Localizer.Instance}}">
           <Panel>
             <Path Classes="lucide" Data="{StaticResource IconVolume}"
-                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" VerticalAlignment="Center" HorizontalAlignment="Center"
                   IsVisible="{Binding !IsMuted}" />
             <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
-                  Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="16" VerticalAlignment="Center" HorizontalAlignment="Center"
                   IsVisible="{Binding IsMuted}" />
           </Panel>
         </Button>

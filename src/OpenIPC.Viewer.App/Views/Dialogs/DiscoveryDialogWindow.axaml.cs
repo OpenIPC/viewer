@@ -12,5 +12,13 @@ public sealed partial class DiscoveryDialogWindow : Window
         _ = content.Completion.ContinueWith(t =>
             Dispatcher.UIThread.Post(() => Close(t.Result)),
             System.Threading.Tasks.TaskScheduler.Default);
+
+        // No native title bar (WindowDecorations=BorderOnly): the dialog
+        // header drags the window.
+        content.HeaderPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                BeginMoveDrag(e);
+        };
     }
 }

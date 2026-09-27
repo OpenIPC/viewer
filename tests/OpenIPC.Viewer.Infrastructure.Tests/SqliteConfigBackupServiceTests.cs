@@ -69,6 +69,29 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_Twice_DoesNotDuplicateLayouts()
+    {
+        var src = await NewDbAsync();
+        var a = await src.cams.AddAsync(Cam("A"), CancellationToken.None);
+        var def = (await src.layouts.GetAllAsync(CancellationToken.None))[0];
+        await src.layouts.SetTilesAsync(def.Id, new[] { a }, CancellationToken.None);
+        await src.layouts.AddAsync("Yard", 3, 1, CancellationToken.None);
+        var json = await src.backup.ExportAsync(null, CancellationToken.None);
+
+        // A fresh install already has its own "Default"; importing twice must
+        // merge into it and into the first imported "Yard".
+        var dst = await NewDbAsync();
+        await dst.backup.ImportAsync(json, CancellationToken.None);
+        await dst.backup.ImportAsync(json, CancellationToken.None);
+
+        var layouts = await dst.layouts.GetAllAsync(CancellationToken.None);
+        Assert.Equal(new[] { "Default", "Yard" }, layouts.Select(l => l.Name).OrderBy(n => n));
+        var merged = layouts.Single(l => l.Name == "Default");
+        Assert.Equal(new[] { a }, await dst.layouts.GetTilesAsync(merged.Id, CancellationToken.None));
+        Assert.Equal(3, layouts.Single(l => l.Name == "Yard").GridSize);
+    }
+
+    [Fact]
     public async Task Preview_CountsUpdatesForExistingCameras()
     {
         var src = await NewDbAsync();

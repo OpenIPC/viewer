@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,13 +19,31 @@ public sealed class TcpReachabilityProbe : IReachabilityProbe
         if (string.IsNullOrWhiteSpace(host) || port < 1 || port > 65535)
             return false;
 
-        using var client = new TcpClient();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         linked.CancelAfter(timeout);
         try
         {
-            await client.ConnectAsync(host, port, linked.Token).ConfigureAwait(false);
-            return client.Connected;
+            // Connect with a socket of each address's own family. A bare
+            // TcpClient() is a dual-mode IPv6 socket, and on hosts with IPv6
+            // disabled (or a VPN that drops it) connecting that to an IPv4
+            // camera fails with WSAEADDRNOTAVAIL — every camera read offline.
+            var addresses = IPAddress.TryParse(host, out var literal)
+                ? new[] { literal }
+                : await Dns.GetHostAddressesAsync(host, linked.Token).ConfigureAwait(false);
+            foreach (var address in addresses)
+            {
+                using var client = new TcpClient(address.AddressFamily);
+                try
+                {
+                    await client.ConnectAsync(address, port, linked.Token).ConfigureAwait(false);
+                    if (client.Connected) return true;
+                }
+                catch (SocketException)
+                {
+                    // Try the next address (e.g. AAAA then A).
+                }
+            }
+            return false;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -32,7 +51,6 @@ public sealed class TcpReachabilityProbe : IReachabilityProbe
         }
         catch (Exception)
         {
-            // SocketException (refused / unreachable), DNS resolution failure, etc.
             return false;
         }
     }

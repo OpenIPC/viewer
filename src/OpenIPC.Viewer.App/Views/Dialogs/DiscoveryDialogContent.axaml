@@ -4,189 +4,301 @@
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              x:Class="OpenIPC.Viewer.App.Views.Dialogs.DiscoveryDialogContent"
              x:DataType="vm:DiscoveryDialogViewModel"
-             MaxWidth="560" MaxHeight="700"
+             MaxWidth="560"
              Background="{StaticResource Bg1Brush}"
              FontFamily="{StaticResource FontSans}"
              FontSize="{StaticResource FontSizeBase}"
              Foreground="{StaticResource TextPrimaryBrush}">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="24">
+  <UserControl.Styles>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}" />
+      <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}" />
+    </Style>
 
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-      <StackPanel Grid.Column="0" Spacing="4">
-        <TextBlock Text="{Binding [Discovery.Header], Source={x:Static svc:Localizer.Instance}}"
-                   FontSize="{StaticResource FontSizeLg}"
-                   FontWeight="SemiBold" />
-        <TextBlock Text="{Binding StatusText}"
-                   FontSize="{StaticResource FontSizeSm}"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   TextWrapping="Wrap" />
-      </StackPanel>
-      <StackPanel Grid.Column="1" Spacing="6" HorizontalAlignment="Right">
-        <Button Content="{Binding [Discovery.Button.Scan], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding ScanCommand}"
-                Padding="14,8"
-                Background="{StaticResource AccentBrush}"
-                Foreground="White"
-                CornerRadius="6"
-                HorizontalAlignment="Right" />
-        <CheckBox IsChecked="{Binding DeepScan, Mode=TwoWay}"
-                  IsEnabled="{Binding !ScanInProgress}"
-                  Content="{Binding [Discovery.DeepScan], Source={x:Static svc:Localizer.Instance}}"
-                  FontSize="{StaticResource FontSizeSm}"
-                  Foreground="{StaticResource TextSecondaryBrush}" />
-      </StackPanel>
-    </Grid>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="14,7" />
+    </Style>
+    <Style Selector="Button.outline">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
 
-    <!-- Where a deep scan goes. The subnets come from the OS routing table and
-         arrive ticked, so a camera on another VLAN or behind a VPN needs no
-         typing at all; the box below is for the odd range routes don't show.
-         Bad input or an over-wide selection shows at the bottom and disables Scan. -->
-    <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,12">
-      <!-- The window is fixed-height, and a machine on several VLANs can turn up
-           many subnets, so the list scrolls inside a capped box instead of
-           pushing the rest of the dialog off the bottom. -->
-      <ScrollViewer IsVisible="{Binding HasScanTargets}"
-                    MaxHeight="132"
-                    HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Auto">
-        <ItemsControl ItemsSource="{Binding ScanTargets}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:ScanTargetRowVm">
-              <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                        IsEnabled="{Binding $parent[UserControl].((vm:DiscoveryDialogViewModel)DataContext).ScanInProgress, Converter={x:Static BoolConverters.Not}}"
-                        Margin="0,0,0,2">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="{Binding Cidr}"
-                             FontFamily="{StaticResource FontMono}"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
-                  <TextBlock Text="{Binding Detail}"
-                             FontSize="{StaticResource FontSizeSm}"
-                             VerticalAlignment="Center"
-                             Foreground="{StaticResource TextTertiaryBrush}" />
-                </StackPanel>
-              </CheckBox>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
+    <!-- Kind badge: OpenIPC (accent), ONVIF (green), anything else (neutral). -->
+    <Style Selector="Border.kind">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+    </Style>
+    <Style Selector="Border.kind.openipc">
+      <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
+    </Style>
+    <Style Selector="Border.kind.onvif">
+      <Setter Property="Background" Value="#2622C55E" />
+    </Style>
+    <!-- Already in the library: still listed, but quieter. -->
+    <Style Selector="Border.devrow.added">
+      <Setter Property="Opacity" Value="0.55" />
+    </Style>
+    <!-- Keeps its row when idle so the list doesn't jump as scans start. -->
+    <Style Selector="ProgressBar.idle">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Border.tag">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="7,1" />
+      <Setter Property="Margin" Value="6,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}" />
+      <Setter Property="Margin" Value="4,14,0,4" />
+    </Style>
 
-      <TextBox Text="{Binding IpRangeText, Mode=TwoWay}"
-               IsEnabled="{Binding !ScanInProgress}"
-               FontFamily="{StaticResource FontMono}"
-               PlaceholderText="{Binding [Discovery.IpRange.Placeholder], Source={x:Static svc:Localizer.Instance}}" />
+    <Style Selector="Button.deephead">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.deephead:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+    </Style>
+  </UserControl.Styles>
 
-      <TextBlock Text="{Binding SweepSummary}"
-                 IsVisible="{Binding SweepSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                 FontSize="{StaticResource FontSizeSm}"
-                 Foreground="{StaticResource TextSecondaryBrush}" />
-      <TextBlock Text="{Binding IpRangeError}"
-                 IsVisible="{Binding IpRangeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                 Foreground="{StaticResource DangerBrush}"
-                 FontSize="{StaticResource FontSizeSm}"
-                 TextWrapping="Wrap" />
-    </StackPanel>
+  <UserControl.DataTemplates>
+    <!-- One found device: kind badge · model + tags · what it is · address · Add. -->
+    <DataTemplate DataType="vm:DiscoveredDeviceRowVm">
+      <Border Classes="devrow" Classes.added="{Binding IsAlreadyAdded}"
+              BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="0,1,0,0" Padding="4,10">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Grid.Column="0" Classes="kind" Classes.openipc="{Binding IsOpenIpc}" Classes.onvif="{Binding IsOnvif}"
+                  Margin="0,0,12,0" VerticalAlignment="Center">
+            <Panel Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Path Classes="lucide" Data="{StaticResource IconCpu}" Stroke="{StaticResource AccentHoverBrush}"
+                    MaxWidth="17" MaxHeight="17" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsOpenIpc}" />
+              <Path Classes="lucide" Data="{StaticResource IconCamera}" Stroke="{StaticResource SuccessBrush}"
+                    MaxWidth="17" MaxHeight="17" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsOnvif}" />
+              <Path Classes="lucide" Data="{StaticResource IconVideoCam}" Stroke="{StaticResource TextSecondaryBrush}"
+                    MaxWidth="17" MaxHeight="17" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsGeneric}" />
+            </Panel>
+          </Border>
 
-    <!-- Scan progress (0..1), shown only while scanning. -->
-    <ProgressBar Grid.Row="2"
-                 Minimum="0" Maximum="1"
-                 Value="{Binding ScanProgress}"
-                 IsVisible="{Binding ScanInProgress}"
-                 Height="4"
-                 Margin="0,0,0,12"
-                 Foreground="{StaticResource AccentBrush}" />
+          <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="230" />
+              <ItemsControl ItemsSource="{Binding Tags}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Border Classes="tag">
+                      <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <TextBlock FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}"
+                       TextTrimming="CharacterEllipsis">
+              <Run Text="{Binding Subtitle}" />
+              <Run Text=" · " />
+              <Run Text="{Binding HostPort}" FontFamily="{StaticResource FontMono}" />
+            </TextBlock>
+          </StackPanel>
 
-    <Border Grid.Row="3"
-            Background="{StaticResource Bg2Brush}"
-            BorderBrush="{StaticResource BorderWeakBrush}"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="2"
-            MinHeight="200">
-      <ListBox ItemsSource="{Binding Cameras}"
-               SelectedItem="{Binding Selected, Mode=TwoWay}"
-               Background="Transparent"
-               BorderThickness="0">
-        <ListBox.ItemTemplate>
-          <DataTemplate DataType="vm:DiscoveredDeviceRowVm">
-            <Grid ColumnDefinitions="*,Auto" Margin="8">
-              <StackPanel Grid.Column="0" Spacing="2">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="{Binding DisplayName}"
-                             FontWeight="Medium"
-                             Foreground="{StaticResource TextPrimaryBrush}" />
-                  <Border IsVisible="{Binding IsAlreadyAdded}"
-                          Background="{StaticResource Bg3Brush}"
-                          CornerRadius="4" Padding="6,1"
-                          VerticalAlignment="Center">
-                    <TextBlock Text="{Binding [Discovery.AlreadyAdded], Source={x:Static svc:Localizer.Instance}}"
-                               FontSize="{StaticResource FontSizeSm}"
-                               Foreground="{StaticResource SuccessBrush}" />
-                  </Border>
-                </StackPanel>
-                <TextBlock Text="{Binding Subtitle}"
-                           FontSize="{StaticResource FontSizeSm}"
-                           Foreground="{StaticResource TextSecondaryBrush}" />
-              </StackPanel>
-              <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
-                <TextBlock Text="{Binding HostPort}"
-                           FontFamily="{StaticResource FontMono}"
-                           FontSize="{StaticResource FontSizeSm}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           HorizontalAlignment="Right" />
-                <TextBlock FontSize="{StaticResource FontSizeSm}"
-                           Foreground="{StaticResource TextTertiaryBrush}"
-                           HorizontalAlignment="Right">
-                  <Run Text="{Binding ProtocolsText}" />
-                  <Run Text=" · " />
-                  <Run Text="{Binding ConfidenceText}" />
-                </TextBlock>
-              </StackPanel>
-            </Grid>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+          <Button Grid.Column="2" Classes="outline" VerticalAlignment="Center" Margin="12,0,0,0"
+                  IsVisible="{Binding !IsAlreadyAdded}"
+                  Click="OnAddClick"
+                  Content="{Binding [Discovery.Add], Source={x:Static svc:Localizer.Instance}}" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="12,0,4,0"
+                      IsVisible="{Binding IsAlreadyAdded}">
+            <Path Classes="lucide" Data="{StaticResource IconCheck}" Stroke="{StaticResource TextSecondaryBrush}"
+                  Width="13" Height="13" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding [Discovery.InLibrary], Source={x:Static svc:Localizer.Instance}}"
+                       FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <!-- Header: icon · title · manual entry · close (drag handle on desktop). -->
+    <Border Grid.Row="0" Name="HeaderBar" Background="Transparent"
+            BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="0,0,0,1"
+            Padding="20,14,12,14">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <Path Grid.Column="0" Classes="lucide" Data="{StaticResource IconRadar}"
+              Stroke="{StaticResource AccentHoverBrush}" Width="18" Height="18"
+              VerticalAlignment="Center" Margin="0,0,10,0" />
+        <TextBlock Grid.Column="1" Text="{Binding [Discovery.Title], Source={x:Static svc:Localizer.Instance}}"
+                   FontSize="{StaticResource FontSizeLg}" FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Classes="link" Name="ManualLink" Margin="12,0,10,0" VerticalAlignment="Center"
+                Content="{Binding [Discovery.Manual], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Grid.Column="3" Name="CloseButton" Classes="row-icon"
+                AutomationProperties.Name="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
+                ToolTip.Tip="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconClose}"
+                Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+        </Button>
+      </Grid>
     </Border>
 
-    <StackPanel Grid.Row="4" Spacing="8" Margin="0,16,0,0"
-                IsVisible="{Binding IsRowSelected}">
-      <Grid ColumnDefinitions="*,12,*">
-        <StackPanel Grid.Column="0" Spacing="6">
-          <TextBlock Text="{Binding [CameraEditor.Label.Username], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-          <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="{Binding [CameraEditor.Placeholder.Username], Source={x:Static svc:Localizer.Instance}}" />
+    <!-- Status line: what's happening / what was found · Retry or Stop. -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="20,10,20,8">
+      <Path Grid.Column="0" Classes="lucide" Data="{StaticResource IconCheck}" Stroke="{StaticResource SuccessBrush}"
+            Width="13" Height="13" Margin="0,0,7,0" VerticalAlignment="Center"
+            IsVisible="{Binding HasNew}" />
+      <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center"
+                 FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="2" Classes="link" Command="{Binding RescanCommand}" IsVisible="{Binding IsIdle}" Margin="12,0,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="5">
+          <Path Classes="lucide" Data="{StaticResource IconRefresh}" Stroke="{StaticResource AccentHoverBrush}"
+                Width="12" Height="12" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding [Discovery.Retry], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
         </StackPanel>
-        <StackPanel Grid.Column="2" Spacing="6">
-          <TextBlock Text="{Binding [CameraEditor.Label.Password], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
-          <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" />
-        </StackPanel>
-      </Grid>
-      <CheckBox IsChecked="{Binding ReuseCredentials, Mode=TwoWay}"
-                Content="{Binding [Discovery.ReuseCreds], Source={x:Static svc:Localizer.Instance}}"
-                FontSize="{StaticResource FontSizeSm}"
-                Foreground="{StaticResource TextSecondaryBrush}" />
-    </StackPanel>
-
-    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
-      <Button Grid.Column="1"
-              Name="CancelButton"
-              Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
-              Padding="14,8"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Foreground="{StaticResource TextPrimaryBrush}"
-              Margin="0,0,8,0" />
-      <Button Grid.Column="2"
-              Name="AddButton"
-              Content="{Binding [Discovery.Button.AddSelected], Source={x:Static svc:Localizer.Instance}}"
-              IsEnabled="{Binding CanAdd}"
-              Padding="14,8"
-              Background="{StaticResource AccentBrush}"
-              Foreground="White"
-              CornerRadius="6"
-              IsDefault="True" />
+      </Button>
+      <Button Grid.Column="2" Classes="link" Command="{Binding StopCommand}" IsVisible="{Binding IsScanning}" Margin="12,0,0,0"
+              Content="{Binding [Discovery.Stop], Source={x:Static svc:Localizer.Instance}}" />
     </Grid>
+
+    <ProgressBar Grid.Row="2" Minimum="0" Maximum="1" Value="{Binding ScanProgress}"
+                 IsIndeterminate="{Binding !IsDeepScanning}"
+                 Height="2" MinHeight="2" Margin="20,0,20,2"
+                 Classes.idle="{Binding IsIdle}"
+                 Foreground="{StaticResource AccentBrush}" Background="Transparent" />
+
+    <!-- Found devices; cameras already in the library underneath. -->
+    <ScrollViewer Grid.Row="3">
+      <StackPanel Margin="16,0,16,12">
+        <ItemsControl ItemsSource="{Binding NewCameras}" />
+
+        <StackPanel IsVisible="{Binding HasAdded}">
+          <TextBlock Classes="section" Text="{Binding [Discovery.Section.InLibrary], Source={x:Static svc:Localizer.Instance}}" />
+          <ItemsControl ItemsSource="{Binding AddedCameras}" />
+        </StackPanel>
+
+        <!-- Nothing found: say why and offer the next step. -->
+        <StackPanel IsVisible="{Binding ShowEmpty}" HorizontalAlignment="Center" Margin="20,40,20,20" MaxWidth="380" Spacing="8">
+          <Path Classes="lucide" Data="{StaticResource IconRadar}" Stroke="{StaticResource TextTertiaryBrush}"
+                Width="30" Height="30" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding [Discovery.Empty.Title], Source={x:Static svc:Localizer.Instance}}"
+                     FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding [Discovery.Empty.QuickBody], Source={x:Static svc:Localizer.Instance}}"
+                     IsVisible="{Binding ShowEmptyDeepHint}"
+                     FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}"
+                     TextWrapping="Wrap" TextAlignment="Center" />
+          <TextBlock Text="{Binding [Discovery.Empty.DeepBody], Source={x:Static svc:Localizer.Instance}}"
+                     IsVisible="{Binding ShowEmptyManualHint}"
+                     FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}"
+                     TextWrapping="Wrap" TextAlignment="Center" />
+          <Button Classes="primary" HorizontalAlignment="Center" Margin="0,6,0,0"
+                  IsVisible="{Binding ShowEmptyDeepHint}"
+                  Command="{Binding DeepScanCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="lucide" Data="{StaticResource IconRadar}" Stroke="White" Width="15" Height="15" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding DeepButtonLabel}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="primary" HorizontalAlignment="Center" Margin="0,6,0,0" Name="EmptyManualButton"
+                  IsVisible="{Binding ShowEmptyManualHint}"
+                  Content="{Binding [Discovery.Manual], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Deep scan: collapsed until asked for; subnets, extra range, start/stop. -->
+    <Border Grid.Row="4" BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="0,1,0,0">
+      <StackPanel>
+        <Button Classes="deephead" Command="{Binding ToggleDeepCommand}">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+            <Path Grid.Column="0" Classes="lucide" Data="{StaticResource IconRadar}" Stroke="{StaticResource TextSecondaryBrush}"
+                  Width="15" Height="15" Margin="0,0,10,0" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                       Text="{Binding [Discovery.Deep.Title], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="10,0,10,0"
+                       FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextTertiaryBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding [Discovery.Deep.Hint], Source={x:Static svc:Localizer.Instance}}" />
+            <Panel Grid.Column="3" Width="14" Height="14" VerticalAlignment="Center">
+              <Path Classes="lucide" Data="{StaticResource IconChevronRight}" Stroke="{StaticResource TextTertiaryBrush}" Width="14" Height="14" IsVisible="{Binding !IsDeepOpen}" />
+              <Path Classes="lucide" Data="{StaticResource IconChevronDown}" Stroke="{StaticResource TextTertiaryBrush}" Width="14" Height="14" IsVisible="{Binding IsDeepOpen}" />
+            </Panel>
+          </Grid>
+        </Button>
+
+        <StackPanel IsVisible="{Binding IsDeepOpen}" Margin="45,0,20,14" Spacing="6">
+          <!-- A machine on several VLANs can list many subnets; cap and scroll. -->
+          <ScrollViewer IsVisible="{Binding HasScanTargets}" MaxHeight="120"
+                        HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding ScanTargets}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ScanTargetRowVm">
+                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" MinHeight="26" Padding="6,0,0,0"
+                            IsEnabled="{Binding $parent[UserControl].((vm:DiscoveryDialogViewModel)DataContext).IsIdle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding Cidr}" FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Detail}" FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </CheckBox>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <TextBox Name="RangeBox" Text="{Binding IpRangeText, Mode=TwoWay}" Margin="0,4,0,0"
+                   IsEnabled="{Binding IsIdle}"
+                   FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                   PlaceholderText="{Binding [Discovery.IpRange.Placeholder], Source={x:Static svc:Localizer.Instance}}" />
+          <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+            <TextBlock Grid.Column="0" Text="{Binding IpRangeError}" VerticalAlignment="Center" Margin="0,0,12,0"
+                       IsVisible="{Binding IpRangeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Foreground="{StaticResource DangerBrush}" FontSize="{StaticResource FontSizeSm}" TextWrapping="Wrap" />
+            <Button Grid.Column="1" Classes="primary" Name="DeepButton"
+                    Command="{Binding DeepScanCommand}" IsVisible="{Binding !IsDeepScanning}"
+                    Content="{Binding DeepButtonLabel}" />
+            <Button Grid.Column="1" Classes="outline"
+                    Command="{Binding StopCommand}" IsVisible="{Binding IsDeepScanning}"
+                    Content="{Binding [Discovery.Stop], Source={x:Static svc:Localizer.Instance}}" />
+          </Grid>
+        </StackPanel>
+      </StackPanel>
+    </Border>
 
   </Grid>
 

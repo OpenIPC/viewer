@@ -14,8 +14,9 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 
 // Plays a recorded file (Phase 16). Mirrors FfmpegVideoSession's decode/emit
 // path but for local files: presentation is paced off the file's own PTS so it
-// plays at real-time speed, and it adds transport (play/pause), a probed
-// Duration, an observable Position, and keyframe Seek.
+// plays at real-time (or Rate x) speed, and it adds transport (play/pause),
+// a probed Duration, an observable Position, frame-accurate Seek, single-frame
+// stepping and audio (decoded only at 1x while playing; no time-stretching).
 //
 // Software decode only — a single local playback stream doesn't need the HW
 // path the live grid relies on, and software decode keeps seeking simple
@@ -31,6 +32,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     private readonly Subject<SessionState> _stateChanged = new();
     private readonly Subject<SessionTelemetry> _telemetry = new();
     private readonly Subject<TimeSpan> _positionChanged = new();
+    private readonly Subject<AudioFrame> _audioFrames = new();
 
     private readonly object _stateLock = new();
     private readonly object _snapshotLock = new();
@@ -49,6 +51,19 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     // Latest-wins seek request in TimeSpan.Ticks, or NoSeek. The decode loop
     // drains it before each packet read; SeekAsync just overwrites it.
     private long _pendingSeekTicks = NoSeek;
+
+    // Playback speed, and a flag asking the loop to re-anchor its clock so a
+    // rate change continues from the current frame instead of jumping.
+    private double _rate = 1.0;
+    private volatile bool _rebaseClock;
+
+    // Audio is decoded only when a listener asked for it (SetAudioEnabled).
+    private volatile bool _audioEnabled;
+
+    // Forward single-frame step request (1 = pending); consumed by the frame
+    // it presents. Frame duration backs the backward step's seek target.
+    private int _stepRequested;
+    private long _frameDurationTicks = TimeSpan.FromSeconds(1 / 25.0).Ticks;
 
     private long _durationTicks;
     private long _positionTicks;
@@ -73,10 +88,8 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     public string? LastError { get { lock (_stateLock) return _lastError; } }
 
     public IObservable<VideoFrame> Frames => _frames;
-    // File playback has no live-audio monitoring path (Phase 17 is RTSP only);
-    // expose an empty stream so the IVideoSession contract is satisfied.
-    public IObservable<AudioFrame> AudioFrames { get; } = System.Reactive.Linq.Observable.Empty<AudioFrame>();
-    public void SetAudioEnabled(bool enabled) { /* file playback has no live audio */ }
+    public IObservable<AudioFrame> AudioFrames => _audioFrames;
+    public void SetAudioEnabled(bool enabled) => _audioEnabled = enabled;
     public IObservable<SessionState> StateChanged => _stateChanged;
     public IObservable<SessionTelemetry> Telemetry => _telemetry;
     public IObservable<TimeSpan> PositionChanged => _positionChanged;
@@ -84,6 +97,18 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
     public TimeSpan Duration => TimeSpan.FromTicks(Interlocked.Read(ref _durationTicks));
     public TimeSpan Position => TimeSpan.FromTicks(Interlocked.Read(ref _positionTicks));
     public bool IsPaused => _paused;
+
+    public double Rate
+    {
+        get => Volatile.Read(ref _rate);
+        set
+        {
+            var clamped = Math.Clamp(value, 0.25, 16.0);
+            if (Volatile.Read(ref _rate) == clamped) return;
+            Volatile.Write(ref _rate, clamped);
+            _rebaseClock = true;
+        }
+    }
 
     public Task StartAsync(CancellationToken ct)
     {
@@ -139,6 +164,23 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         return Task.CompletedTask;
     }
 
+    public void StepFrame(bool forward)
+    {
+        if (_thread is null) return;
+        if (!_paused) Pause();
+        if (forward)
+        {
+            Interlocked.Exchange(ref _stepRequested, 1);
+            _playGate.Set();
+            return;
+        }
+        // Aim between the previous frame and the one before it, so PTS jitter
+        // cannot land back on the current frame.
+        var back = TimeSpan.FromTicks(Interlocked.Read(ref _frameDurationTicks) * 3 / 2);
+        var target = Position - back;
+        _ = SeekAsync(target < TimeSpan.Zero ? TimeSpan.Zero : target, CancellationToken.None);
+    }
+
     public Task<byte[]> SnapshotAsync(SnapshotFormat format, CancellationToken ct)
     {
         byte[]? bgra;
@@ -172,6 +214,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         _stateChanged.OnCompleted();
         _telemetry.OnCompleted();
         _positionChanged.OnCompleted();
+        _audioFrames.OnCompleted();
         _cts?.Dispose();
         _playGate.Dispose();
     }
@@ -183,6 +226,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         AVFrame* frame = null;
         AVPacket* packet = null;
         SwsContext* sws = null;
+        FfmpegAudioDecoder? audio = null;
         var videoStreamIndex = -1;
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         double timeBase = 0;
@@ -217,6 +261,9 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
             var stream = fmtCtx->streams[videoStreamIndex];
             timeBase = ffmpeg.av_q2d(stream->time_base);
             SetDuration(fmtCtx, stream);
+            var frameRate = ffmpeg.av_guess_frame_rate(fmtCtx, stream, null);
+            if (frameRate.num > 0 && frameRate.den > 0)
+                Interlocked.Exchange(ref _frameDurationTicks, TimeSpan.FromSeconds(frameRate.den / (double)frameRate.num).Ticks);
 
             var codecpar = stream->codecpar;
             var codec = ffmpeg.avcodec_find_decoder(codecpar->codec_id);
@@ -236,9 +283,14 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
 
             packet = ffmpeg.av_packet_alloc();
             frame = ffmpeg.av_frame_alloc();
+            audio = FfmpegAudioDecoder.TryOpen(fmtCtx, _logger);
 
             SetState(SessionState.Playing);
             var ct = _cts!.Token;
+
+            // Decode-and-drop target after a seek, in video PTS units. Lives
+            // across packets: landing on the exact frame may take a whole GOP.
+            long seekTargetPts = ffmpeg.AV_NOPTS_VALUE;
 
             while (!ct.IsCancellationRequested)
             {
@@ -252,7 +304,6 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
                 }
 
                 var seek = Interlocked.Exchange(ref _pendingSeekTicks, NoSeek);
-                long seekTargetPts = ffmpeg.AV_NOPTS_VALUE;
                 if (seek != NoSeek)
                 {
                     var target = TimeSpan.FromTicks(seek);
@@ -261,6 +312,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
                     if (ret < 0)
                         _logger.LogWarning("avformat_seek_file failed: {Err}", FfmpegError.Describe(ret));
                     ffmpeg.avcodec_flush_buffers(codecCtx);
+                    audio?.Flush();
                     haveClock = false;
                     seekTargetPts = ts; // decode-and-drop until we reach the requested point
                     // After a seek we present one frame even if paused, so the UI
@@ -275,6 +327,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
                         // Hold at end-of-file: freeze on the last frame and park
                         // until a seek (or dispose) arrives.
                         SetPosition(Duration);
+                        seekTargetPts = ffmpeg.AV_NOPTS_VALUE;
                         _paused = true;
                         _playGate.Reset();
                         SetState(SessionState.Paused);
@@ -282,6 +335,16 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
                     }
                     _logger.LogWarning("av_read_frame failed: {Err}", FfmpegError.Describe(ret));
                     break;
+                }
+
+                if (audio is not null && packet->stream_index == audio.StreamIndex)
+                {
+                    // Sound only in plain 1x playback: not while paused/stepping,
+                    // catching up to a seek target, or at another speed.
+                    if (_audioEnabled && !_paused && Rate == 1.0 && seekTargetPts == ffmpeg.AV_NOPTS_VALUE)
+                        audio.Decode(packet, _audioFrames.OnNext, ct);
+                    ffmpeg.av_packet_unref(packet);
+                    continue;
                 }
 
                 if (packet->stream_index != videoStreamIndex)
@@ -345,8 +408,10 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
                     SetPosition(TimeSpan.FromSeconds(mediaSec));
                     ffmpeg.av_frame_unref(frame);
 
-                    // A seek while paused presents exactly one frame, then re-parks.
-                    if (justSeeked && _paused)
+                    // A seek or a step while paused presents exactly one frame,
+                    // then re-parks.
+                    var stepped = Interlocked.Exchange(ref _stepRequested, 0) == 1;
+                    if ((justSeeked || stepped) && _paused)
                     {
                         _playGate.Reset();
                         break;
@@ -363,6 +428,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         finally
         {
             if (sws != null) ffmpeg.sws_freeContext(sws);
+            audio?.Dispose();
             if (frame != null) { var p = frame; ffmpeg.av_frame_free(&p); }
             if (packet != null) { var p = packet; ffmpeg.av_packet_free(&p); }
             if (codecCtx != null) { var p = codecCtx; ffmpeg.avcodec_free_context(&p); }
@@ -386,6 +452,12 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
 
     private void PaceTo(Stopwatch clock, ref bool haveClock, ref double wallOriginSec, ref double mediaOriginSec, double mediaSec, CancellationToken ct)
     {
+        if (_rebaseClock)
+        {
+            _rebaseClock = false;
+            haveClock = false;
+        }
+
         if (!haveClock)
         {
             wallOriginSec = clock.Elapsed.TotalSeconds;
@@ -394,13 +466,14 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
             return;
         }
 
-        var targetWall = wallOriginSec + (mediaSec - mediaOriginSec);
+        var targetWall = wallOriginSec + (mediaSec - mediaOriginSec) / Rate;
         while (!ct.IsCancellationRequested)
         {
             var remaining = targetWall - clock.Elapsed.TotalSeconds;
             if (remaining <= 0.001) break;
-            // Bail out early if a seek arrives so scrubbing stays responsive.
-            if (Interlocked.Read(ref _pendingSeekTicks) != NoSeek) break;
+            // Bail out early if a seek or a speed change arrives so scrubbing
+            // and speed switching stay responsive.
+            if (Interlocked.Read(ref _pendingSeekTicks) != NoSeek || _rebaseClock) break;
             var ms = (int)Math.Min(remaining * 1000, 50);
             if (ms > 0) Thread.Sleep(ms);
         }

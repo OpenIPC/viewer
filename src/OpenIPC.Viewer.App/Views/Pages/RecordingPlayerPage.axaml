@@ -2,157 +2,351 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.RecordingPlayerPage"
              x:DataType="vm:RecordingPlayerPageViewModel">
 
   <UserControl.Styles>
-    <!-- Narrow viewport: drop the day-event sidebar so the video keeps the full
-         width instead of being squeezed beside a fixed 260px panel. Events
-         remain reachable via the timeline markers below. -->
-    <Style Selector="Grid.compact &gt; Border.eventsidebar">
+    <!-- Narrow viewport: drop the event sidebar so the video keeps the full
+         width; events stay reachable via the timeline markers below. -->
+    <Style Selector="Grid.compact &gt; Panel.eventsidebar">
       <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="Button.evfilter">
-      <Setter Property="Padding" Value="8,3" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
-      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-      <Setter Property="BorderThickness" Value="0" />
+    <!-- Narrow header: prev/next collapse to their icons. -->
+    <Style Selector="Grid.compact TextBlock.navlabel">
+      <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="Button.evfilter.active">
-      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-      <Setter Property="Foreground" Value="White" />
+
+    <!-- Fullscreen: the controls get a gutter since the page has no margin.
+         Margin lives in styles only: a local value would outrank them. -->
+    <Style Selector="StackPanel.controls">
+      <Setter Property="Margin" Value="0,12,0,0" />
     </Style>
-    <Style Selector="Button.evrow">
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Style Selector="Grid.full &gt; StackPanel.controls">
+      <Setter Property="Margin" Value="16,10,16,14" />
+    </Style>
+
+    <Style Selector="Button.outline">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.outline:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <!-- Translucent buttons floating over the video. -->
+    <Style Selector=":is(Button).overlay">
+      <Setter Property="Background" Value="#80000000" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.transport">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="10,5" />
-      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
-    <Style Selector="Button.evrow:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.transport:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+    </Style>
+    <Style Selector="Button.play">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="44" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.play:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.evrow">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.evrow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+    </Style>
+    <Style Selector="Border.kind-icon">
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="CornerRadius" Value="12" />
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,*,Auto" Classes.full="{Binding IsFullscreen}">
 
-    <!-- Header: back + file name + camera -->
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
-      <Button Grid.Column="0"
+    <!-- Header: back · camera + date/time · previous / next · ⋯ -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12"
+          IsVisible="{Binding !IsFullscreen}"
+          b:Adaptive.CompactBelow="620">
+      <Button Grid.Column="0" Classes="outline"
               Command="{Binding BackCommand}"
-              Background="Transparent"
-              BorderBrush="{StaticResource BorderMediumBrush}"
-              BorderThickness="1"
-              CornerRadius="6"
-              Padding="8,6"
-              VerticalAlignment="Center">
+              AutomationProperties.Name="{Binding [Player.Back], Source={x:Static svc:Localizer.Instance}}"
+              ToolTip.Tip="{Binding [Player.Back], Source={x:Static svc:Localizer.Instance}}">
         <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
               Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
       </Button>
-      <StackPanel Grid.Column="1" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center">
-        <TextBlock Text="{Binding Title}"
-                   FontFamily="{StaticResource FontMono}"
+
+      <StackPanel Grid.Column="1" Spacing="2" Margin="14,0,12,0" VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding FileName}">
+        <TextBlock Text="{Binding CameraName}"
                    FontSize="{StaticResource FontSizeLg}"
                    FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis"
                    Foreground="{StaticResource TextPrimaryBrush}" />
-        <TextBlock Text="{Binding CameraName}"
+        <TextBlock Text="{Binding Subtitle}"
                    FontSize="{StaticResource FontSizeSm}"
+                   TextTrimming="CharacterEllipsis"
                    Foreground="{StaticResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Button Classes="outline"
+                Command="{Binding PreviousCommand}"
+                ToolTip.Tip="{Binding PreviousTip}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="lucide" Data="{StaticResource IconSkipBack}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Classes="navlabel" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}"
+                       Text="{Binding [Player.Previous], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+        </Button>
+        <Button Classes="outline"
+                Command="{Binding NextCommand}"
+                ToolTip.Tip="{Binding NextTip}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Classes="navlabel" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}"
+                       Text="{Binding [Player.Next], Source={x:Static svc:Localizer.Instance}}" />
+            <Path Classes="lucide" Data="{StaticResource IconSkipForward}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="outline"
+                AutomationProperties.Name="{Binding [Recordings.Tooltip.More], Source={x:Static svc:Localizer.Instance}}"
+                ToolTip.Tip="{Binding [Recordings.Tooltip.More], Source={x:Static svc:Localizer.Instance}}">
+          <!-- The glyph is a flat row of dots: keep a square box and centre it,
+               or Uniform stretch pins it to the top. -->
+          <Panel Width="16" Height="16">
+            <Path Classes="lucide" Data="{StaticResource IconEllipsis}"
+                  Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="2"
+                  Width="16" VerticalAlignment="Center" />
+          </Panel>
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="{Binding [Recordings.ShowInFolder], Source={x:Static svc:Localizer.Instance}}"
+                        IsVisible="{Binding CanShowInFolder}"
+                        Command="{Binding ShowInFolderCommand}">
+                <MenuItem.Icon>
+                  <Path Classes="lucide" Data="{StaticResource IconFolder}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+                </MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="{Binding [Recordings.CopyFile], Source={x:Static svc:Localizer.Instance}}"
+                        Command="{Binding CopyFileCommand}">
+                <MenuItem.Icon>
+                  <Path Classes="lucide" Data="{StaticResource IconPaste}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+                </MenuItem.Icon>
+              </MenuItem>
+              <Separator />
+              <MenuItem Header="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource DangerBrush}"
+                        Command="{Binding DeleteCommand}">
+                <MenuItem.Icon>
+                  <Path Classes="lucide" Data="{StaticResource IconTrash}" Stroke="{StaticResource DangerBrush}" Width="14" Height="14" />
+                </MenuItem.Icon>
+              </MenuItem>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
       </StackPanel>
     </Grid>
 
-    <!-- Video surface + overlays (left) + day event list (right) -->
+    <!-- Video surface + overlays (left) + this recording's events (right) -->
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" b:Adaptive.CompactBelow="620">
       <Grid Grid.Column="0" ClipToBounds="True" Background="Black">
-      <!-- Digital zoom, same as the live page: wheel / pinch / double-tap,
-           drag to pan, Shift+drag or the top-right toggle to zoom to an area. -->
-      <controls:ZoomPanHost Name="ZoomHost"
-                            ContentAspect="{Binding #PlayerVideo.FrameAspect}"
-                            SourcePixelWidth="{Binding #PlayerVideo.FrameWidth}">
-        <controls:RtspVideoView Name="PlayerVideo" Session="{Binding VideoSession}" />
-      </controls:ZoomPanHost>
+        <!-- Digital zoom, same as the live page: wheel / pinch / double-tap,
+             drag to pan, Shift+drag or the top-right toggle to zoom to an area. -->
+        <controls:ZoomPanHost Name="ZoomHost"
+                              ContentAspect="{Binding #PlayerVideo.FrameAspect}"
+                              SourcePixelWidth="{Binding #PlayerVideo.FrameWidth}">
+          <controls:RtspVideoView Name="PlayerVideo" Session="{Binding VideoSession}" />
+        </controls:ZoomPanHost>
 
-      <controls:ZoomOverlay Host="{Binding #ZoomHost}" Video="{Binding #PlayerVideo}"
-                            HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" />
+        <controls:ZoomOverlay Host="{Binding #ZoomHost}" Video="{Binding #PlayerVideo}"
+                              HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" />
 
-      <ToggleButton IsChecked="{Binding #ZoomHost.IsRegionSelectArmed, Mode=TwoWay}"
-                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12"
-                    Background="#80000000"
-                    CornerRadius="6"
-                    Padding="8"
-                    ToolTip.Tip="{Binding [Zoom.Area], Source={x:Static svc:Localizer.Instance}}">
-        <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
-              Stroke="White" Width="16" Height="16" />
-      </ToggleButton>
-
-      <!-- Error strip -->
-      <Border HorizontalAlignment="Stretch" VerticalAlignment="Top"
-              Background="{StaticResource DangerBrush}"
-              Padding="12,8"
-              IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-        <TextBlock Text="{Binding ErrorMessage}" Foreground="White" TextWrapping="Wrap" />
-      </Border>
-
-      <!-- Failed overlay -->
-      <Border IsVisible="{Binding IsFailed}" Background="#A0000000">
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420">
-          <TextBlock Text="{Binding [Stream.Disconnected], Source={x:Static svc:Localizer.Instance}}"
-                     Foreground="White"
-                     FontSize="{StaticResource FontSizeLg}"
-                     FontWeight="SemiBold"
-                     HorizontalAlignment="Center" />
-          <TextBlock Text="{Binding ErrorMessage}"
-                     Foreground="{StaticResource TextSecondaryBrush}"
-                     FontSize="{StaticResource FontSizeBase}"
-                     TextWrapping="Wrap"
-                     TextAlignment="Center"
-                     HorizontalAlignment="Center"
-                     IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12">
+          <Button Classes="overlay"
+                  Command="{Binding SaveFrameCommand}"
+                  AutomationProperties.Name="{Binding [Player.SaveFrame], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.SaveFrame], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconCamera}"
+                  Stroke="White" Width="16" Height="16" />
+          </Button>
+          <ToggleButton Classes="overlay"
+                        IsChecked="{Binding #ZoomHost.IsRegionSelectArmed, Mode=TwoWay}"
+                        AutomationProperties.Name="{Binding [Zoom.Area], Source={x:Static svc:Localizer.Instance}}"
+                        ToolTip.Tip="{Binding [Zoom.Area], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
+                  Stroke="White" Width="16" Height="16" />
+          </ToggleButton>
+          <Button Classes="overlay"
+                  Command="{Binding ToggleFullscreenCommand}"
+                  AutomationProperties.Name="{Binding [Player.Fullscreen], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.Fullscreen], Source={x:Static svc:Localizer.Instance}}">
+            <Panel>
+              <Path Classes="lucide" Data="{StaticResource IconMaximize}"
+                    Stroke="White" Width="16" Height="16" IsVisible="{Binding !IsFullscreen}" />
+              <Path Classes="lucide" Data="{StaticResource IconMinimize}"
+                    Stroke="White" Width="16" Height="16" IsVisible="{Binding IsFullscreen}" />
+            </Panel>
+          </Button>
         </StackPanel>
-      </Border>
+
+        <!-- Error strip -->
+        <Border HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                Background="{StaticResource DangerBrush}"
+                Padding="12,8"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding ErrorMessage}" Foreground="White" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Failed overlay -->
+        <Border IsVisible="{Binding IsFailed}" Background="#A0000000">
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420">
+            <TextBlock Text="{Binding [Stream.Disconnected], Source={x:Static svc:Localizer.Instance}}"
+                       Foreground="White"
+                       FontSize="{StaticResource FontSizeLg}"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding ErrorMessage}"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="{StaticResource FontSizeBase}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Transient notice: "Frame saved", "Clip saved: …" -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="12,0,12,16"
+                Background="#CC000000" CornerRadius="6" Padding="12,6"
+                IsVisible="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding Notice}" Foreground="White" TextWrapping="Wrap"
+                     FontSize="{StaticResource FontSizeSm}" />
+        </Border>
       </Grid>
 
-      <!-- Day event list (16.6): motion/detection of this recording's window;
-           click an entry to seek; filter by type. -->
-      <Border Grid.Column="1" Classes="eventsidebar" Width="260" Margin="12,0,0,0"
+      <!-- Events of this recording (16.6): click to seek, filter by type.
+           Hidden when the recording has none. -->
+      <Panel Grid.Column="1" Classes="eventsidebar">
+      <Border Width="260" Margin="12,0,0,0"
+              IsVisible="{Binding ShowEventSidebar}"
               Background="{StaticResource Bg1Brush}"
               BorderBrush="{StaticResource BorderWeakBrush}"
               BorderThickness="1"
               CornerRadius="8">
-        <Grid RowDefinitions="Auto,*">
-          <!-- Type filter -->
-          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="10,10,10,8">
-            <Button Classes="evfilter" Classes.active="{Binding IsFilterAll}"
-                    Command="{Binding SetEventFilterCommand}" CommandParameter="all" Content="All" />
-            <Button Classes="evfilter" Classes.active="{Binding IsFilterMotion}"
-                    Command="{Binding SetEventFilterCommand}" CommandParameter="motion" Content="Motion" />
-            <Button Classes="evfilter" Classes.active="{Binding IsFilterDetection}"
-                    Command="{Binding SetEventFilterCommand}" CommandParameter="detection" Content="AI" />
-          </StackPanel>
+        <Grid RowDefinitions="Auto,Auto,*">
+          <TextBlock Grid.Row="0" Text="{Binding EventsTitle}" Margin="12,10,12,8"
+                     FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
 
-          <TextBlock Grid.Row="1"
-                     IsVisible="{Binding !HasEvents}"
-                     Text="—"
-                     Foreground="{StaticResource TextTertiaryBrush}"
-                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <Border Grid.Row="1" Classes="segmented" Margin="10,0,10,8" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Classes="segment" GroupName="playerEvents" FontSize="{StaticResource FontSizeSm}" Padding="8,3"
+                           IsChecked="{Binding IsFilterAll, Mode=OneWay}"
+                           Command="{Binding SetEventFilterCommand}" CommandParameter="all"
+                           Content="{Binding FilterAllLabel}" />
+              <RadioButton Classes="segment" GroupName="playerEvents" FontSize="{StaticResource FontSizeSm}" Padding="8,3"
+                           IsChecked="{Binding IsFilterMotion, Mode=OneWay}"
+                           Command="{Binding SetEventFilterCommand}" CommandParameter="motion"
+                           Content="{Binding FilterMotionLabel}" />
+              <RadioButton Classes="segment" GroupName="playerEvents" FontSize="{StaticResource FontSizeSm}" Padding="8,3"
+                           IsChecked="{Binding IsFilterDetection, Mode=OneWay}"
+                           Command="{Binding SetEventFilterCommand}" CommandParameter="detection"
+                           Content="{Binding FilterDetectionLabel}" />
+            </StackPanel>
+          </Border>
 
-          <ScrollViewer Grid.Row="1" IsVisible="{Binding HasEvents}">
+          <ScrollViewer Grid.Row="2" Padding="4,0,4,6">
             <ItemsControl ItemsSource="{Binding EventList}">
               <ItemsControl.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="vm:PlayerEventRow">
                   <Button Classes="evrow"
                           Command="{Binding $parent[ItemsControl].((vm:RecordingPlayerPageViewModel)DataContext).SeekToTimeCommand}"
-                          CommandParameter="{Binding Time}">
-                    <TextBlock Text="{Binding Label}"
-                               FontFamily="{StaticResource FontMono}"
-                               FontSize="11"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="{StaticResource TextSecondaryBrush}" />
+                          CommandParameter="{Binding Time}"
+                          ToolTip.Tip="{Binding OffsetLabel}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Panel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <Border Classes="kind-icon" Background="#33f59e0b" IsVisible="{Binding IsMotion}">
+                          <Path Classes="lucide" Data="{StaticResource IconWalk}"
+                                Stroke="{StaticResource WarningBrush}" Height="12"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Border Classes="kind-icon" Background="{StaticResource AccentTintBrush}" IsVisible="{Binding !IsMotion}">
+                          <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
+                                Stroke="{StaticResource AccentHoverBrush}" Width="12" Height="12"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                      </Panel>
+
+                      <TextBlock Grid.Column="1" Text="{Binding Title}"
+                                 IsVisible="{Binding !HasChips}"
+                                 FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <ItemsControl Grid.Column="1" ItemsSource="{Binding Chips}"
+                                    IsVisible="{Binding HasChips}" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="svc:DetectionClassChip">
+                            <Border Background="{StaticResource Bg3Brush}" CornerRadius="999" Padding="6,1">
+                              <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                  <Path Classes="lucide" Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyConverter.Instance}}"
+                                        Stroke="{StaticResource TextSecondaryBrush}" MaxWidth="12" MaxHeight="12"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Panel>
+                                <TextBlock Text="{Binding Name}" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding CountLabel}" FontSize="11" IsVisible="{Binding HasCount}"
+                                           Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+
+                      <TextBlock Grid.Column="2" Text="{Binding TimeLabel}" Margin="8,0,0,0"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Foreground="{StaticResource TextTertiaryBrush}"
+                                 VerticalAlignment="Center" />
+                    </Grid>
                   </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -160,13 +354,14 @@
           </ScrollViewer>
         </Grid>
       </Border>
+      </Panel>
     </Grid>
 
-    <!-- Timeline + transport bar -->
-    <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0">
+    <!-- Timeline + transport + clip bar -->
+    <StackPanel Grid.Row="2" Classes="controls" Spacing="10">
 
       <!-- Canvas timeline: segments + motion/detection markers, wheel-zoom to
-           cursor, click/marker-tap to seek (16.4). -->
+           cursor, click/marker-tap to seek, drag to select a clip (16.4). -->
       <controls:TimelineControl Height="60"
                                 TotalStart="{Binding TimelineStart}"
                                 TotalEnd="{Binding TimelineEnd}"
@@ -181,90 +376,157 @@
                                 PlayheadBrush="{StaticResource AccentBrush}"
                                 LabelBrush="{StaticResource TextSecondaryBrush}" />
 
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-        <Button Grid.Column="0"
-                Command="{Binding PlayPauseCommand}"
-                Background="{StaticResource AccentBrush}"
-                CornerRadius="6"
-                Padding="10,8"
-                VerticalAlignment="Center">
-          <Panel>
-            <Path Classes="lucide" Data="{StaticResource IconPause}" Stroke="White" Width="16" Height="16"
-                  IsVisible="{Binding IsPlaying}" />
-            <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Width="16" Height="16"
-                  IsVisible="{Binding !IsPlaying}" />
-          </Panel>
-        </Button>
+      <!-- Transport: −10 · ▶ · +10 · wall clock | speed · clip.
+           WrapPanel so the right cluster drops below on a narrow viewport. -->
+      <WrapPanel Orientation="Horizontal" ItemSpacing="24" LineSpacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Classes="transport" Command="{Binding SkipBackCommand}"
+                  AutomationProperties.Name="{Binding [Player.SkipBack], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.SkipBack], Source={x:Static svc:Localizer.Instance}}">
+            <Panel Width="22" Height="22">
+              <Path Classes="lucide" Data="{StaticResource IconRotateCcw}"
+                    Stroke="{StaticResource TextPrimaryBrush}" Width="22" Height="22" />
+              <TextBlock Text="10" FontSize="8" FontWeight="Bold"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,1,0,0" />
+            </Panel>
+          </Button>
+          <Button Classes="transport" Command="{Binding StepBackCommand}"
+                  AutomationProperties.Name="{Binding [Player.StepBack], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.StepBack], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconFrameBack}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="18" Height="18" />
+          </Button>
+          <Button Classes="transport play" Command="{Binding PlayPauseCommand}"
+                  AutomationProperties.Name="{Binding [Player.PlayPause], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.PlayPause], Source={x:Static svc:Localizer.Instance}}">
+            <Panel>
+              <Path Classes="lucide" Data="{StaticResource IconPause}" Stroke="White" Width="18" Height="18"
+                    IsVisible="{Binding IsPlaying}" />
+              <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Fill="White" Width="18" Height="18"
+                    Margin="2,0,0,0" IsVisible="{Binding !IsPlaying}" />
+            </Panel>
+          </Button>
+          <Button Classes="transport" Command="{Binding StepForwardCommand}"
+                  AutomationProperties.Name="{Binding [Player.StepForward], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.StepForward], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconFrameForward}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="18" Height="18" />
+          </Button>
+          <Button Classes="transport" Command="{Binding SkipForwardCommand}"
+                  AutomationProperties.Name="{Binding [Player.SkipForward], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.SkipForward], Source={x:Static svc:Localizer.Instance}}">
+            <Panel Width="22" Height="22">
+              <Path Classes="lucide" Data="{StaticResource IconRotateCw}"
+                    Stroke="{StaticResource TextPrimaryBrush}" Width="22" Height="22" />
+              <TextBlock Text="10" FontSize="8" FontWeight="Bold"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,1,0,0" />
+            </Panel>
+          </Button>
 
-        <TextBlock Grid.Column="1"
-                   Text="{Binding PositionLabel}"
-                   FontFamily="{StaticResource FontMono}"
-                   FontSize="{StaticResource FontSizeSm}"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   VerticalAlignment="Center"
-                   Margin="12,0,0,0" MinWidth="56" />
-
-        <TextBlock Grid.Column="3"
-                   Text="{Binding DurationLabel}"
-                   FontFamily="{StaticResource FontMono}"
-                   FontSize="{StaticResource FontSizeSm}"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   VerticalAlignment="Center"
-                   Margin="0,0,12,0" MinWidth="56" />
-
-        <Button Grid.Column="4"
-                Command="{Binding RestartCommand}"
-                Background="Transparent"
-                BorderBrush="{StaticResource BorderMediumBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="8,8"
-                VerticalAlignment="Center">
-          <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
-                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
-        </Button>
-      </Grid>
-
-      <!-- Export bar (16.5): mark in/out, choose precise vs fast copy, export.
-           WrapPanel so the cluster reflows on a narrow viewport. -->
-      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-        <Button Command="{Binding SetInCommand}"
-                Content="{Binding [Recordings.MarkIn], Source={x:Static svc:Localizer.Instance}}"
-                Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="10,5" FontSize="11"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Command="{Binding SetOutCommand}"
-                Content="{Binding [Recordings.MarkOut], Source={x:Static svc:Localizer.Instance}}"
-                Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="10,5" FontSize="11"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Command="{Binding ClearSelectionCommand}"
-                IsVisible="{Binding HasSelection}"
-                Content="{Binding [Common.Close], Source={x:Static svc:Localizer.Instance}}"
-                Background="Transparent" BorderThickness="0"
-                CornerRadius="6" Padding="8,5" FontSize="11"
-                Foreground="{StaticResource TextSecondaryBrush}" />
-
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <TextBlock Text="{Binding SelectionLabel}"
-                     FontFamily="{StaticResource FontMono}" FontSize="11"
-                     Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
-          <ProgressBar Width="120" Minimum="0" Maximum="1" Value="{Binding ExportFraction}"
-                       IsVisible="{Binding IsExporting}" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding ExportStatus}"
-                     IsVisible="{Binding ExportStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                     FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+          <StackPanel Spacing="0" Margin="10,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding WallClockLabel}"
+                       FontFamily="{StaticResource FontMono}"
+                       FontSize="20" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimaryBrush}" />
+            <TextBlock Text="{Binding ProgressLabel}"
+                       FontFamily="{StaticResource FontMono}"
+                       FontSize="11"
+                       Foreground="{StaticResource TextTertiaryBrush}" />
+          </StackPanel>
         </StackPanel>
 
-        <CheckBox IsChecked="{Binding PreciseExport, Mode=TwoWay}"
-                  Content="{Binding [Recordings.Precise], Source={x:Static svc:Localizer.Instance}}"
-                  FontSize="11" VerticalAlignment="Center"
-                  Foreground="{StaticResource TextSecondaryBrush}" />
-        <Button Command="{Binding ExportCommand}"
-                Content="{Binding [Recordings.Export], Source={x:Static svc:Localizer.Instance}}"
-                Background="{StaticResource AccentBrush}" Foreground="White"
-                CornerRadius="6" Padding="14,5" FontSize="11" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <!-- Sound (1x only): mute + volume, shared with the live page. -->
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                      IsVisible="{Binding CanListen}">
+            <Button Classes="transport" Command="{Binding ToggleMuteCommand}"
+                    AutomationProperties.Name="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}"
+                    ToolTip.Tip="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}">
+              <Panel Width="18" Height="18">
+                <Path Classes="lucide" Data="{StaticResource IconVolume}"
+                      Stroke="{StaticResource TextPrimaryBrush}" Width="18" VerticalAlignment="Center"
+                      IsVisible="{Binding !IsMuted}" />
+                <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
+                      Stroke="{StaticResource TextSecondaryBrush}" Width="18" VerticalAlignment="Center"
+                      IsVisible="{Binding IsMuted}" />
+              </Panel>
+            </Button>
+            <Slider Width="90" Minimum="0" Maximum="1"
+                    Value="{Binding Volume}"
+                    IsEnabled="{Binding !IsMuted}"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding [CameraPage.Tooltip.Volume], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+
+          <Border Classes="segmented" VerticalAlignment="Center" ToolTip.Tip="{Binding [Player.Speed], Source={x:Static svc:Localizer.Instance}}">
+            <ItemsControl ItemsSource="{Binding RateOptions}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="2" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PlaybackRateOption">
+                  <RadioButton Classes="segment" GroupName="playerRate" Padding="8,3"
+                               FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                               IsChecked="{Binding IsActive, Mode=OneWay}"
+                               Command="{Binding $parent[ItemsControl].((vm:RecordingPlayerPageViewModel)DataContext).SetRateCommand}"
+                               CommandParameter="{Binding Parameter}"
+                               Content="{Binding Label}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+
+          <ToggleButton Classes="chip" IsChecked="{Binding IsClipMode, Mode=TwoWay}" VerticalAlignment="Center"
+                        ToolTip.Tip="{Binding [Player.Clip.Tooltip], Source={x:Static svc:Localizer.Instance}}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="lucide" Data="{StaticResource IconScissors}"
+                    Stroke="{Binding $parent[ToggleButton].Foreground}" Width="14" Height="14" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding [Player.Clip], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </ToggleButton>
+        </StackPanel>
       </WrapPanel>
+
+      <!-- Clip bar (16.5): bounds from the playhead or a timeline drag,
+           fast (keyframe) or precise (re-encode) cut, save. -->
+      <Border IsVisible="{Binding IsClipMode}"
+              Background="{StaticResource Bg1Brush}"
+              BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
+              CornerRadius="8" Padding="10,8">
+        <Grid ColumnDefinitions="*,Auto">
+          <WrapPanel Grid.Column="0" Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
+            <Button Classes="outline" Padding="10,5" FontSize="{StaticResource FontSizeSm}"
+                    Command="{Binding SetInCommand}"
+                    Content="{Binding [Player.Clip.SetStart], Source={x:Static svc:Localizer.Instance}}" />
+            <Button Classes="outline" Padding="10,5" FontSize="{StaticResource FontSizeSm}"
+                    Command="{Binding SetOutCommand}"
+                    Content="{Binding [Player.Clip.SetEnd], Source={x:Static svc:Localizer.Instance}}" />
+            <TextBlock Text="{Binding SelectionLabel}" VerticalAlignment="Center"
+                       FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                       Foreground="{StaticResource TextPrimaryBrush}" />
+            <CheckBox IsChecked="{Binding PreciseExport, Mode=TwoWay}" VerticalAlignment="Center"
+                      FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}"
+                      Content="{Binding [Player.Clip.Precise], Source={x:Static svc:Localizer.Instance}}" />
+            <ProgressBar Width="120" Minimum="0" Maximum="1" Value="{Binding ExportFraction}"
+                         IsVisible="{Binding IsExporting}" VerticalAlignment="Center" />
+          </WrapPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="8,0,0,0">
+            <Button Command="{Binding CancelClipCommand}"
+                    Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
+                    Background="Transparent" BorderThickness="0" CornerRadius="6" Padding="10,5"
+                    FontSize="{StaticResource FontSizeSm}"
+                    Foreground="{StaticResource TextSecondaryBrush}" />
+            <Button Command="{Binding ExportCommand}"
+                    Content="{Binding [Player.Clip.Save], Source={x:Static svc:Localizer.Instance}}"
+                    Background="{StaticResource AccentBrush}" Foreground="White"
+                    CornerRadius="6" Padding="14,5" FontSize="{StaticResource FontSizeSm}" />
+          </StackPanel>
+        </Grid>
+      </Border>
     </StackPanel>
 
   </Grid>

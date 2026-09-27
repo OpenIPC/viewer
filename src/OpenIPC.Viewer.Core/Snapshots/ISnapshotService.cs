@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenIPC.Viewer.Core.Entities;
@@ -30,5 +31,11 @@ public interface ISnapshotService
     /// the result as a new <c>*_edited.jpg</c> copy (the original is untouched),
     /// generating a thumbnail and a DB row. Returns the new snapshot.
     /// </summary>
+    /// <summary>
+    /// Saves an already-encoded JPEG frame (e.g. from the archive player) as a
+    /// snapshot of <paramref name="cameraId"/> taken at <paramref name="takenAtUtc"/>.
+    /// </summary>
+    Task<Snapshot> SaveFrameAsync(CameraId cameraId, byte[] jpeg, DateTime takenAtUtc, CancellationToken ct);
+
     Task<Snapshot> SaveEditAsync(Snapshot source, SnapshotEdit edit, CancellationToken ct);
 }

@@ -5,12 +5,21 @@
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:input="using:Avalonia.Input"
+             xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.GridPage"
              x:DataType="vm:GridPageViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <UserControl.Styles>
+    <!-- Narrow viewports: segment and "+ layout" labels collapse to icons. -->
+    <Style Selector="Grid.compact TextBlock.wide-only">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+  </UserControl.Styles>
 
-    <!-- Toolbar -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto" b:Adaptive.CompactBelow="700">
+
+    <!-- Toolbar: view mode (live / stills), then page-level tools (health,
+         fullscreen) behind a divider. -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <TextBlock Grid.Column="0"
                  Text="{Binding Title}"
@@ -19,136 +28,207 @@
                  Foreground="{StaticResource TextPrimaryBrush}"
                  VerticalAlignment="Center" />
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-        <Button Command="{Binding OpenHealthCommand}"
-                Padding="10,6" CornerRadius="6" Margin="0,0,8,0"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Health.Tooltip], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconActivity}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
-        </Button>
-        <!-- Stills mode: periodic snapshots instead of live video (cheap on big walls). -->
-        <ToggleButton IsChecked="{Binding StillsMode, Mode=TwoWay}"
-                      Padding="10,6" CornerRadius="6" Margin="0,0,8,0"
-                      Foreground="{StaticResource TextPrimaryBrush}"
-                      ToolTip.Tip="{Binding [Grid.Tooltip.Stills], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconCamera}"
-                Stroke="{StaticResource TextPrimaryBrush}" Width="15" Height="15" />
-        </ToggleButton>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <!-- Live video vs stills (periodic snapshots — cheap on big walls). -->
+        <Border Classes="segmented" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <RadioButton Classes="segment" GroupName="GridViewMode"
+                         IsChecked="{Binding LiveMode, Mode=TwoWay}"
+                         ToolTip.Tip="{Binding [Grid.Tooltip.Live], Source={x:Static svc:Localizer.Instance}}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Classes="lucide" Data="{StaticResource IconVideoCam}" Width="16" VerticalAlignment="Center" />
+                <TextBlock Classes="wide-only" VerticalAlignment="Center" Text="{Binding [Grid.Mode.Live], Source={x:Static svc:Localizer.Instance}}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Classes="segment" GroupName="GridViewMode"
+                         IsChecked="{Binding StillsMode, Mode=TwoWay}"
+                         ToolTip.Tip="{Binding [Grid.Tooltip.Stills], Source={x:Static svc:Localizer.Instance}}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Classes="lucide" Data="{StaticResource IconImage}" Width="14" Height="14" />
+                <TextBlock Classes="wide-only" VerticalAlignment="Center" Text="{Binding [Grid.Mode.Stills], Source={x:Static svc:Localizer.Instance}}" />
+              </StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </Border>
         <ComboBox ItemsSource="{Binding StillsIntervalOptions}"
                   SelectedItem="{Binding StillsIntervalSeconds, Mode=TwoWay}"
                   IsVisible="{Binding StillsMode}"
-                  MinWidth="64" Margin="0,0,8,0"
+                  MinWidth="64"
                   x:CompileBindings="False"
-                  VerticalAlignment="Center">
+                  VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding [Grid.Tooltip.StillsInterval], Source={x:Static svc:Localizer.Instance}}">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding StringFormat='{}{0}s'}" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <Button Content="1×1" Command="{Binding SetLayoutCommand}" CommandParameter="1"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="2×2" Command="{Binding SetLayoutCommand}" CommandParameter="2"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="3×3" Command="{Binding SetLayoutCommand}" CommandParameter="3"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="4×4" Command="{Binding SetLayoutCommand}" CommandParameter="4"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                Foreground="{StaticResource TextPrimaryBrush}" />
-        <Button Content="5×5" Command="{Binding SetLayoutCommand}" CommandParameter="5"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                Foreground="{StaticResource TextPrimaryBrush}" />
 
-        <!-- Fullscreen / kiosk: full-bleed grid for a guard station (Phase 20). -->
-        <Button Click="OnFullscreenClick"
-                Margin="8,0,0,0" Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Grid.Tooltip.Fullscreen], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconMaximize}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
-        </Button>
+        <Border Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"
+                Background="{StaticResource BorderMediumBrush}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button Command="{Binding OpenHealthCommand}"
+                  Padding="10,6" CornerRadius="6"
+                  Background="{StaticResource Bg2Brush}"
+                  BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  ToolTip.Tip="{Binding [Health.Tooltip], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconActivity}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+          </Button>
+          <!-- Fullscreen / kiosk: full-bleed grid for a guard station (Phase 20). -->
+          <Button Click="OnFullscreenClick"
+                  Padding="10,6" CornerRadius="6"
+                  Background="{StaticResource Bg2Brush}"
+                  BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  ToolTip.Tip="{Binding [Grid.Tooltip.Fullscreen], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconMaximize}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+          </Button>
+        </StackPanel>
       </StackPanel>
     </Grid>
 
-    <!-- Layout tabs (Phase 19.1) -->
+    <!-- Layout tabs (Phase 19.1). Per-layout actions live in the active tab's
+         "⋯" menu (also on right-click); the grid size is per layout, so its
+         picker sits on this row too. -->
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-        <ItemsControl ItemsSource="{Binding Layouts}" x:CompileBindings="False">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="4" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Tapped="OnTabTapped"
-                      PointerPressed="OnTabPointerPressed"
-                      PointerMoved="OnTabPointerMoved"
-                      AttachedToVisualTree="OnTabAttached"
-                      input:DragDrop.AllowDrop="True"
-                      Cursor="Hand"
-                      Padding="12,6" CornerRadius="6"
-                      BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
-                <Border.Background>
-                  <MultiBinding Converter="{x:Static conv:LayoutTabBrushConverter.Instance}">
-                    <Binding />
-                    <Binding Path="DataContext.ActiveLayout" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
-                  </MultiBinding>
-                </Border.Background>
-                <TextBlock Text="{Binding Name}"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           VerticalAlignment="Center" />
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <ItemsControl ItemsSource="{Binding Layouts}" x:CompileBindings="False">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Tapped="OnTabTapped"
+                        PointerPressed="OnTabPointerPressed"
+                        PointerMoved="OnTabPointerMoved"
+                        AttachedToVisualTree="OnTabAttached"
+                        input:DragDrop.AllowDrop="True"
+                        Cursor="Hand"
+                        MinHeight="32"
+                        Padding="12,0" CornerRadius="6"
+                        BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+                  <Border.Background>
+                    <MultiBinding Converter="{x:Static conv:LayoutTabBrushConverter.Instance}">
+                      <Binding />
+                      <Binding Path="DataContext.ActiveLayout" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                    </MultiBinding>
+                  </Border.Background>
+                  <Border.ContextFlyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnTabMenuOpening">
+                      <MenuItem Header="{Binding [Layouts.Tooltip.Cameras], Source={x:Static svc:Localizer.Instance}}"
+                                Click="OnTabMenuCamerasClick">
+                        <MenuItem.Icon>
+                          <Path Classes="lucide" Data="{StaticResource IconVideo}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      <MenuItem Header="{Binding [Common.Rename], Source={x:Static svc:Localizer.Instance}}"
+                                Click="OnTabMenuRenameClick">
+                        <MenuItem.Icon>
+                          <Path Classes="lucide" Data="{StaticResource IconEdit}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      <Separator />
+                      <MenuItem Tag="delete"
+                                Header="{Binding [Common.Delete], Source={x:Static svc:Localizer.Instance}}"
+                                Foreground="{StaticResource DangerBrush}"
+                                Click="OnTabMenuDeleteClick">
+                        <MenuItem.Icon>
+                          <Path Classes="lucide" Data="{StaticResource IconTrash}" Stroke="{StaticResource DangerBrush}" Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                    </MenuFlyout>
+                  </Border.ContextFlyout>
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               VerticalAlignment="Center" />
+                    <Button Classes="chip-icon"
+                            Margin="0,0,-6,0"
+                            Click="OnTabMoreClick"
+                            ToolTip.Tip="{Binding [Layouts.Tooltip.Menu], Source={x:Static svc:Localizer.Instance}}">
+                      <Button.IsVisible>
+                        <MultiBinding Converter="{x:Static conv:LayoutTabIsActiveConverter.Instance}">
+                          <Binding />
+                          <Binding Path="DataContext.ActiveLayout" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                        </MultiBinding>
+                      </Button.IsVisible>
+                      <Path Classes="lucide" Data="{StaticResource IconEllipsis}"
+                            Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="2"
+                            Width="14" VerticalAlignment="Center" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Button Command="{Binding AddLayoutCommand}"
+                  MinHeight="32" Padding="10,0" CornerRadius="6"
+                  Background="Transparent"
+                  BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                  ToolTip.Tip="{Binding [Layouts.Tooltip.Add], Source={x:Static svc:Localizer.Instance}}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="lucide" Data="{StaticResource IconPlus}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+              <TextBlock Classes="wide-only" VerticalAlignment="Center"
+                         Text="{Binding [Layouts.Add], Source={x:Static svc:Localizer.Instance}}"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </ScrollViewer>
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-        <Button Command="{Binding AddLayoutCommand}"
-                Content="+" FontSize="16" FontWeight="SemiBold"
-                Padding="12,2" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                Foreground="{StaticResource TextPrimaryBrush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Layouts.Tooltip.Add], Source={x:Static svc:Localizer.Instance}}" />
-        <Button Command="{Binding ManageCamerasCommand}"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Layouts.Tooltip.Cameras], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconVideo}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
-        </Button>
-        <Button Command="{Binding RenameLayoutCommand}"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Layouts.Tooltip.Rename], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconEdit}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
-        </Button>
-        <Button Command="{Binding DeleteLayoutCommand}"
-                IsEnabled="{Binding CanDeleteLayout}"
-                Padding="10,6" CornerRadius="6"
-                Background="{StaticResource Bg2Brush}"
-                BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-                ToolTip.Tip="{Binding [Layouts.Tooltip.Delete], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconClose}" Stroke="{StaticResource DangerBrush}" Width="14" Height="14" />
-        </Button>
-      </StackPanel>
+      <!-- Grid size of the active layout: one button showing the current shape,
+           the full 1×1…5×5 choice in its menu. -->
+      <Button Grid.Column="1"
+              Margin="8,0,0,0" MinHeight="32" Padding="10,0" CornerRadius="6"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              ToolTip.Tip="{Binding [Grid.Tooltip.GridSize], Source={x:Static svc:Localizer.Instance}}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Path Classes="lucide" Data="{Binding LayoutSize, Converter={x:Static conv:GridSizeIconConverter.Instance}}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+          <TextBlock Text="{Binding LayoutSizeLabel}" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          <Path Classes="lucide" Data="{StaticResource IconChevronDown}"
+                Stroke="{StaticResource TextSecondaryBrush}" Width="10" VerticalAlignment="Center" />
+        </StackPanel>
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuItem Header="1×1" Command="{Binding SetLayoutCommand}" CommandParameter="1">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconGrid1}" Width="14" Height="14"
+                      Stroke="{Binding LayoutSize, Converter={x:Static conv:GridSizeBrushConverter.Instance}, ConverterParameter=1}" />
+              </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="2×2" Command="{Binding SetLayoutCommand}" CommandParameter="2">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconGrid2}" Width="14" Height="14"
+                      Stroke="{Binding LayoutSize, Converter={x:Static conv:GridSizeBrushConverter.Instance}, ConverterParameter=2}" />
+              </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="3×3" Command="{Binding SetLayoutCommand}" CommandParameter="3">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconGrid3}" Width="14" Height="14"
+                      Stroke="{Binding LayoutSize, Converter={x:Static conv:GridSizeBrushConverter.Instance}, ConverterParameter=3}" />
+              </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="4×4" Command="{Binding SetLayoutCommand}" CommandParameter="4">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconGrid4}" Width="14" Height="14"
+                      Stroke="{Binding LayoutSize, Converter={x:Static conv:GridSizeBrushConverter.Instance}, ConverterParameter=4}" />
+              </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="5×5" Command="{Binding SetLayoutCommand}" CommandParameter="5">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconGrid5}" Width="14" Height="14"
+                      Stroke="{Binding LayoutSize, Converter={x:Static conv:GridSizeBrushConverter.Instance}, ConverterParameter=5}" />
+              </MenuItem.Icon>
+            </MenuItem>
+          </MenuFlyout>
+        </Button.Flyout>
+      </Button>
     </Grid>
 
     <!-- Grid -->
@@ -239,7 +319,7 @@
                               Width="28" Height="28" Padding="0"
                               ToolTip.Tip="{Binding [Tile.Snapshot], Source={x:Static svc:Localizer.Instance}}">
                         <Path Classes="lucide" Data="{StaticResource IconCamera}"
-                              Stroke="White" Width="16" Height="16" />
+                              Stroke="White" Width="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
                       </Button>
 
                       <!-- Listen toggle (Phase 17): makes this tile the single
@@ -252,10 +332,10 @@
                               ToolTip.Tip="{Binding [CameraPage.Tooltip.Listen], Source={x:Static svc:Localizer.Instance}}">
                         <Panel>
                           <Path Classes="lucide" Data="{StaticResource IconVolume}"
-                                Stroke="{StaticResource AccentBrush}" Width="16" Height="16"
+                                Stroke="{StaticResource AccentBrush}" Width="16" VerticalAlignment="Center" HorizontalAlignment="Center"
                                 IsVisible="{Binding IsListening}" />
                           <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
-                                Stroke="White" Width="16" Height="16"
+                                Stroke="White" Width="16" VerticalAlignment="Center" HorizontalAlignment="Center"
                                 IsVisible="{Binding !IsListening}" />
                         </Panel>
                       </Button>

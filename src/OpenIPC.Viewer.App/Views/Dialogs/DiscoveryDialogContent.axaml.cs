@@ -1,5 +1,8 @@
+using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
@@ -10,22 +13,42 @@ public sealed partial class DiscoveryDialogContent : UserControl
 
     public Task<DiscoveryDialogResult?> Completion => _tcs.Task;
 
+    // Raised when the header is pressed, so a borderless host window can drag.
+    public event EventHandler<PointerPressedEventArgs>? HeaderPressed;
+
     public DiscoveryDialogContent()
     {
         InitializeComponent();
 
-        this.FindControl<Button>("CancelButton")!.Click += (_, _) =>
+        this.FindControl<Button>("CloseButton")!.Click += (_, _) => Finish(null);
+        this.FindControl<Button>("ManualLink")!.Click += (_, _) => Finish(new DiscoveryDialogResult(null, null, ManualEntry: true));
+        this.FindControl<Button>("EmptyManualButton")!.Click += (_, _) => Finish(new DiscoveryDialogResult(null, null, ManualEntry: true));
+        this.FindControl<Border>("HeaderBar")!.PointerPressed += (_, e) => HeaderPressed?.Invoke(this, e);
+
+        // Escape closes; the window has no Cancel button to carry IsCancel.
+        KeyDown += (_, e) =>
         {
-            if (DataContext is DiscoveryDialogViewModel vm) vm.Cancel();
-            _tcs.TrySetResult(null);
+            if (e.Key == Key.Escape) { Finish(null); e.Handled = true; }
         };
 
-        this.FindControl<Button>("AddButton")!.Click += async (_, _) =>
+        // A fresh session starts scanning the moment the dialog shows.
+        AttachedToVisualTree += async (_, _) =>
         {
-            if (DataContext is not DiscoveryDialogViewModel vm) return;
-            var result = await vm.AddSelectedAsync();
-            if (result is not null)
-                _tcs.TrySetResult(result);
+            if (DataContext is DiscoveryDialogViewModel vm)
+                await vm.StartAsync();
         };
+    }
+
+    private void OnAddClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DiscoveryDialogViewModel vm
+            || (sender as Control)?.DataContext is not DiscoveredDeviceRowVm row) return;
+        Finish(vm.BuildResult(row));
+    }
+
+    private void Finish(DiscoveryDialogResult? result)
+    {
+        (DataContext as DiscoveryDialogViewModel)?.Cancel();
+        _tcs.TrySetResult(result);
     }
 }

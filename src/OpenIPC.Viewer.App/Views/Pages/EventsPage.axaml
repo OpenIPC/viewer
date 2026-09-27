@@ -2,101 +2,308 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              x:Class="OpenIPC.Viewer.App.Views.Pages.EventsPage"
              x:DataType="vm:EventsPageViewModel">
 
-  <Grid RowDefinitions="Auto,*">
+  <UserControl.Styles>
+    <Style Selector="Border.event-row">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.event-row:pointerover">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+    </Style>
+    <!-- Camera name in a row: reads as text, acts as "filter to this camera". -->
+    <Style Selector="Button.camera-link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.camera-link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}" />
+    </Style>
+    <Style Selector="Border.kind-icon">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="CornerRadius" Value="14" />
+    </Style>
+  </UserControl.Styles>
 
-    <!-- Header: title on top, filter + action wrap below so they never collide
-         with the title on a phone-width viewport. -->
-    <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,16">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <!-- Header: title with a quiet overflow menu (developer tools). -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <TextBlock Text="{Binding Title}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
-      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-        <ComboBox ItemsSource="{Binding CameraOptions}"
-                  SelectedItem="{Binding SelectedCamera, Mode=TwoWay}"
-                  MinWidth="160" />
-        <Button Content="{Binding [Events.Button.SimulateMotion], Source={x:Static svc:Localizer.Instance}}"
-                Command="{Binding SimulateMotionCommand}"
-                Padding="12,6"
-                Background="Transparent"
-                BorderBrush="{StaticResource BorderMediumBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Foreground="{StaticResource TextPrimaryBrush}" />
+                 Foreground="{StaticResource TextPrimaryBrush}"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1" Classes="row-icon"
+              ToolTip.Tip="{Binding [Events.Tooltip.More], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconEllipsis}"
+              Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="2"
+              Width="16" VerticalAlignment="Center" />
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuItem Header="{Binding [Events.Button.SimulateMotion], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding SimulateMotionCommand}">
+              <MenuItem.Icon>
+                <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource TextSecondaryBrush}" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </MenuItem.Icon>
+            </MenuItem>
+          </MenuFlyout>
+        </Button.Flyout>
+      </Button>
+    </Grid>
+
+    <!-- Filters: camera, kind, period, burst grouping; then the totals. -->
+    <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,12">
+      <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+        <!-- Camera picker: searchable multi-select with per-camera counts. -->
+        <controls:CameraPickerView DataContext="{Binding Cameras}" VerticalAlignment="Center" />
+        <RadioButton Classes="chip" GroupName="EventKind" VerticalAlignment="Center"
+                     IsChecked="{Binding IsKindAll, Mode=TwoWay}"
+                     Content="{Binding [Events.Kind.All], Source={x:Static svc:Localizer.Instance}}" />
+        <RadioButton Classes="chip" GroupName="EventKind" VerticalAlignment="Center"
+                     IsChecked="{Binding IsKindMotion, Mode=TwoWay}">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource WarningBrush}" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding [Events.Kind.Motion], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton Classes="chip" GroupName="EventKind" VerticalAlignment="Center"
+                     IsChecked="{Binding IsKindDetection, Mode=TwoWay}">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <Path Classes="lucide" Data="{StaticResource IconScanSearch}" Stroke="{StaticResource AccentHoverBrush}" Width="12" Height="12" />
+            <TextBlock Text="{Binding [Events.Kind.Detection], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+        </RadioButton>
+        <Border Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"
+                Background="{StaticResource BorderMediumBrush}" />
+        <RadioButton Classes="chip" GroupName="EventPeriod" VerticalAlignment="Center"
+                     IsChecked="{Binding IsPeriodToday, Mode=TwoWay}"
+                     Content="{Binding [Snapshots.PresetToday], Source={x:Static svc:Localizer.Instance}}" />
+        <RadioButton Classes="chip" GroupName="EventPeriod" VerticalAlignment="Center"
+                     IsChecked="{Binding IsPeriod7, Mode=TwoWay}"
+                     Content="{Binding [Snapshots.Preset7], Source={x:Static svc:Localizer.Instance}}" />
+        <RadioButton Classes="chip" GroupName="EventPeriod" VerticalAlignment="Center"
+                     IsChecked="{Binding IsPeriod30, Mode=TwoWay}"
+                     Content="{Binding [Snapshots.Preset30], Source={x:Static svc:Localizer.Instance}}" />
+        <RadioButton Classes="chip" GroupName="EventPeriod" VerticalAlignment="Center"
+                     IsChecked="{Binding IsPeriodAll, Mode=TwoWay}"
+                     Content="{Binding [Snapshots.PresetAll], Source={x:Static svc:Localizer.Instance}}" />
+        <Border Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"
+                Background="{StaticResource BorderMediumBrush}" />
+        <ToggleButton Classes="chip" VerticalAlignment="Center"
+                      IsChecked="{Binding GroupBursts, Mode=TwoWay}"
+                      Content="{Binding [Events.GroupBursts], Source={x:Static svc:Localizer.Instance}}" />
       </WrapPanel>
+      <TextBlock Text="{Binding Summary}"
+                 FontFamily="{StaticResource FontMono}"
+                 FontSize="{StaticResource FontSizeSm}"
+                 Foreground="{StaticResource TextSecondaryBrush}" />
     </StackPanel>
 
-    <!-- Empty -->
-    <TextBlock Grid.Row="1"
-               IsVisible="{Binding IsEmpty}"
-               Text="{Binding [Events.Empty], Source={x:Static svc:Localizer.Instance}}"
+    <!-- Empty / no-match states -->
+    <StackPanel Grid.Row="2" IsVisible="{Binding IsEmpty}" Spacing="12"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+      <TextBlock Text="{Binding [Events.Empty], Source={x:Static svc:Localizer.Instance}}"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" />
+      <!-- The default period is a week; older history is one click away. -->
+      <Button HorizontalAlignment="Center"
+              IsVisible="{Binding !IsPeriodAll}"
+              Command="{Binding ShowAllTimeCommand}"
+              Content="{Binding [Events.ShowAllTime], Source={x:Static svc:Localizer.Instance}}"
+              Padding="14,7" CornerRadius="8"
+              Background="Transparent"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+              Foreground="{StaticResource TextPrimaryBrush}" />
+    </StackPanel>
+    <TextBlock Grid.Row="2" IsVisible="{Binding HasNoMatches}"
+               Text="{Binding [Events.NoMatches], Source={x:Static svc:Localizer.Instance}}"
                Foreground="{StaticResource TextSecondaryBrush}"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Center" />
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-    <!-- List -->
-    <ScrollViewer Grid.Row="1" IsVisible="{Binding !IsEmpty}">
-      <ItemsControl ItemsSource="{Binding Items}">
+    <!-- List: day headers interleaved with event / episode rows. -->
+    <ScrollViewer Grid.Row="2" x:Name="ListScroll" IsVisible="{Binding HasRows}">
+      <Border Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
+              CornerRadius="10" Padding="4,0,4,4" VerticalAlignment="Top">
+        <ItemsControl ItemsSource="{Binding PageItems}" Grid.IsSharedSizeScope="True">
+          <ItemsControl.DataTemplates>
+
+            <DataTemplate DataType="vm:EventDayHeader">
+              <Grid ColumnDefinitions="*,Auto" Margin="8,12,8,4">
+                <TextBlock Text="{Binding Title}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding Count}"
+                           FontFamily="{StaticResource FontMono}"
+                           FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource TextTertiaryBrush}" />
+              </Grid>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:EventEpisodeRow">
+              <Border Classes="event-row" CornerRadius="8" Padding="8,5"
+                      ToolTip.Tip="{Binding Tooltip}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Time" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Actions" />
+                  </Grid.ColumnDefinitions>
+
+                  <!-- Kind icon: AI detection (accent) or motion (amber). -->
+                  <Panel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <Border Classes="kind-icon" Background="{StaticResource AccentTintBrush}" IsVisible="{Binding IsDetection}">
+                      <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
+                            Stroke="{StaticResource AccentHoverBrush}" Width="14" Height="14" />
+                    </Border>
+                    <Border Classes="kind-icon" Background="#33f59e0b" IsVisible="{Binding IsMotion}">
+                      <Path Classes="lucide" Data="{StaticResource IconWalk}"
+                            Stroke="{StaticResource WarningBrush}" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                  </Panel>
+
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="camera-link"
+                            Command="{Binding $parent[ItemsControl].((vm:EventsPageViewModel)DataContext).AddCameraFilterCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding [Events.Tooltip.FilterCamera], Source={x:Static svc:Localizer.Instance}}">
+                      <TextBlock Text="{Binding CameraName}" FontWeight="SemiBold" />
+                    </Button>
+                    <TextBlock Text="{Binding Description}"
+                               IsVisible="{Binding !HasClasses}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <!-- Detected classes as icon chips. -->
+                    <ItemsControl ItemsSource="{Binding Classes}" IsVisible="{Binding HasClasses}"
+                                  VerticalAlignment="Center">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="svc:DetectionClassChip">
+                          <Border Background="{StaticResource Bg3Brush}" CornerRadius="999" Padding="7,1">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                              <Panel Width="14" Height="14" VerticalAlignment="Center">
+                                <Path Classes="lucide" Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyConverter.Instance}}"
+                                      Stroke="{StaticResource TextSecondaryBrush}" MaxWidth="14" MaxHeight="14"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Panel>
+                              <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSizeSm}"
+                                         Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding CountLabel}" FontSize="{StaticResource FontSizeSm}"
+                                         Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border IsVisible="{Binding IsBurst}"
+                            Background="{StaticResource Bg3Brush}" CornerRadius="4" Padding="6,1"
+                            VerticalAlignment="Center">
+                      <TextBlock Text="{Binding CountLabel}"
+                                 FontFamily="{StaticResource FontMono}" FontSize="11"
+                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                    </Border>
+                  </StackPanel>
+
+                  <TextBlock Grid.Column="2" Text="{Binding TimeLabel}"
+                             Margin="16,0,0,0" VerticalAlignment="Center"
+                             HorizontalAlignment="Right"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="{StaticResource FontSizeSm}"
+                             Foreground="{StaticResource TextSecondaryBrush}" />
+
+                  <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" Margin="8,0,0,0"
+                              HorizontalAlignment="Right">
+                    <Button Classes="row-icon"
+                            IsVisible="{Binding HasRecording}"
+                            Command="{Binding $parent[ItemsControl].((vm:EventsPageViewModel)DataContext).PlayFromEventCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding [Events.Tooltip.Play], Source={x:Static svc:Localizer.Instance}}">
+                      <Path Classes="lucide" Data="{StaticResource IconPlay}"
+                            Stroke="{StaticResource AccentHoverBrush}" Fill="{StaticResource AccentHoverBrush}"
+                            Width="12" Height="12" />
+                    </Button>
+                    <Button Classes="row-icon"
+                            Command="{Binding $parent[ItemsControl].((vm:EventsPageViewModel)DataContext).OpenCameraCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding [Events.Tooltip.OpenCamera], Source={x:Static svc:Localizer.Instance}}">
+                      <Path Classes="lucide" Data="{StaticResource IconVideoCam}"
+                            Stroke="{StaticResource TextSecondaryBrush}" Width="16" VerticalAlignment="Center" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+      </Border>
+    </ScrollViewer>
+
+    <!-- Pager: < 1 2 3 > -->
+    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="4"
+                HorizontalAlignment="Center" Margin="0,12,0,0"
+                IsVisible="{Binding HasMultiplePages}">
+      <Button Command="{Binding PrevPageCommand}"
+              IsEnabled="{Binding CanPrevPage}"
+              Padding="8,6" CornerRadius="6"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+      </Button>
+      <ItemsControl ItemsSource="{Binding Pages}" x:CompileBindings="False">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Spacing="6" />
+            <StackPanel Orientation="Horizontal" Spacing="4" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
-          <DataTemplate DataType="vm:EventRowViewModel">
-            <Border Background="{StaticResource Bg2Brush}"
-                    BorderBrush="{StaticResource BorderWeakBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,8">
-              <!-- Kind + camera on top; source / duration / timestamp wrap below
-                   so the row never clips its trailing columns on a phone. -->
-              <StackPanel Spacing="6">
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                  <Border Background="{StaticResource WarningBrush}"
-                          CornerRadius="3"
-                          Padding="6,2"
-                          VerticalAlignment="Center">
-                    <TextBlock Text="{Binding KindLabel}"
-                               FontFamily="{StaticResource FontMono}"
-                               FontSize="10"
-                               Foreground="White" />
-                  </Border>
-                  <TextBlock Text="{Binding CameraName}"
-                             Foreground="{StaticResource TextPrimaryBrush}"
-                             VerticalAlignment="Center" />
-                </StackPanel>
-
-                <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
-                  <TextBlock Text="{Binding Source}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="11"
-                             Foreground="{StaticResource TextTertiaryBrush}"
-                             VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding Duration}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="11"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             VerticalAlignment="Center"
-                             MinWidth="40" />
-                  <TextBlock Text="{Binding OccurredAtLocal, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
-                             FontFamily="{StaticResource FontMono}"
-                             FontSize="11"
-                             Foreground="{StaticResource TextSecondaryBrush}"
-                             VerticalAlignment="Center" />
-                </WrapPanel>
-              </StackPanel>
-            </Border>
+          <DataTemplate>
+            <Button Content="{Binding}"
+                    Command="{Binding DataContext.GoToPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                    CommandParameter="{Binding}"
+                    MinWidth="32" Padding="8,6" CornerRadius="6"
+                    HorizontalContentAlignment="Center"
+                    Foreground="{StaticResource TextPrimaryBrush}"
+                    BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+              <Button.Background>
+                <MultiBinding Converter="{x:Static conv:PageActiveBrushConverter.Instance}">
+                  <Binding />
+                  <Binding Path="DataContext.CurrentPageDisplay" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                </MultiBinding>
+              </Button.Background>
+            </Button>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-    </ScrollViewer>
+      <Button Command="{Binding NextPageCommand}"
+              IsEnabled="{Binding CanNextPage}"
+              Padding="8,6" CornerRadius="6"
+              Background="{StaticResource Bg2Brush}"
+              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+        <Path Classes="lucide" Data="{StaticResource IconChevronRight}" Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" />
+      </Button>
+    </StackPanel>
 
     <!-- Loading overlay (rendered last → on top). -->
-    <StackPanel Grid.Row="1"
+    <StackPanel Grid.Row="2"
                 IsVisible="{Binding IsLoading}"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"

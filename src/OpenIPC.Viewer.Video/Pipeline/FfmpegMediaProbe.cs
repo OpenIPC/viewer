@@ -42,6 +42,14 @@ public sealed class FfmpegMediaProbe : IMediaProbe
 
             string? codec = null;
             int width = 0, height = 0;
+            var hasAudio = false;
+            for (var i = 0; i < (int)fmtCtx->nb_streams; i++)
+            {
+                var ap = fmtCtx->streams[i]->codecpar;
+                // Only audio this build can actually decode counts.
+                if (ap->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO && ffmpeg.avcodec_find_decoder(ap->codec_id) != null)
+                    hasAudio = true;
+            }
             for (var i = 0; i < (int)fmtCtx->nb_streams; i++)
             {
                 var par = fmtCtx->streams[i]->codecpar;
@@ -63,7 +71,7 @@ public sealed class FfmpegMediaProbe : IMediaProbe
                 break;
             }
 
-            return new MediaInfo(duration, codec, width, height);
+            return new MediaInfo(duration, codec, width, height, hasAudio);
         }
         finally
         {

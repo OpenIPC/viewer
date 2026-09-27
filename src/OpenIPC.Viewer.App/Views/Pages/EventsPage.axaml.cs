@@ -13,6 +13,23 @@ public sealed partial class EventsPage : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    // A new page of rows starts at the top of the list.
+    private EventsPageViewModel? _vm;
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_vm is not null) _vm.PropertyChanged -= OnVmPropertyChanged;
+        _vm = DataContext as EventsPageViewModel;
+        if (_vm is not null) _vm.PropertyChanged += OnVmPropertyChanged;
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(EventsPageViewModel.CurrentPage))
+            ListScroll.Offset = default;
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)

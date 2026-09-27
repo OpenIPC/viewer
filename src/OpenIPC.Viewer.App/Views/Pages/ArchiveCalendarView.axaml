@@ -29,6 +29,16 @@
     <Style Selector="Button.day.selected">
       <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
     </Style>
+    <Style Selector="Button.day TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}" />
+    </Style>
+    <Style Selector="Button.day.hasrec TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.day.hasrec">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
     <Style Selector="Border.today">
       <Setter Property="BorderBrush" Value="{StaticResource TextSecondaryBrush}" />
       <Setter Property="BorderThickness" Value="1" />
@@ -57,13 +67,13 @@
 
     <!-- Weekday header -->
     <UniformGrid Columns="7">
-      <TextBlock Text="Mon" Classes="wd" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Tue" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Wed" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Thu" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Fri" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Sat" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="Sun" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Mon], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Tue], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Wed], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Thu], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Fri], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Sat], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      <TextBlock Text="{Binding [Calendar.Sun], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
     </UniformGrid>
 
     <!-- Day grid -->
@@ -75,9 +85,13 @@
       </ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate>
         <DataTemplate DataType="vm:CalendarDayCell">
+          <!-- Recording days: accent fill (brighter = more recordings), bold
+               number. Event-only days: a small dot, not selectable. -->
           <Button Classes="day"
                   Classes.outmonth="{Binding !InMonth}"
                   Classes.selected="{Binding IsSelected}"
+                  Classes.hasrec="{Binding HasRecordings}"
+                  ToolTip.Tip="{Binding Tooltip}"
                   Command="{Binding $parent[ItemsControl].((vm:ArchiveCalendarViewModel)DataContext).SelectDayCommand}"
                   CommandParameter="{Binding}">
             <Panel>
@@ -88,13 +102,29 @@
               <TextBlock Text="{Binding DayNumber}"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center"
-                         FontSize="12"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
+                         FontSize="12" />
+              <Ellipse Width="4" Height="4"
+                       HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3"
+                       Fill="{StaticResource WarningBrush}"
+                       IsVisible="{Binding HasEventsOnly}" />
             </Panel>
           </Button>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <TextBlock Text="{Binding MonthSummary}"
+               HorizontalAlignment="Center"
+               FontSize="{StaticResource FontSizeSm}"
+               Foreground="{StaticResource TextSecondaryBrush}" />
+
+    <!-- Empty month: jump to the nearest month that has recordings. -->
+    <Button Classes="nav"
+            HorizontalAlignment="Center"
+            IsVisible="{Binding HasNearestMonth}"
+            Command="{Binding JumpToNearestMonthCommand}"
+            Foreground="{StaticResource AccentBrush}"
+            Content="{Binding NearestMonthLabel}" />
 
     <Button Classes="nav"
             HorizontalAlignment="Center"
