@@ -16,6 +16,8 @@ public sealed class RecordingPlayerPageFactory
     private readonly IRecordingRepository _recordings;
     private readonly ISnapshotService _snapshots;
     private readonly IClipExporter _exporter;
+    private readonly AudioMonitor _audio;
+    private readonly UserSettingsService _userSettings;
     private readonly IDialogService _dialogs;
     private readonly OpenIPC.Viewer.Core.Platform.IShareService _share;
     private readonly ILoggerFactory _loggerFactory;
@@ -27,6 +29,8 @@ public sealed class RecordingPlayerPageFactory
         IRecordingRepository recordings,
         ISnapshotService snapshots,
         IClipExporter exporter,
+        AudioMonitor audio,
+        UserSettingsService userSettings,
         IDialogService dialogs,
         OpenIPC.Viewer.Core.Platform.IShareService share,
         ILoggerFactory loggerFactory)
@@ -37,12 +41,14 @@ public sealed class RecordingPlayerPageFactory
         _recordings = recordings;
         _snapshots = snapshots;
         _exporter = exporter;
+        _audio = audio;
+        _userSettings = userSettings;
         _dialogs = dialogs;
         _share = share;
         _loggerFactory = loggerFactory;
     }
 
     public RecordingPlayerPageViewModel Create(Recording recording, string cameraName) =>
-        new(recording, cameraName, _engine, _probe, _events, _recordings, _snapshots, _exporter, _dialogs, _share,
+        new(recording, cameraName, _engine, _probe, _events, _recordings, _snapshots, _exporter, _audio, _userSettings, _dialogs, _share,
             _loggerFactory.CreateLogger<RecordingPlayerPageViewModel>());
 }

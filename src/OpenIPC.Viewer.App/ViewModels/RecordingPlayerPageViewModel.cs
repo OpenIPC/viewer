@@ -44,6 +44,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     private readonly IRecordingRepository _recordings;
     private readonly ISnapshotService _snapshots;
     private readonly IClipExporter _exporter;
+    private readonly AudioMonitor _audio;
+    private readonly UserSettingsService _userSettings;
     private readonly IDialogService _dialogs;
     private readonly OpenIPC.Viewer.Core.Platform.IShareService _share;
     private readonly ILogger<RecordingPlayerPageViewModel> _logger;
@@ -54,6 +56,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     private Recording? _previous;
     private Recording? _next;
     private CancellationTokenSource? _noticeCts;
+    private bool _audioAttached;
     private bool _userPaused;
     private bool _continued;
     private bool _activating;
@@ -68,6 +71,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         IRecordingRepository recordings,
         ISnapshotService snapshots,
         IClipExporter exporter,
+        AudioMonitor audio,
+        UserSettingsService userSettings,
         IDialogService dialogs,
         OpenIPC.Viewer.Core.Platform.IShareService share,
         ILogger<RecordingPlayerPageViewModel> logger)
@@ -80,6 +85,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         _recordings = recordings;
         _snapshots = snapshots;
         _exporter = exporter;
+        _audio = audio;
+        _userSettings = userSettings;
         _dialogs = dialogs;
         _share = share;
         _logger = logger;
@@ -136,6 +143,19 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     private IVideoSession? _videoSession;
 
     [ObservableProperty] private string? _errorMessage;
+
+    // Chrome-free fullscreen; owned by MainWindowViewModel (see
+    // SetPlayerFullscreenMessage), pushed back here.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEventSidebar))]
+    private bool _isFullscreen;
+
+    // Sound: the file must carry a decodable audio track and a sink must exist.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanListen))]
+    private bool _hasAudio;
+
+    public bool CanListen => HasAudio && _audio.IsAvailable;
 
     // Transient confirmation over the video ("Frame saved"); clears itself.
     [ObservableProperty] private string? _notice;
@@ -196,6 +216,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
     public bool IsFilterMotion => EventFilter == PlayerEventFilter.Motion;
     public bool IsFilterDetection => EventFilter == PlayerEventFilter.Detection;
     public bool HasAnyEvents => _allEvents.Count > 0;
+    public bool ShowEventSidebar => HasAnyEvents && !IsFullscreen;
     public bool HasEvents => EventList.Count > 0;
     public string FilterAllLabel => $"{Localizer.Instance["Player.Filter.All"]} {_allEvents.Count}";
     public string FilterMotionLabel => $"{Localizer.Instance["Player.Filter.Motion"]} {_allEvents.Count(e => e.IsMotion)}";
@@ -264,6 +285,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
                 var info = await _probe.ProbeAsync(_recording.FilePath, ct).ConfigureAwait(true);
                 if (info.Duration > TimeSpan.Zero)
                     Duration = info.Duration;
+                HasAudio = info.HasAudio;
             }
             catch (Exception ex)
             {
@@ -294,6 +316,18 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             }));
             _playback = session;
             VideoSession = session;
+            if (CanListen)
+            {
+                // Same persisted mute/volume as the live page; the player takes
+                // over as the one audio source while it's open.
+                _audio.Muted = _userSettings.Current.AudioMuted;
+                _audio.Volume = (float)_userSettings.Current.AudioVolume;
+                _audio.Changed += OnAudioChanged;
+                session.SetAudioEnabled(true);
+                _audio.Detach();
+                _audio.Attach(session, _recording.CameraId);
+                _audioAttached = true;
+            }
             await session.StartAsync(ct).ConfigureAwait(true);
             if (StartAt is { } start && start > TimeSpan.FromSeconds(1))
                 await SeekToAsync(start).ConfigureAwait(true);
@@ -329,6 +363,65 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             _userPaused = true;
             _playback.Pause();
         }
+    }
+
+    // Single-frame step (pauses first). Backward costs a GOP decode.
+    [RelayCommand]
+    private void StepBack() => StepFrame(false);
+
+    [RelayCommand]
+    private void StepForward() => StepFrame(true);
+
+    public void StepFrame(bool forward)
+    {
+        if (_playback is null) return;
+        _userPaused = true;
+        _playback.StepFrame(forward);
+    }
+
+    [RelayCommand]
+    private void ToggleFullscreen() =>
+        WeakReferenceMessenger.Default.Send(new SetPlayerFullscreenMessage(!IsFullscreen));
+
+    // ── Sound ─────────────────────────────────────────────────────────────
+
+    public bool IsMuted
+    {
+        get => _audio.Muted;
+        set
+        {
+            if (_audio.Muted == value) return;
+            _audio.Muted = value; // raises Changed → OnAudioChanged re-raises + persists
+        }
+    }
+
+    public double Volume
+    {
+        get => _audio.Volume;
+        set
+        {
+            if (Math.Abs(_audio.Volume - value) < 0.0001) return;
+            _audio.Volume = (float)value;
+        }
+    }
+
+    [RelayCommand]
+    public void ToggleMute()
+    {
+        if (CanListen) IsMuted = !IsMuted;
+    }
+
+    private void OnAudioChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsMuted));
+            OnPropertyChanged(nameof(Volume));
+        });
+        var cur = _userSettings.Current;
+        if (cur.AudioMuted == _audio.Muted && Math.Abs(cur.AudioVolume - _audio.Volume) < 0.0001)
+            return;
+        _ = _userSettings.UpdateAsync(cur with { AudioMuted = _audio.Muted, AudioVolume = _audio.Volume });
     }
 
     [RelayCommand]
@@ -397,8 +490,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             if (i < 0) return;
             _previous = i > 0 ? all[i - 1] : null;
             _next = i < all.Count - 1 ? all[i + 1] : null;
-            PreviousTip = _previous is null ? null : NeighbourTip("Player.Previous", _previous);
-            NextTip = _next is null ? null : NeighbourTip("Player.Next", _next);
+            PreviousTip = _previous is null ? null : NeighbourTip("Player.PreviousTip", _previous);
+            NextTip = _next is null ? null : NeighbourTip("Player.NextTip", _next);
         }
         catch (Exception ex)
         {
@@ -639,6 +732,7 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             Markers = markers;
             ApplyEventFilter();
             OnPropertyChanged(nameof(HasAnyEvents));
+            OnPropertyChanged(nameof(ShowEventSidebar));
             OnPropertyChanged(nameof(FilterAllLabel));
             OnPropertyChanged(nameof(FilterMotionLabel));
             OnPropertyChanged(nameof(FilterDetectionLabel));
@@ -682,6 +776,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         if (_disposed) return;
         _disposed = true;
         _noticeCts?.Cancel();
+        _audio.Changed -= OnAudioChanged;
+        if (_audioAttached) _audio.Detach(_recording.CameraId);
         _stateSub?.Dispose();
         _positionSub?.Dispose();
         var session = _playback;

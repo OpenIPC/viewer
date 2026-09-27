@@ -54,7 +54,10 @@ public sealed partial class RecordingPlayerPage : UserControl
             await vm.DisposeAsync();
     }
 
-    // Space play/pause, ←/→ ±5 s, Home/End jump to the ends.
+    // Space play/pause, ←/→ ±5 s, ,/. frame step, Home/End jump to the ends,
+    // PageUp/PageDown previous/next recording, M mute, F fullscreen. F11 and
+    // Esc are the window's own key bindings (MainWindowViewModel routes them
+    // to the player's fullscreen while it's open).
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
         if (Vm is not { } vm || e.KeyModifiers != KeyModifiers.None) return;
@@ -62,6 +65,24 @@ public sealed partial class RecordingPlayerPage : UserControl
 
         switch (e.Key)
         {
+            case Key.OemComma:
+                vm.StepFrame(false);
+                break;
+            case Key.OemPeriod:
+                vm.StepFrame(true);
+                break;
+            case Key.PageUp:
+                if (vm.PreviousCommand.CanExecute(null)) vm.PreviousCommand.Execute(null);
+                break;
+            case Key.PageDown:
+                if (vm.NextCommand.CanExecute(null)) vm.NextCommand.Execute(null);
+                break;
+            case Key.M:
+                vm.ToggleMute();
+                break;
+            case Key.F:
+                vm.ToggleFullscreenCommand.Execute(null);
+                break;
             case Key.Space:
                 vm.PlayPauseCommand.Execute(null);
                 break;

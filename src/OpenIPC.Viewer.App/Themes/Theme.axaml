@@ -135,6 +135,10 @@
   <StreamGeometry x:Key="IconRotateCw">M21,12 a9,9 0 1 1 -9,-9 c2.52,0 4.93,1 6.74,2.74 L21,8 M21,3 v5 h-5</StreamGeometry>
   <StreamGeometry x:Key="IconSkipBack">M19,20 L9,12 L19,4 Z M5,19 V5</StreamGeometry>
   <StreamGeometry x:Key="IconSkipForward">M5,4 L15,12 L5,20 Z M19,5 V19</StreamGeometry>
+  <!-- Frame step: a chevron against a bar. IconMinimize is Lucide "minimize". -->
+  <StreamGeometry x:Key="IconFrameBack">M17,18 L11,12 L17,6 M7,6 V18</StreamGeometry>
+  <StreamGeometry x:Key="IconFrameForward">M7,18 L13,12 L7,6 M17,6 V18</StreamGeometry>
+  <StreamGeometry x:Key="IconMinimize">M8,3 v3 a2,2 0 0 1 -2,2 H3 M21,8 h-3 a2,2 0 0 1 -2,-2 V3 M3,16 h3 a2,2 0 0 1 2,2 v3 M16,21 v-3 a2,2 0 0 1 2,-2 h3</StreamGeometry>
   <StreamGeometry x:Key="IconScissors">M9,6 A3,3 0 1 1 3,6 A3,3 0 1 1 9,6 Z M8.12,8.12 L12,12 M20,4 L8.12,15.88 M9,18 A3,3 0 1 1 3,18 A3,3 0 1 1 9,18 Z M14.8,14.8 L20,20</StreamGeometry>
   <!-- AI detection classes. Lucide "user", "car", "truck", "bike". -->
   <StreamGeometry x:Key="IconPerson">M19,21 v-2 a4,4 0 0 0 -4,-4 H9 a4,4 0 0 0 -4,4 v2 M8,7 A4,4 0 1 0 16,7 A4,4 0 1 0 8,7 Z</StreamGeometry>

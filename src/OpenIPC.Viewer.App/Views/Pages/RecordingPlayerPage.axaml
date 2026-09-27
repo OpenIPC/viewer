@@ -11,12 +11,21 @@
   <UserControl.Styles>
     <!-- Narrow viewport: drop the event sidebar so the video keeps the full
          width; events stay reachable via the timeline markers below. -->
-    <Style Selector="Grid.compact &gt; Border.eventsidebar">
+    <Style Selector="Grid.compact &gt; Panel.eventsidebar">
       <Setter Property="IsVisible" Value="False" />
     </Style>
     <!-- Narrow header: prev/next collapse to their icons. -->
     <Style Selector="Grid.compact TextBlock.navlabel">
       <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- Fullscreen: the controls get a gutter since the page has no margin.
+         Margin lives in styles only: a local value would outrank them. -->
+    <Style Selector="StackPanel.controls">
+      <Setter Property="Margin" Value="0,12,0,0" />
+    </Style>
+    <Style Selector="Grid.full &gt; StackPanel.controls">
+      <Setter Property="Margin" Value="16,10,16,14" />
     </Style>
 
     <Style Selector="Button.outline">
@@ -84,10 +93,11 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,*,Auto" Classes.full="{Binding IsFullscreen}">
 
     <!-- Header: back · camera + date/time · previous / next · ⋯ -->
     <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12"
+          IsVisible="{Binding !IsFullscreen}"
           b:Adaptive.CompactBelow="620">
       <Button Grid.Column="0" Classes="outline"
               Command="{Binding BackCommand}"
@@ -134,9 +144,13 @@
         <Button Classes="outline"
                 AutomationProperties.Name="{Binding [Recordings.Tooltip.More], Source={x:Static svc:Localizer.Instance}}"
                 ToolTip.Tip="{Binding [Recordings.Tooltip.More], Source={x:Static svc:Localizer.Instance}}">
-          <Path Classes="lucide" Data="{StaticResource IconEllipsis}"
-                Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="2"
-                Width="16" Height="16" />
+          <!-- The glyph is a flat row of dots: keep a square box and centre it,
+               or Uniform stretch pins it to the top. -->
+          <Panel Width="16" Height="16">
+            <Path Classes="lucide" Data="{StaticResource IconEllipsis}"
+                  Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="2"
+                  Width="16" VerticalAlignment="Center" />
+          </Panel>
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
               <MenuItem Header="{Binding [Recordings.ShowInFolder], Source={x:Static svc:Localizer.Instance}}"
@@ -196,6 +210,17 @@
             <Path Classes="lucide" Data="{StaticResource IconScanSearch}"
                   Stroke="White" Width="16" Height="16" />
           </ToggleButton>
+          <Button Classes="overlay"
+                  Command="{Binding ToggleFullscreenCommand}"
+                  AutomationProperties.Name="{Binding [Player.Fullscreen], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.Fullscreen], Source={x:Static svc:Localizer.Instance}}">
+            <Panel>
+              <Path Classes="lucide" Data="{StaticResource IconMaximize}"
+                    Stroke="White" Width="16" Height="16" IsVisible="{Binding !IsFullscreen}" />
+              <Path Classes="lucide" Data="{StaticResource IconMinimize}"
+                    Stroke="White" Width="16" Height="16" IsVisible="{Binding IsFullscreen}" />
+            </Panel>
+          </Button>
         </StackPanel>
 
         <!-- Error strip -->
@@ -235,8 +260,9 @@
 
       <!-- Events of this recording (16.6): click to seek, filter by type.
            Hidden when the recording has none. -->
-      <Border Grid.Column="1" Classes="eventsidebar" Width="260" Margin="12,0,0,0"
-              IsVisible="{Binding HasAnyEvents}"
+      <Panel Grid.Column="1" Classes="eventsidebar">
+      <Border Width="260" Margin="12,0,0,0"
+              IsVisible="{Binding ShowEventSidebar}"
               Background="{StaticResource Bg1Brush}"
               BorderBrush="{StaticResource BorderWeakBrush}"
               BorderThickness="1"
@@ -328,10 +354,11 @@
           </ScrollViewer>
         </Grid>
       </Border>
+      </Panel>
     </Grid>
 
     <!-- Timeline + transport + clip bar -->
-    <StackPanel Grid.Row="2" Spacing="10" Margin="0,12,0,0">
+    <StackPanel Grid.Row="2" Classes="controls" Spacing="10">
 
       <!-- Canvas timeline: segments + motion/detection markers, wheel-zoom to
            cursor, click/marker-tap to seek, drag to select a clip (16.4). -->
@@ -364,6 +391,12 @@
                          HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,1,0,0" />
             </Panel>
           </Button>
+          <Button Classes="transport" Command="{Binding StepBackCommand}"
+                  AutomationProperties.Name="{Binding [Player.StepBack], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.StepBack], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconFrameBack}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="18" Height="18" />
+          </Button>
           <Button Classes="transport play" Command="{Binding PlayPauseCommand}"
                   AutomationProperties.Name="{Binding [Player.PlayPause], Source={x:Static svc:Localizer.Instance}}"
                   ToolTip.Tip="{Binding [Player.PlayPause], Source={x:Static svc:Localizer.Instance}}">
@@ -373,6 +406,12 @@
               <Path Classes="lucide" Data="{StaticResource IconPlay}" Stroke="White" Fill="White" Width="18" Height="18"
                     Margin="2,0,0,0" IsVisible="{Binding !IsPlaying}" />
             </Panel>
+          </Button>
+          <Button Classes="transport" Command="{Binding StepForwardCommand}"
+                  AutomationProperties.Name="{Binding [Player.StepForward], Source={x:Static svc:Localizer.Instance}}"
+                  ToolTip.Tip="{Binding [Player.StepForward], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide" Data="{StaticResource IconFrameForward}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="18" Height="18" />
           </Button>
           <Button Classes="transport" Command="{Binding SkipForwardCommand}"
                   AutomationProperties.Name="{Binding [Player.SkipForward], Source={x:Static svc:Localizer.Instance}}"
@@ -399,7 +438,29 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Border Classes="segmented" ToolTip.Tip="{Binding [Player.Speed], Source={x:Static svc:Localizer.Instance}}">
+          <!-- Sound (1x only): mute + volume, shared with the live page. -->
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                      IsVisible="{Binding CanListen}">
+            <Button Classes="transport" Command="{Binding ToggleMuteCommand}"
+                    AutomationProperties.Name="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}"
+                    ToolTip.Tip="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}">
+              <Panel Width="18" Height="18">
+                <Path Classes="lucide" Data="{StaticResource IconVolume}"
+                      Stroke="{StaticResource TextPrimaryBrush}" Width="18" VerticalAlignment="Center"
+                      IsVisible="{Binding !IsMuted}" />
+                <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
+                      Stroke="{StaticResource TextSecondaryBrush}" Width="18" VerticalAlignment="Center"
+                      IsVisible="{Binding IsMuted}" />
+              </Panel>
+            </Button>
+            <Slider Width="90" Minimum="0" Maximum="1"
+                    Value="{Binding Volume}"
+                    IsEnabled="{Binding !IsMuted}"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding [CameraPage.Tooltip.Volume], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+
+          <Border Classes="segmented" VerticalAlignment="Center" ToolTip.Tip="{Binding [Player.Speed], Source={x:Static svc:Localizer.Instance}}">
             <ItemsControl ItemsSource="{Binding RateOptions}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -419,7 +480,7 @@
             </ItemsControl>
           </Border>
 
-          <ToggleButton Classes="chip" IsChecked="{Binding IsClipMode, Mode=TwoWay}"
+          <ToggleButton Classes="chip" IsChecked="{Binding IsClipMode, Mode=TwoWay}" VerticalAlignment="Center"
                         ToolTip.Tip="{Binding [Player.Clip.Tooltip], Source={x:Static svc:Localizer.Instance}}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Path Classes="lucide" Data="{StaticResource IconScissors}"

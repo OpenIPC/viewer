@@ -18,6 +18,10 @@ public sealed record OpenRecordingMessage(Recording Recording, string CameraName
 // must be re-read instead of shown from cache.
 public sealed record GoBackToRecordingsMessage(bool Reload = false);
 
+// Recording player asks for (or leaves) chrome-free fullscreen; the main window
+// owns the state so it survives previous/next swapping the player VM.
+public sealed record SetPlayerFullscreenMessage(bool On);
+
 // AI page → Events filtered to AI detections.
 public sealed record ShowDetectionEventsMessage;
 

@@ -17,7 +17,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     IRecipient<OpenRecordingMessage>,
     IRecipient<ShowDetectionEventsMessage>,
     IRecipient<GoBackToRecordingsMessage>,
-    IRecipient<ToggleKioskMessage>
+    IRecipient<ToggleKioskMessage>,
+    IRecipient<SetPlayerFullscreenMessage>
 {
     private readonly CameraDirectoryService _directory;
     private readonly SingleCameraPageFactory _singleCameraFactory;
@@ -61,6 +62,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     [ObservableProperty]
     private bool _isFullscreen;
 
+    // Recording player fullscreen, requested by the player's own button / F.
+    private bool _playerFullscreen;
+
     public bool IsLiveSelected => CurrentPage is GridPageViewModel;
     public bool IsLibrarySelected => CurrentPage is CameraLibraryPageViewModel or SingleCameraPageViewModel;
     public bool IsRecordingsSelected => CurrentPage is RecordingsPageViewModel or RecordingPlayerPageViewModel;
@@ -100,6 +104,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         WeakReferenceMessenger.Default.Register<ShowDetectionEventsMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToRecordingsMessage>(this);
         WeakReferenceMessenger.Default.Register<ToggleKioskMessage>(this);
+        WeakReferenceMessenger.Default.Register<SetPlayerFullscreenMessage>(this);
 
         // While a mobile overlay dialog is open the bottom nav must not switch
         // pages under it — the dim layer doesn't reliably swallow those taps.
@@ -122,13 +127,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
 
     private void UpdateFullscreen()
     {
+        var onPlayer = CurrentPage is RecordingPlayerPageViewModel;
         IsFullscreen = KioskMode
-            || (_isMobileLandscape && CurrentPage is SingleCameraPageViewModel);
-        // Camera-to-camera swipe replaces the page VM while IsFullscreen stays
-        // true, so the flag is pushed to the current page explicitly instead
-        // of relying on the property-changed callback.
+            || (_isMobileLandscape && (CurrentPage is SingleCameraPageViewModel || onPlayer))
+            || (_playerFullscreen && onPlayer);
+        // Camera-to-camera swipe (and player previous/next) replaces the page
+        // VM while IsFullscreen stays true, so the flag is pushed to the current
+        // page explicitly instead of relying on the property-changed callback.
         if (CurrentPage is SingleCameraPageViewModel camera)
             camera.IsFullscreen = IsFullscreen;
+        if (CurrentPage is RecordingPlayerPageViewModel player)
+            player.IsFullscreen = IsFullscreen;
+    }
+
+    public void Receive(SetPlayerFullscreenMessage message)
+    {
+        _playerFullscreen = message.On;
+        UpdateFullscreen();
     }
 
     // Toggle the desktop kiosk. Entering tears down any single-camera/player
@@ -146,14 +161,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         UpdateFullscreen();
     }
 
+    // F11: on the recording player it toggles the player's own fullscreen
+    // (kiosk would close the player and drop to the grid).
     [RelayCommand]
-    private void ToggleKiosk() => Receive(new ToggleKioskMessage());
+    private void ToggleKiosk()
+    {
+        if (CurrentPage is RecordingPlayerPageViewModel)
+            Receive(new SetPlayerFullscreenMessage(!_playerFullscreen));
+        else
+            Receive(new ToggleKioskMessage());
+    }
 
     // Esc only exits (never enters) — a no-op elsewhere, so it won't swallow
     // Escape from dialogs that aren't in kiosk.
     [RelayCommand]
     private void ExitKiosk()
     {
+        if (_playerFullscreen && CurrentPage is RecordingPlayerPageViewModel)
+        {
+            Receive(new SetPlayerFullscreenMessage(false));
+            return;
+        }
         if (!KioskMode) return;
         KioskMode = false;
         UpdateFullscreen();
@@ -227,6 +255,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     {
         try
         {
+            // Fullscreen carries over previous/next, not a fresh open.
+            if (CurrentPage is not RecordingPlayerPageViewModel)
+                _playerFullscreen = false;
             _ = DisposeActivePlayerAsync();
             _activePlayer = _playerFactory.Create(message.Recording, message.CameraName);
             _activePlayer.StartAt = message.StartAt;
@@ -242,6 +273,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     public async void Receive(GoBackToRecordingsMessage message)
     {
         await DisposeActivePlayerAsync().ConfigureAwait(true);
+        _playerFullscreen = false;
         CurrentPage = Recordings;
         if (message.Reload)
             await Recordings.LoadAsync(CancellationToken.None).ConfigureAwait(true);
