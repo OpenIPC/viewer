@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Messages;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
+using OpenIPC.Viewer.Core.Discovery;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Persistence;
@@ -560,30 +561,43 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
             if (found is null)
                 return;
 
-            // Pre-fill the editor from the probe result so the user sees / can tweak
-            // everything before saving (RTSP URI especially — phase-04 risks §"ONVIF
-            // returns wrong RTSP URI behind NAT" applies).
+            if (found.ManualEntry || found.Device is not { } device)
+            {
+                await AddCameraAsync().ConfigureAwait(true);
+                return;
+            }
+
+            // The editor's Connect does the identifying (OpenIPC / ONVIF), picks
+            // the streams and checks them; hand it the address, what discovery
+            // already knows, and the login last used this session.
             var editor = _editorFactory.CreateForNew();
-            editor.Name = found.Device.Model ?? found.Device.Name ?? found.Device.Host;
-            editor.Host = found.Device.Host;
-            editor.OnvifPortText = (found.Device.OnvifServiceUri?.Port ?? 80).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            editor.RtspMainText = found.RtspMainUri.ToString();
+            editor.Host = device.Host;
+            // The web UI answered on 8080 only: that's the camera's HTTP port.
+            if (device.Ports.Contains(8080) && !device.Ports.Contains(80))
+                editor.HttpPort = 8080;
+            if (device.OnvifServiceUri is { } onvif)
+                editor.OnvifPortText = onvif.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if ((device.Model ?? device.Name) is { } label)
+                editor.SuggestName($"{label} — {device.Host}");
+            // A bare RTSP responder on the alternate port: point the stream there.
+            if (!device.Protocols.HasFlag(DiscoveryProtocol.Majestic) && !device.Protocols.HasFlag(DiscoveryProtocol.Onvif)
+                && device.Ports.Contains(8554) && !device.Ports.Contains(554))
+                editor.RtspMainText = $"rtsp://{device.Host}:8554/";
             editor.Username = found.Credentials?.Username ?? "";
             editor.Password = found.Credentials?.Password ?? "";
+            editor.AutoConnect = true;
 
             var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
+            // Whatever login was typed is the best guess for the next camera.
+            _discoveryFactory.Session.Username = editor.Username;
+            _discoveryFactory.Session.Password = editor.Password;
             if (result?.NewRequest is not { } req)
                 continue; // editor cancelled — back to the scan list
 
             try
             {
                 var id = await _directory.AddAsync(req, CancellationToken.None).ConfigureAwait(true);
-                // Persist HasPtz / ProfileToken / manufacturer info from the probe so
-                // SingleCameraPage knows whether to show the PTZ joystick (Phase 4c).
-                // Non-ONVIF devices (sweep/mDNS) have no probe — nothing to persist.
-                // A Connect inside the editor supersedes the discovery probe.
-                if (result.Onvif is null && found.Probe is { } probe)
-                    await _directory.SaveOnvifMetadataAsync(id, probe, CancellationToken.None).ConfigureAwait(true);
+                // PTZ / ONVIF profile / OpenIPC flag learned by the editor's Connect.
                 await _directory.SaveDetectedAsync(id, result, CancellationToken.None).ConfigureAwait(true);
                 await LoadAsync(CancellationToken.None).ConfigureAwait(true);
                 knownHosts.Add(req.Host);

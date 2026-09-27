@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,19 +11,20 @@ using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Discovery;
 using OpenIPC.Viewer.Core.Entities;
-using OpenIPC.Viewer.Core.Onvif;
 
 namespace OpenIPC.Viewer.App.ViewModels.Dialogs;
 
-// Two-step: (1) scan via the aggregator (ONVIF + later sweep/mDNS) -> merged
-// devices, upserted by host as signals arrive; (2) user picks one, types creds,
-// we ONVIF-probe (capabilities + profiles + stream URI) to produce the result
-// the Library hands to the CameraEditor. Probe fails fast inside the dialog
-// instead of pre-filling the editor with bad data.
+public enum DiscoveryPhase { Idle, Quick, Deep }
+
+// Finds cameras on the network. Opening the dialog runs a quick passive scan
+// (ONVIF + mDNS); an opt-in deep scan walks the addresses of the ticked
+// subnets. Each found device is one row with its own "Add", which hands the
+// device to the camera editor — identification, credentials and the stream
+// check happen there (its Connect). Results survive closing the dialog so
+// several cameras go in from one scan.
 public sealed partial class DiscoveryDialogViewModel : ViewModelBase
 {
     private readonly IDiscoveryAggregator _aggregator;
-    private readonly OnvifProbeService _probe;
     private readonly OpenIPC.Viewer.Core.Majestic.IMajesticClient _majestic;
     private readonly DiscoverySessionCache _cache;
     private readonly IReadOnlySet<string> _knownHosts;
@@ -31,81 +33,98 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     private CancellationTokenSource? _scanCts;
     // Cancels in-flight Majestic fingerprints when the dialog goes away.
     private readonly CancellationTokenSource _lifetimeCts = new();
-    // What the sweep will actually walk: the ticked subnets folded together with
-    // anything typed. Null means "no sweep", which is what an untouched dialog
-    // wants — passive sources only.
+    // What the deep scan will walk: the ticked subnets folded together with
+    // anything typed. Null = nothing chosen (the sweep then works out the
+    // local subnet by itself, when no subnets are offered at all).
     private IpRange? _effectiveRange;
     private readonly Dictionary<string, DiscoveredDeviceRowVm> _rowsByHost =
         new(StringComparer.OrdinalIgnoreCase);
     // Hosts we already fingerprinted (or are fingerprinting) — one ping per host.
     private readonly HashSet<string> _fingerprinted = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _fingerprintGate = new(6);
+    private DiscoveryPhase _lastScan = DiscoveryPhase.Idle;
+    private bool _stopped;
+    private string? _failure;
 
-    public ObservableCollection<DiscoveredDeviceRowVm> Cameras { get; } = new();
+    // New finds first; cameras already in the library collect underneath.
+    public ObservableCollection<DiscoveredDeviceRowVm> NewCameras { get; } = new();
+    public ObservableCollection<DiscoveredDeviceRowVm> AddedCameras { get; } = new();
 
-    // Subnets the OS says are reachable, ticked by default — the point is that
-    // Deep scan needs no typing to reach a camera on another VLAN or behind a
-    // VPN. Empty on a platform with no route reader and no usable interfaces,
-    // in which case the dialog shows only the manual box.
+    // Subnets offered for the deep scan. Local ones arrive ticked, routed ones
+    // (behind a VPN / on another VLAN) don't — sweeping the far side of a
+    // tunnel shouldn't happen without a deliberate tick.
     public ObservableCollection<ScanTargetRowVm> ScanTargets { get; } = new();
-
     public bool HasScanTargets => ScanTargets.Count > 0;
 
-    [ObservableProperty] private string _statusText = Localizer.Instance["Discovery.Status.Initial"];
-
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsRowSelected))]
-    [NotifyPropertyChangedFor(nameof(CanAdd))]
-    private DiscoveredDeviceRowVm? _selected;
+    [NotifyPropertyChangedFor(nameof(IsScanning), nameof(IsDeepScanning), nameof(IsIdle), nameof(StatusText),
+        nameof(ShowEmpty), nameof(ShowEmptyDeepHint), nameof(ShowEmptyManualHint))]
+    [NotifyCanExecuteChangedFor(nameof(RescanCommand), nameof(DeepScanCommand))]
+    private DiscoveryPhase _phase = DiscoveryPhase.Idle;
 
-    public bool IsRowSelected => Selected is not null;
+    public bool IsScanning => Phase != DiscoveryPhase.Idle;
+    public bool IsDeepScanning => Phase == DiscoveryPhase.Deep;
+    public bool IsIdle => Phase == DiscoveryPhase.Idle;
 
-    [ObservableProperty] private string _username = "";
-    [ObservableProperty] private string _password = "";
+    // 0..1, mean across sources.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private double _scanProgress;
 
-    // "Use these credentials for all cameras" (multi-add). Off → the next
-    // dialog instance starts with blank login fields.
-    [ObservableProperty] private bool _reuseCredentials = true;
+    // The deep-scan section is expanded.
+    [ObservableProperty] private bool _isDeepOpen;
 
-    // 0..1 scan progress (mean across sources). Drives the progress bar; hidden
-    // when not scanning.
-    [ObservableProperty] private double _scanProgress;
-
-    // Opt-in active /24 sweep — finds OpenIPC cameras that answer neither ONVIF
-    // nor mDNS, at the cost of knocking on every host. Off by default.
-    [ObservableProperty] private bool _deepScan;
-
-    // Extra hand-typed range on top of the ticked subnets — for a subnet with no
-    // route of its own, or a single address. Typing one turns the sweep on by
-    // itself, so it still works with Deep scan off.
+    // Extra hand-typed range on top of the ticked subnets.
     [ObservableProperty] private string _ipRangeText = "";
 
-    // Null while everything ticked and typed adds up to something sweepable; a
-    // localized complaint otherwise. Disables Scan, so neither a typo nor an
-    // over-wide selection can quietly degrade into the wrong sweep.
+    // Null while the ticked + typed targets add up to something sweepable.
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeepScanCommand))]
     private string? _ipRangeError;
 
-    // "will knock on N addresses" — shown before the user commits, because the
-    // ticked subnets were chosen for them and the total should not surprise.
-    [ObservableProperty] private string _sweepSummary = "";
-
+    // "508 addresses" / "this computer's subnet".
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyPropertyChangedFor(nameof(CanAdd))]
-    private bool _scanInProgress;
+    [NotifyPropertyChangedFor(nameof(DeepButtonLabel))]
+    private string _sweepSummary = "";
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyPropertyChangedFor(nameof(CanAdd))]
-    private bool _addInProgress;
+    public string DeepButtonLabel => string.IsNullOrEmpty(SweepSummary)
+        ? Localizer.Instance["Discovery.Deep.Start"]
+        : $"{Localizer.Instance["Discovery.Deep.Start"]} · {SweepSummary}";
 
-    public bool CanAdd => Selected is not null && !ScanInProgress && !AddInProgress;
+    public bool HasNew => NewCameras.Count > 0;
+    public bool HasAdded => AddedCameras.Count > 0;
+    // Not after a manual Stop: nobody failed to answer, the user cut it short.
+    public bool ShowEmpty => IsIdle && _lastScan != DiscoveryPhase.Idle && !_stopped && !HasNew && !HasAdded;
+    public bool ShowEmptyDeepHint => ShowEmpty && _lastScan == DiscoveryPhase.Quick;
+    public bool ShowEmptyManualHint => ShowEmpty && _lastScan == DiscoveryPhase.Deep;
+
+    public string StatusText
+    {
+        get
+        {
+            var total = NewCameras.Count + AddedCameras.Count;
+            switch (Phase)
+            {
+                case DiscoveryPhase.Quick:
+                    return Localizer.Instance["Discovery.Status.Quick"];
+                case DiscoveryPhase.Deep:
+                    return string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Discovery.Status.DeepFormat"],
+                        (int)Math.Round(ScanProgress * 100), total);
+            }
+            if (_failure is not null) return _failure;
+            if (_lastScan == DiscoveryPhase.Idle) return "";
+            if (total == 0)
+                return Localizer.Instance[_stopped ? "Discovery.Status.Stopped"
+                    : _lastScan == DiscoveryPhase.Deep ? "Discovery.Status.NothingDeep" : "Discovery.Status.NothingQuick"];
+            var found = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Discovery.Status.FoundFormat"], total);
+            return AddedCameras.Count == 0
+                ? found
+                : found + " · " + string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Discovery.Status.InLibraryFormat"], AddedCameras.Count);
+        }
+    }
 
     public DiscoveryDialogViewModel(
         IDiscoveryAggregator aggregator,
-        OnvifProbeService probe,
         OpenIPC.Viewer.Core.Majestic.IMajesticClient majestic,
         IScanTargetProvider scanTargets,
         DiscoverySessionCache cache,
@@ -113,30 +132,15 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         ILogger<DiscoveryDialogViewModel> logger)
     {
         _aggregator = aggregator;
-        _probe = probe;
         _majestic = majestic;
         _cache = cache;
         _knownHosts = knownHosts;
         _logger = logger;
 
-        // Rehydrate the previous scan so the user can add several cameras
-        // one-by-one without rescanning between dialog opens. Credentials only
-        // carry over while "use for all cameras" is on — a mixed-credential
-        // park starts each camera with blank fields.
-        _reuseCredentials = cache.ReuseCredentials;
-        if (_reuseCredentials)
-        {
-            _username = cache.Username;
-            _password = cache.Password;
-        }
-        _deepScan = cache.DeepScan;
+        _isDeepOpen = cache.DeepScan;
         _ipRangeText = cache.IpRangeText;
 
-        // Local subnets ticked, routed ones (behind a VPN / another VLAN) not:
-        // sweeping the LAN this machine is on is the feature, but sweeping the
-        // far side of a tunnel someone happens to be on shouldn't happen without
-        // a deliberate tick. A choice the user already made this session wins
-        // over the default.
+        // A choice the user already made this session wins over the default.
         foreach (var target in SafeTargets(scanTargets))
         {
             var selected = cache.TargetSelections.TryGetValue(target.Cidr, out var choice)
@@ -146,24 +150,20 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         }
 
         // Field init skips the generated On*Changed hooks, so the rehydrated
-        // state has to be folded in by hand or the first Scan would ignore it.
+        // state has to be folded in by hand.
         RecomputeRange();
         foreach (var device in cache.Snapshot())
             Upsert(device);
-        if (Cameras.Count > 0)
-            StatusText = string.Format(Localizer.Instance["Discovery.Status.FoundFormat"], Cameras.Count);
+        if (NewCameras.Count + AddedCameras.Count > 0)
+            _lastScan = DiscoveryPhase.Quick;
     }
 
-    partial void OnUsernameChanged(string value) => _cache.Username = value;
-    partial void OnPasswordChanged(string value) => _cache.Password = value;
-    partial void OnDeepScanChanged(bool value)
-    {
-        _cache.DeepScan = value;
-        // Deep scan is the gate, the tick list is the destination — flipping the
-        // gate changes what gets swept, so the total has to be recomputed.
-        RecomputeRange();
-    }
-    partial void OnReuseCredentialsChanged(bool value) => _cache.ReuseCredentials = value;
+    // Called when the dialog opens: a fresh session scans straight away; a
+    // reopened one (multi-add) shows what it already found.
+    public Task StartAsync() =>
+        _lastScan == DiscoveryPhase.Idle && !IsScanning ? ScanAsync(deep: false) : Task.CompletedTask;
+
+    partial void OnIsDeepOpenChanged(bool value) => _cache.DeepScan = value;
 
     partial void OnIpRangeTextChanged(string value)
     {
@@ -178,8 +178,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     }
 
     // Folds the ticked subnets and the typed range into the single range the
-    // sweep walks, and reports what that adds up to. Runs per keystroke and per
-    // tick, so it stays pure arithmetic and never touches the network.
+    // sweep walks. Runs per keystroke and per tick — pure arithmetic.
     private void RecomputeRange()
     {
         IpRange? typed = null;
@@ -193,21 +192,14 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         var parts = new List<IpRange>();
         if (typed is not null)
             parts.Add(typed);
-        // Deep scan decides WHETHER to sweep, the tick list decides WHERE. An
-        // untouched dialog therefore stays passive-only, exactly as before.
-        if (DeepScan)
-            parts.AddRange(ScanTargets.Where(t => t.IsSelected).Select(t => t.Target.Range));
+        parts.AddRange(ScanTargets.Where(t => t.IsSelected).Select(t => t.Target.Range));
 
         if (parts.Count == 0)
         {
             _effectiveRange = null;
-            // With no targets to offer, Deep scan still sweeps the subnet the
-            // source works out for itself — say so, rather than leaving the line
-            // blank and letting a 254-host sweep come as a surprise.
-            SweepSummary = DeepScan && ScanTargets.Count == 0
-                ? Localizer.Instance["Discovery.Sweep.SummaryLocal"]
-                : "";
-            IpRangeError = null;
+            // No subnets offered at all: the sweep works out the local /24 itself.
+            SweepSummary = ScanTargets.Count == 0 ? Localizer.Instance["Discovery.Sweep.SummaryLocal"] : "";
+            IpRangeError = ScanTargets.Count == 0 ? null : Localizer.Instance["Discovery.Deep.NothingTicked"];
             return;
         }
 
@@ -218,8 +210,26 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         }
 
         _effectiveRange = combined;
-        SweepSummary = string.Format(Localizer.Instance["Discovery.Sweep.SummaryFormat"], combined.Count);
+        SweepSummary = AddressCount(combined.Count);
         IpRangeError = null;
+    }
+
+    // "1 address" / "5 addresses"; Russian has three forms (1 / 2–4 / 5+).
+    private static string AddressCount(int n)
+    {
+        var key = "Discovery.Sweep.Many";
+        if (Localizer.Instance.Active == LangCode.Russian)
+        {
+            var mod100 = n % 100;
+            var mod10 = n % 10;
+            if (mod10 == 1 && mod100 != 11) key = "Discovery.Sweep.One";
+            else if (mod10 is >= 2 and <= 4 && mod100 is < 12 or > 14) key = "Discovery.Sweep.Few";
+        }
+        else if (n == 1)
+        {
+            key = "Discovery.Sweep.One";
+        }
+        return string.Format(CultureInfo.CurrentCulture, Localizer.Instance[key], n);
     }
 
     private void Reject(IpRangeParseError error)
@@ -227,12 +237,12 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         _effectiveRange = null;
         SweepSummary = "";
         IpRangeError = error == IpRangeParseError.TooLarge
-            ? string.Format(Localizer.Instance["Discovery.IpRange.TooLargeFormat"], IpRange.MaxHosts)
+            ? string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Discovery.IpRange.TooLargeFormat"], IpRange.MaxHosts)
             : Localizer.Instance["Discovery.IpRange.Invalid"];
     }
 
-    // A provider that trips over an exotic adapter must not stop the dialog from
-    // opening — the manual box still works with no targets at all.
+    // A provider that trips over an exotic adapter must not stop the dialog
+    // from opening — the manual range still works with no targets at all.
     private IReadOnlyList<ScanTarget> SafeTargets(IScanTargetProvider provider)
     {
         try
@@ -246,56 +256,68 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanScan))]
-    private async Task ScanAsync()
+    private bool CanRescan() => !IsScanning;
+    private bool CanDeepScan() => !IsScanning && IpRangeError is null;
+
+    [RelayCommand(CanExecute = nameof(CanRescan))]
+    private Task RescanAsync() => ScanAsync(deep: false);
+
+    [RelayCommand(CanExecute = nameof(CanDeepScan))]
+    private Task DeepScanAsync()
     {
-        Cameras.Clear();
-        _rowsByHost.Clear();
-        _fingerprinted.Clear();
-        _cache.Clear();
-        Selected = null;
+        IsDeepOpen = true;
+        return ScanAsync(deep: true);
+    }
+
+    [RelayCommand]
+    private void Stop() => _scanCts?.Cancel();
+
+    [RelayCommand]
+    private void ToggleDeep() => IsDeepOpen = !IsDeepOpen;
+
+    // Quick: passive sources only, starts the list over. Deep: adds the
+    // address sweep and keeps what's already listed.
+    private async Task ScanAsync(bool deep)
+    {
+        if (!deep)
+        {
+            NewCameras.Clear();
+            AddedCameras.Clear();
+            _rowsByHost.Clear();
+            _fingerprinted.Clear();
+            _cache.Clear();
+            ListChanged();
+        }
+        _stopped = false;
+        _failure = null;
         ScanProgress = 0;
-        StatusText = _effectiveRange is { } sweep
-            ? string.Format(Localizer.Instance["Discovery.Status.ScanningRangeFormat"], sweep, sweep.Count)
-            : Localizer.Instance["Discovery.Status.Scanning"];
-        ScanInProgress = true;
 
         _scanCts?.Cancel();
         _scanCts = new CancellationTokenSource();
         var ct = _scanCts.Token;
+        Phase = deep ? DiscoveryPhase.Deep : DiscoveryPhase.Quick;
 
         try
         {
-            // Unticking every target means "don't sweep", and has to be passed
-            // as such: the sweep source enables on DeepScan alone and would fall
-            // back to deriving the local /24, running a 254-host sweep the
-            // dialog just told the user it would not run. When no targets were
-            // offered at all there is nothing to untick, so Deep scan keeps its
-            // original meaning of "sweep whatever subnet you can work out".
-            var doSweep = DeepScan && (_effectiveRange is not null || ScanTargets.Count == 0);
-            var options = new DiscoveryOptions(TimeSpan.FromSeconds(6), doSweep, _effectiveRange);
+            var options = new DiscoveryOptions(TimeSpan.FromSeconds(6), deep, deep ? _effectiveRange : null);
             var progress = new Progress<double>(p => ScanProgress = p);
-
             await foreach (var device in _aggregator.ScanAsync(options, progress, ct).ConfigureAwait(true))
                 Upsert(device);
-
-            StatusText = Cameras.Count == 0
-                ? Localizer.Instance["Discovery.Status.NoResponse"]
-                : string.Format(Localizer.Instance["Discovery.Status.FoundFormat"], Cameras.Count);
         }
         catch (OperationCanceledException)
         {
-            StatusText = Localizer.Instance["Discovery.Status.Cancelled"];
+            _stopped = true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Discovery scan failed");
-            StatusText = string.Format(Localizer.Instance["Discovery.Status.ScanFailedFormat"], ex.Message);
+            _failure = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Discovery.Status.ScanFailedFormat"], ex.Message);
         }
         finally
         {
-            ScanInProgress = false;
+            _lastScan = deep ? DiscoveryPhase.Deep : DiscoveryPhase.Quick;
             ScanProgress = 0;
+            Phase = DiscoveryPhase.Idle;
         }
     }
 
@@ -305,7 +327,7 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     {
         if (_rowsByHost.TryGetValue(device.Host, out var row))
         {
-            row.Device = device;
+            row.Device = row.Device.MergeWith(device);
         }
         else
         {
@@ -314,17 +336,28 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
                 IsAlreadyAdded = _knownHosts.Contains(device.Host),
             };
             _rowsByHost[device.Host] = row;
-            Cameras.Add(row);
+            (row.IsAlreadyAdded ? AddedCameras : NewCameras).Add(row);
+            ListChanged();
         }
 
         _cache.Put(row.Device);
         ScheduleFingerprint(row.Device);
     }
 
+    private void ListChanged()
+    {
+        OnPropertyChanged(nameof(HasNew));
+        OnPropertyChanged(nameof(HasAdded));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ShowEmpty));
+        OnPropertyChanged(nameof(ShowEmptyDeepHint));
+        OnPropertyChanged(nameof(ShowEmptyManualHint));
+    }
+
     // Newer OpenIPC firmwares always run the Majestic web UI, so an HTTP ping
     // identifies them even when they answer neither ONVIF nor mDNS with a
     // model. One bounded background ping per host; on a hit the row upgrades
-    // in place (Majestic protocol + "OpenIPC" label + High confidence).
+    // in place (Majestic protocol + "OpenIPC" label).
     private void ScheduleFingerprint(DiscoveredDevice device)
     {
         if (device.Protocols.HasFlag(DiscoveryProtocol.Majestic) && device.Model is not null)
@@ -368,69 +401,14 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
         }, ct);
     }
 
-    private bool CanScan() => !ScanInProgress && !AddInProgress && IpRangeError is null;
-
-    public async Task<DiscoveryDialogResult?> AddSelectedAsync()
+    // The row's "Add": hand the device (and the login last used this session)
+    // to the camera editor.
+    public DiscoveryDialogResult BuildResult(DiscoveredDeviceRowVm row)
     {
-        var row = Selected;
-        if (row is null) return null;
-
-        var creds = string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password)
+        var creds = string.IsNullOrEmpty(_cache.Username) && string.IsNullOrEmpty(_cache.Password)
             ? null
-            : new CameraCredentials(Username, Password);
-
-        AddInProgress = true;
-        try
-        {
-            // ONVIF device → probe for the real stream URI. Non-ONVIF (sweep/mDNS)
-            // → skip the probe and pre-fill a guessed RTSP URL from the open ports;
-            // the user reviews / tests it in the editor before saving.
-            var onvifUri = row.Device.OnvifServiceUri;
-            if (onvifUri is null)
-            {
-                StatusText = Localizer.Instance["Discovery.Status.ManualAdd"];
-                return new DiscoveryDialogResult(row.Device, GuessRtspUri(row.Device), null, creds);
-            }
-
-            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbingFormat"], row.HostPort);
-            var endpoint = new OnvifEndpoint(onvifUri, creds);
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var probeResult = await _probe.ProbeAsync(endpoint, cts.Token).ConfigureAwait(true);
-
-            StatusText = string.Format(Localizer.Instance["Discovery.Status.ProbeOkFormat"], probeResult.Manufacturer ?? "?", probeResult.Model ?? "").TrimEnd();
-            return new DiscoveryDialogResult(row.Device, probeResult.RtspMainUri, probeResult, creds);
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText = Localizer.Instance["Discovery.Status.Cancelled"];
-            return null;
-        }
-        catch (Exception ex)
-        {
-            // The ONVIF SOAP probe can't run on every platform — the WCF
-            // XmlSerializer stack fails to build on Android (XmlType reflection
-            // error over the generated contract types). Rather than dead-end the
-            // user, degrade to the same guessed-RTSP add we use for non-ONVIF
-            // finds: the camera is added and refined/tested in the editor.
-            _logger.LogWarning(ex, "ONVIF probe failed for {Host}; falling back to guessed RTSP", row.HostPort);
-            StatusText = Localizer.Instance["Discovery.Status.ManualAdd"];
-            return new DiscoveryDialogResult(row.Device, GuessRtspUri(row.Device), null, creds);
-        }
-        finally
-        {
-            AddInProgress = false;
-        }
-    }
-
-    // OpenIPC/Majestic RTSP convention (matches CameraEditor): rtsp://host/ for
-    // the default 554, an explicit port otherwise. The user can refine it.
-    private static Uri GuessRtspUri(DiscoveredDevice device)
-    {
-        var port = device.Ports.Contains(8554) && !device.Ports.Contains(554) ? 8554 : 554;
-        return port == 554
-            ? new Uri($"rtsp://{device.Host}/")
-            : new Uri($"rtsp://{device.Host}:{port}/");
+            : new CameraCredentials(_cache.Username, _cache.Password);
+        return new DiscoveryDialogResult(row.Device, creds);
     }
 
     public void Cancel()
@@ -440,9 +418,9 @@ public sealed partial class DiscoveryDialogViewModel : ViewModelBase
     }
 }
 
-// One auto-detected subnet in the tick list. The callback (rather than the VM
-// watching the collection) keeps the "remember what I unticked" bookkeeping in
-// one place and avoids a CollectionChanged subscription per row.
+// One auto-detected subnet in the deep-scan tick list. The callback (rather
+// than the VM watching the collection) keeps the "remember what I unticked"
+// bookkeeping in one place.
 public sealed partial class ScanTargetRowVm : ViewModelBase
 {
     private readonly Action<ScanTargetRowVm> _onToggled;
@@ -462,73 +440,87 @@ public sealed partial class ScanTargetRowVm : ViewModelBase
 
     public string Cidr => Target.Cidr;
 
-    // e.g. "Ethernet 2 · this machine's network · 254 addresses" — the origin is
-    // the part worth reading: a routed subnet is one passive discovery can never
-    // see, which is exactly why it is offered here.
+    // "Ethernet 2 · this network" / "through a VPN or route".
     public string Detail => string.Format(
+        CultureInfo.CurrentCulture,
         Localizer.Instance["Discovery.Target.DetailFormat"],
         Target.InterfaceName,
         Localizer.Instance[Target.Origin == ScanTargetOrigin.LocalSubnet
             ? "Discovery.Target.Local"
-            : "Discovery.Target.Routed"],
-        Target.Range.Count);
+            : "Discovery.Target.Routed"]);
 }
+
+public enum DiscoveredKind { OpenIpc, Onvif, Rtsp, Other }
 
 public sealed partial class DiscoveredDeviceRowVm : ViewModelBase
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DisplayName))]
-    [NotifyPropertyChangedFor(nameof(Subtitle))]
-    [NotifyPropertyChangedFor(nameof(HostPort))]
-    [NotifyPropertyChangedFor(nameof(ProtocolsText))]
-    [NotifyPropertyChangedFor(nameof(ConfidenceText))]
+    [NotifyPropertyChangedFor(nameof(Kind), nameof(IsOpenIpc), nameof(IsOnvif), nameof(IsGeneric),
+        nameof(Title), nameof(Subtitle), nameof(HostPort), nameof(Tags))]
     private DiscoveredDevice _device;
 
-    // A camera with this host already exists in the library — shown as a badge
-    // so the multi-add flow makes it obvious what's left to add.
+    // A camera with this host already exists in the library.
     [ObservableProperty] private bool _isAlreadyAdded;
 
     public DiscoveredDeviceRowVm(DiscoveredDevice device) => _device = device;
 
     public string Host => Device.Host;
-    public string DisplayName => Device.Name ?? Device.Model ?? Device.Host;
-    public string Subtitle => Device.Model ?? Localizer.Instance["Discovery.UnknownModel"];
+
+    public DiscoveredKind Kind =>
+        Device.Protocols.HasFlag(DiscoveryProtocol.Majestic) ? DiscoveredKind.OpenIpc
+        : Device.Protocols.HasFlag(DiscoveryProtocol.Onvif) ? DiscoveredKind.Onvif
+        : Device.Protocols.HasFlag(DiscoveryProtocol.Rtsp) ? DiscoveredKind.Rtsp
+        : DiscoveredKind.Other;
+
+    public bool IsOpenIpc => Kind == DiscoveredKind.OpenIpc;
+    public bool IsOnvif => Kind == DiscoveredKind.Onvif;
+    public bool IsGeneric => Kind is DiscoveredKind.Rtsp or DiscoveredKind.Other;
+
+    public string Title => Device.Model ?? Device.Name ?? Localizer.Instance[Kind switch
+    {
+        DiscoveredKind.OpenIpc => "Discovery.Kind.OpenIpc",
+        DiscoveredKind.Onvif => "Discovery.Kind.Onvif",
+        _ => "Discovery.Kind.Unknown",
+    }];
+
+    // What kind of thing it is, in words (the model is already the title).
+    public string Subtitle => Kind switch
+    {
+        DiscoveredKind.OpenIpc => "OpenIPC · Majestic",
+        DiscoveredKind.Onvif => Device.Name is { } n && n != Device.Model ? $"ONVIF · {n}" : Localizer.Instance["Discovery.Kind.Onvif"],
+        DiscoveredKind.Rtsp => Localizer.Instance["Discovery.Kind.RtspOnly"],
+        _ => Localizer.Instance["Discovery.Kind.HttpOnly"],
+    };
 
     public string HostPort
     {
         get
         {
-            var port = Device.OnvifServiceUri?.Port ?? (Device.Ports.Count > 0 ? Device.Ports.First() : 0);
+            var port = Device.OnvifServiceUri?.Port ?? 0;
             return port is 0 or 80 ? Device.Host : $"{Device.Host}:{port}";
         }
     }
 
-    // e.g. "ONVIF · RTSP" — how the device was detected.
-    public string ProtocolsText => string.Join(" · ", DescribeProtocols(Device.Protocols));
-
-    public string ConfidenceText => Localizer.Instance[Device.Confidence switch
+    // How the device was found, as small tags.
+    public IReadOnlyList<string> Tags
     {
-        DiscoveryConfidence.High => "Discovery.Confidence.High",
-        DiscoveryConfidence.Medium => "Discovery.Confidence.Medium",
-        _ => "Discovery.Confidence.Low",
-    }];
-
-    private static IEnumerable<string> DescribeProtocols(DiscoveryProtocol p)
-    {
-        if (p.HasFlag(DiscoveryProtocol.Onvif)) yield return "ONVIF";
-        if (p.HasFlag(DiscoveryProtocol.Mdns)) yield return "mDNS";
-        if (p.HasFlag(DiscoveryProtocol.Majestic)) yield return "Majestic";
-        if (p.HasFlag(DiscoveryProtocol.Rtsp)) yield return "RTSP";
-        if (p.HasFlag(DiscoveryProtocol.Http)) yield return "HTTP";
+        get
+        {
+            var p = Device.Protocols;
+            var tags = new List<string>();
+            if (p.HasFlag(DiscoveryProtocol.Majestic)) tags.Add("OpenIPC");
+            if (p.HasFlag(DiscoveryProtocol.Onvif)) tags.Add("ONVIF");
+            if (p.HasFlag(DiscoveryProtocol.Mdns)) tags.Add("mDNS");
+            if (p.HasFlag(DiscoveryProtocol.Rtsp)) tags.Add("RTSP");
+            return tags;
+        }
     }
 }
 
-// The dialog's output: the picked device, the RTSP URL to pre-fill (from the
-// ONVIF probe when available, otherwise a sensible guess for non-ONVIF devices),
-// the ONVIF probe result (null for non-ONVIF — no PTZ/profile metadata), and any
-// credentials the user typed.
+// The dialog's output: the picked device and the login last used this session
+// (the editor pre-fills and connects with it) — or ManualEntry when the user
+// chose to type an address instead.
 public sealed record DiscoveryDialogResult(
-    DiscoveredDevice Device,
-    Uri RtspMainUri,
-    OnvifProbeResult? Probe,
-    CameraCredentials? Credentials);
+    DiscoveredDevice? Device,
+    CameraCredentials? Credentials,
+    bool ManualEntry = false);

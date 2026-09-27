@@ -6,11 +6,14 @@
         x:Class="OpenIPC.Viewer.App.Views.Dialogs.DiscoveryDialogWindow"
         x:DataType="vm:DiscoveryDialogViewModel"
         Title="{Binding [Discovery.Title], Source={x:Static svc:Localizer.Instance}}"
-        Width="560" Height="660"
+        Width="560" Height="620"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
+        WindowDecorations="BorderOnly"
         Background="{StaticResource Bg1Brush}">
 
+  <!-- No native title bar: the dialog draws its own dark header (title,
+       close box, drag handle). The OS keeps the border and shadow. -->
   <dialogs:DiscoveryDialogContent Name="InnerContent" />
 
 </Window>

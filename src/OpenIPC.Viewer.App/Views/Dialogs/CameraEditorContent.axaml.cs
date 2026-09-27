@@ -66,6 +66,8 @@ public sealed partial class CameraEditorContent : UserControl
             {
                 await vm.LoadGroupsAsync(CancellationToken.None);
                 if (vm.IsNew) address.Focus();
+                if (vm.AutoConnect && vm.ConnectCommand.CanExecute(null))
+                    await vm.ConnectCommand.ExecuteAsync(null);
             }
         };
     }

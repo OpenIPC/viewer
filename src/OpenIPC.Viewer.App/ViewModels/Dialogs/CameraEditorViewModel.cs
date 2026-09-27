@@ -44,6 +44,16 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     // Library "Add camera" sets this so the header offers the other ways in.
     [ObservableProperty] private bool _showAlternatives;
 
+    // Opened from discovery: run Connect as soon as the dialog shows.
+    public bool AutoConnect { get; set; }
+
+    // A name to start with that Connect may still replace with a better one.
+    public void SuggestName(string name)
+    {
+        Name = name;
+        _autoName = name;
+    }
+
     public string Title => IsNew
         ? Localizer.Instance["CameraEditor.Title.Add"]
         : string.Format(CultureInfo.CurrentCulture, Localizer.Instance["CameraEditor.Title.EditFormat"],
@@ -452,6 +462,8 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
         (FailTitle, FailHint) = failure switch
         {
             CameraConnectFailure.Unreachable => (Localizer.Instance["CameraEditor.Fail.Unreachable"], Localizer.Instance["CameraEditor.Fail.UnreachableHint"]),
+            CameraConnectFailure.Unauthorized when Credentials() is null => (Localizer.Instance["CameraEditor.Fail.AuthNeeded"],
+                Localizer.Instance[isMajestic ? "CameraEditor.Fail.AuthNeededHintOpenIpc" : "CameraEditor.Fail.AuthNeededHint"]),
             CameraConnectFailure.Unauthorized => (Localizer.Instance["CameraEditor.Fail.Auth"],
                 Localizer.Instance[isMajestic ? "CameraEditor.Fail.AuthHintOpenIpc" : "CameraEditor.Fail.AuthHint"]),
             CameraConnectFailure.Timeout => (Localizer.Instance["CameraEditor.Fail.Timeout"], Localizer.Instance["CameraEditor.Fail.NoVideoHint"]),
@@ -508,6 +520,7 @@ public sealed partial class CameraEditorViewModel : ViewModelBase
     private static bool IsTrivialRtsp(string text, string host) =>
         Uri.TryCreate(text.Trim(), UriKind.Absolute, out var u)
         && u.Scheme == "rtsp" && string.Equals(u.Host, host, StringComparison.OrdinalIgnoreCase)
+        && u.Port is -1 or 554
         && (u.AbsolutePath is "" or "/") && string.IsNullOrEmpty(u.Query);
 
     // Editing the address or login invalidates a previous Connect result.
