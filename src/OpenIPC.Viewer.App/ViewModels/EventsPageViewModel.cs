@@ -447,6 +447,7 @@ public sealed class EventEpisodeRow
             ? $"{LatestLocal:HH:mm:ss}"
             : $"{earliestLocal:HH:mm} – {LatestLocal:HH:mm}";
         Description = Describe(newestFirst);
+        Classes = newestFirst[0].Kind == EventKind.Detection ? MaxClasses(newestFirst) : Array.Empty<DetectionClassChip>();
         Tooltip = string.Join("  ·  ", new[] { latest.Source, CountLabel }.Where(s => !string.IsNullOrEmpty(s)));
     }
 
@@ -457,6 +458,11 @@ public sealed class EventEpisodeRow
     public DateTime LatestLocal { get; }
     public string TimeLabel { get; }
     public string Description { get; }
+
+    // Detection: one icon chip per class ("🚗 машина ×4"); empty for motion,
+    // which shows Description instead.
+    public IReadOnlyList<DetectionClassChip> Classes { get; }
+    public bool HasClasses => Classes.Count > 0;
     public string Tooltip { get; }
     public Recording? Recording { get; }
     public TimeSpan? RecordingOffset { get; }
@@ -470,6 +476,17 @@ public sealed class EventEpisodeRow
     // Detection: per-class maximum across the burst ("car ×5, person ×1"),
     // with class names localized where we have them. Motion: its summary or
     // a plain "motion".
+    private static IReadOnlyList<DetectionClassChip> MaxClasses(IReadOnlyList<CameraEvent> events)
+    {
+        var max = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in events)
+            foreach (var (label, count) in DetectionClasses.Parse(e.Summary))
+                max[label] = max.TryGetValue(label, out var cur) ? Math.Max(cur, count) : count;
+        return max.OrderByDescending(kv => kv.Value)
+            .Select(kv => new DetectionClassChip(kv.Key, kv.Value, DetectionClasses.IconKey(kv.Key)))
+            .ToList();
+    }
+
     private static string Describe(IReadOnlyList<CameraEvent> events)
     {
         if (events[0].Kind != EventKind.Detection)
@@ -478,27 +495,9 @@ public sealed class EventEpisodeRow
 
         var max = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var e in events)
-        {
-            if (string.IsNullOrWhiteSpace(e.Summary)) continue;
-            foreach (var part in e.Summary.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                var bits = part.Split('×', StringSplitOptions.TrimEntries);
-                var label = bits[0];
-                var count = bits.Length > 1 && int.TryParse(bits[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var c) ? c : 1;
-                if (label.Length == 0) continue;
+            foreach (var (label, count) in DetectionClasses.Parse(e.Summary))
                 max[label] = max.TryGetValue(label, out var cur) ? Math.Max(cur, count) : count;
-            }
-        }
         if (max.Count == 0) return Localizer.Instance["Events.Kind.Detection"];
-        return string.Join(", ", max.OrderByDescending(kv => kv.Value).Select(kv => $"{ClassName(kv.Key)} ×{kv.Value}"));
-    }
-
-    // Localizer returns the key itself when a translation is missing — fall
-    // back to the model's own class label then.
-    private static string ClassName(string label)
-    {
-        var key = "Coco." + label.ToLowerInvariant();
-        var text = Localizer.Instance[key];
-        return text == key ? label : text;
+        return string.Join(", ", max.OrderByDescending(kv => kv.Value).Select(kv => $"{DetectionClasses.Localize(kv.Key)} ×{kv.Value}"));
     }
 }

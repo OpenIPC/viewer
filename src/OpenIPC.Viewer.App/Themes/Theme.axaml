@@ -129,4 +129,9 @@
   <StreamGeometry x:Key="IconRefresh">M21,12 a9,9 0 1 1 -9,-9 c2.52,0 4.93,1 6.74,2.74 L21,8 M21,3 v5 h-5</StreamGeometry>
   <!-- Events page. IconWalk is Tabler "walk" (MIT) — motion events. -->
   <StreamGeometry x:Key="IconWalk">M13,4 A1,1 0 1 0 15,4 A1,1 0 1 0 13,4 Z M7,21 L10,17 M16,21 L14,17 L11,14 L12,8 M6,12 L8,9 L12,8 L15,11 L18,12</StreamGeometry>
+  <!-- AI detection classes. Lucide "user", "car", "truck", "bike". -->
+  <StreamGeometry x:Key="IconPerson">M19,21 v-2 a4,4 0 0 0 -4,-4 H9 a4,4 0 0 0 -4,4 v2 M8,7 A4,4 0 1 0 16,7 A4,4 0 1 0 8,7 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconCar">M19,17 h2 c0.6,0 1,-0.4 1,-1 v-3 c0,-0.9 -0.7,-1.7 -1.5,-1.9 C18.7,10.6 16,10 16,10 c0,0 -1.3,-1.4 -2.2,-2.3 c-0.5,-0.4 -1.1,-0.7 -1.8,-0.7 H5 c-0.6,0 -1.1,0.4 -1.4,0.9 l-1.4,2.9 A3.7,3.7 0 0 0 2,12 v4 c0,0.6 0.4,1 1,1 h2 M5,17 A2,2 0 1 0 9,17 A2,2 0 1 0 5,17 Z M9,17 H15 M15,17 A2,2 0 1 0 19,17 A2,2 0 1 0 15,17 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconTruck">M14,18 V6 a2,2 0 0 0 -2,-2 H4 a2,2 0 0 0 -2,2 v11 a1,1 0 0 0 1,1 h2 M15,18 H9 M19,18 h2 a1,1 0 0 0 1,-1 v-3.65 a1,1 0 0 0 -0.22,-0.624 l-3.48,-4.35 A1,1 0 0 0 17.52,8 H14 M15,18 A2,2 0 1 0 19,18 A2,2 0 1 0 15,18 Z M5,18 A2,2 0 1 0 9,18 A2,2 0 1 0 5,18 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconBike">M2,17.5 A3.5,3.5 0 1 0 9,17.5 A3.5,3.5 0 1 0 2,17.5 Z M15,17.5 A3.5,3.5 0 1 0 22,17.5 A3.5,3.5 0 1 0 15,17.5 Z M14,5 A1,1 0 1 0 16,5 A1,1 0 1 0 14,5 Z M12,17.5 V14 L9,11 L13,8 L15,11 H17</StreamGeometry>
 </ResourceDictionary>

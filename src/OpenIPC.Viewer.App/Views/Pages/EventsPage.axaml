@@ -183,9 +183,36 @@
                       <TextBlock Text="{Binding CameraName}" FontWeight="SemiBold" />
                     </Button>
                     <TextBlock Text="{Binding Description}"
+                               IsVisible="{Binding !HasClasses}"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
+                    <!-- Detected classes as icon chips. -->
+                    <ItemsControl ItemsSource="{Binding Classes}" IsVisible="{Binding HasClasses}"
+                                  VerticalAlignment="Center">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="svc:DetectionClassChip">
+                          <Border Background="{StaticResource Bg3Brush}" CornerRadius="999" Padding="7,1">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                              <Panel Width="14" Height="14" VerticalAlignment="Center">
+                                <Path Classes="lucide" Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyConverter.Instance}}"
+                                      Stroke="{StaticResource TextSecondaryBrush}" MaxWidth="14" MaxHeight="14"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Panel>
+                              <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSizeSm}"
+                                         Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding CountLabel}" FontSize="{StaticResource FontSizeSm}"
+                                         Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                     <Border IsVisible="{Binding IsBurst}"
                             Background="{StaticResource Bg3Brush}" CornerRadius="4" Padding="6,1"
                             VerticalAlignment="Center">

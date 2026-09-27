@@ -15,6 +15,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     IRecipient<OpenCameraMessage>,
     IRecipient<GoBackToLibraryMessage>,
     IRecipient<OpenRecordingMessage>,
+    IRecipient<ShowDetectionEventsMessage>,
     IRecipient<GoBackToRecordingsMessage>,
     IRecipient<ToggleKioskMessage>
 {
@@ -96,6 +97,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         WeakReferenceMessenger.Default.Register<OpenCameraMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);
         WeakReferenceMessenger.Default.Register<OpenRecordingMessage>(this);
+        WeakReferenceMessenger.Default.Register<ShowDetectionEventsMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToRecordingsMessage>(this);
         WeakReferenceMessenger.Default.Register<ToggleKioskMessage>(this);
 
@@ -213,6 +215,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         await DisposeActiveSingleCameraAsync().ConfigureAwait(true);
         CurrentPage = _singleCameraOrigin ?? Library;
         _singleCameraOrigin = null;
+    }
+
+    public void Receive(ShowDetectionEventsMessage message)
+    {
+        Events.KindFilter = EventKindFilter.Detection;
+        Navigate("events");
     }
 
     public void Receive(OpenRecordingMessage message)

@@ -69,6 +69,23 @@ public sealed class GridSizeIconConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+// Resource key (e.g. "IconCar") → the theme resource, so view models can pick
+// an icon without referencing Avalonia types.
+public sealed class ResourceKeyConverter : IValueConverter
+{
+    public static readonly ResourceKeyConverter Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not string key) return null;
+        object? res = null;
+        return Application.Current?.Resources.TryGetResource(key, null, out res) == true ? res : null;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 internal static class ThemeResource
 {
     public static IBrush Brush(string key)

@@ -193,6 +193,7 @@ public static class SharedComposition
         services.AddSingleton<SingleCameraPageFactory>();
         services.AddSingleton<RecordingPlayerPageFactory>();
         services.AddSingleton<CameraEditorFactory>();
+        services.AddSingleton<CameraEditService>();
         services.AddSingleton<DiscoveryDialogFactory>();
         services.AddSingleton<DiscoverySessionCache>();
         services.AddSingleton<FirmwareDialogFactory>();

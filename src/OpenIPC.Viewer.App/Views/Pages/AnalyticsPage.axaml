@@ -2,98 +2,311 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:conv="using:OpenIPC.Viewer.App.Converters"
              x:Class="OpenIPC.Viewer.App.Views.Pages.AnalyticsPage"
              x:DataType="vm:AnalyticsPageViewModel">
 
+  <UserControl.Styles>
+    <Style Selector="Border.tile">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderWeakBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="MinWidth" Value="150" />
+    </Style>
+    <Style Selector="Border.tile TextBlock.k">
+      <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Border.tile TextBlock.v">
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Border.status">
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderWeakBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Border.class-chip">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="8,2" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource AccentHoverBrush}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid RowDefinitions="Auto,*">
 
-    <!-- Header -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-      <TextBlock Grid.Column="0"
-                 Text="{Binding Title}"
+    <!-- Header: title + engine status badge, refresh as an icon. -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+      <TextBlock Text="{Binding Title}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
                  Foreground="{StaticResource TextPrimaryBrush}"
                  VerticalAlignment="Center" />
-      <Button Grid.Column="1"
-              Content="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}"
+      <Panel Grid.Column="1" Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+        <Border Classes="status" Background="#2622c55e" IsVisible="{Binding IsReady}">
+          <TextBlock Text="{Binding StatusBadge, StringFormat='● {0}'}" FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource SuccessBrush}" />
+        </Border>
+        <Border Classes="status" Background="#26f59e0b" IsVisible="{Binding IsBusy}">
+          <TextBlock Text="{Binding StatusBadge, StringFormat='● {0}'}" FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource WarningBrush}" />
+        </Border>
+        <Border Classes="status" Background="#26ef4444" IsVisible="{Binding IsFailed}">
+          <TextBlock Text="{Binding StatusBadge, StringFormat='● {0}'}" FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource DangerBrush}" />
+        </Border>
+        <Border Classes="status" Background="{StaticResource Bg3Brush}" IsVisible="{Binding IsNotStarted}">
+          <TextBlock Text="{Binding StatusBadge, StringFormat='○ {0}'}" FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextSecondaryBrush}" />
+        </Border>
+      </Panel>
+      <Button Grid.Column="2" Classes="row-icon"
               Command="{Binding RefreshCommand}"
-              Padding="10,6" CornerRadius="6"
-              Background="{StaticResource Bg2Brush}"
-              BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
-              Foreground="{StaticResource TextPrimaryBrush}" />
+              ToolTip.Tip="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}">
+        <Path Classes="lucide" Data="{StaticResource IconRefresh}"
+              Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16" />
+      </Button>
     </Grid>
 
     <ScrollViewer Grid.Row="1">
-      <StackPanel Spacing="16">
+      <StackPanel Spacing="20">
 
-        <!-- Overview / diagnostics -->
-        <Border Background="{StaticResource Bg2Brush}" CornerRadius="8" Padding="16">
-          <StackPanel Spacing="10">
-            <TextBlock Text="{Binding [Analytics.Overview], Source={x:Static svc:Localizer.Instance}}"
-                       FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Analytics.Status], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding EngineStatus}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="Medium" />
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Analytics.Provider], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ActiveProvider}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Analytics.ActiveCameras], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveCameras}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [Analytics.Processed], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FramesProcessed}" Foreground="{StaticResource TextPrimaryBrush}" />
-              <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [Analytics.Dropped], Source={x:Static svc:Localizer.Instance}}" Foreground="{StaticResource TextSecondaryBrush}" />
-              <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FramesDropped}" Foreground="{StaticResource TextPrimaryBrush}" />
-            </Grid>
-            <Grid ColumnDefinitions="*,*">
-              <TextBlock Grid.Column="0" Foreground="{StaticResource TextSecondaryBrush}">
-                <Run Text="{Binding [Analytics.Queue], Source={x:Static svc:Localizer.Instance}}" />
-                <Run Text="{Binding QueueDepth}" Foreground="{StaticResource TextPrimaryBrush}" />
-              </TextBlock>
-              <TextBlock Grid.Column="1" Foreground="{StaticResource TextSecondaryBrush}">
-                <Run Text="{Binding [Analytics.Latency], Source={x:Static svc:Localizer.Instance}}" />
-                <Run Text="{Binding AverageLatencyMs, StringFormat='{}{0:F0} ms'}" Foreground="{StaticResource TextPrimaryBrush}" />
-              </TextBlock>
-            </Grid>
-          </StackPanel>
+        <!-- Engine: live tiles, or how it starts when it isn't running. -->
+        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" IsVisible="{Binding ShowTiles}">
+          <Border Classes="tile">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="k" Text="{Binding [Analytics.Tile.Cameras], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Classes="v" Text="{Binding ActiveCameras}" />
+            </StackPanel>
+          </Border>
+          <Border Classes="tile">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="k" Text="{Binding [Analytics.Tile.Processed], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Classes="v" Text="{Binding FramesProcessed}" />
+            </StackPanel>
+          </Border>
+          <Border Classes="tile">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="k" Text="{Binding [Analytics.Tile.Dropped], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Classes="v" Text="{Binding DroppedShare}" />
+            </StackPanel>
+          </Border>
+          <Border Classes="tile">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="k" Text="{Binding [Analytics.Tile.Latency], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Classes="v" Text="{Binding Latency}" />
+            </StackPanel>
+          </Border>
+          <Border Classes="tile">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="k" Text="{Binding [Analytics.Tile.Queue], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Classes="v" Text="{Binding QueueDepth}" />
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+        <Border Classes="card" Padding="14,10" IsVisible="{Binding IsNotStarted}">
+          <Grid ColumnDefinitions="Auto,*">
+            <Path Classes="lucide" Data="{StaticResource IconAbout}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16"
+                  VerticalAlignment="Top" Margin="0,2,10,0" />
+            <TextBlock Grid.Column="1" TextWrapping="Wrap"
+                       Text="{Binding [Analytics.NotStartedHint], Source={x:Static svc:Localizer.Instance}}"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+          </Grid>
         </Border>
 
-        <!-- Cameras with analytics on -->
-        <TextBlock Text="{Binding [Analytics.Cameras], Source={x:Static svc:Localizer.Instance}}"
-                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-        <ItemsControl ItemsSource="{Binding Cameras}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:AnalyticsCameraRow">
-              <Border Background="{StaticResource Bg2Brush}" CornerRadius="6" Padding="12" Margin="0,0,0,6">
-                <Grid ColumnDefinitions="*,Auto">
-                  <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding Name}" FontWeight="Medium" Foreground="{StaticResource TextPrimaryBrush}" />
-                    <TextBlock Text="{Binding Classes}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" TextWrapping="Wrap" />
+        <!-- Detection on cameras -->
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding [Analytics.Cameras], Source={x:Static svc:Localizer.Instance}}"
+                       FontWeight="SemiBold" FontSize="{StaticResource FontSizeMd}"
+                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Padding="10,6" CornerRadius="6"
+                    Background="{StaticResource Bg2Brush}"
+                    BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Classes="lucide" Data="{StaticResource IconPlus}"
+                      Stroke="{StaticResource TextPrimaryBrush}" Width="12" Height="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding [Analytics.EnableOnCamera], Source={x:Static svc:Localizer.Instance}}"
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+              </StackPanel>
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                  <StackPanel Width="280" Spacing="8">
+                    <TextBox Text="{Binding EnableSearch, Mode=TwoWay}" Classes="clearButton"
+                             VerticalContentAlignment="Center"
+                             PlaceholderText="{Binding [Analytics.EnableSearch], Source={x:Static svc:Localizer.Instance}}">
+                      <TextBox.InnerLeftContent>
+                        <Path Classes="lucide" Data="{StaticResource IconSearch}"
+                              Stroke="{StaticResource TextTertiaryBrush}"
+                              Width="14" Height="14" Margin="10,0,0,0" VerticalAlignment="Center" />
+                      </TextBox.InnerLeftContent>
+                    </TextBox>
+                    <ScrollViewer MaxHeight="300">
+                      <ItemsControl ItemsSource="{Binding EnableCandidates}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate DataType="vm:AiEnableCandidate">
+                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                    Background="Transparent" BorderThickness="0" Padding="8,5" CornerRadius="6"
+                                    Command="{Binding $parent[ItemsControl].((vm:AnalyticsPageViewModel)DataContext).EnableCameraCommand}"
+                                    CommandParameter="{Binding}">
+                              <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                           Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Host}" Margin="8,0,0,0"
+                                           FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                           Foreground="{StaticResource TextTertiaryBrush}" />
+                              </Grid>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
                   </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
-                    <TextBlock Text="{Binding Fps, StringFormat='{}{0} fps'}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" HorizontalAlignment="Right" />
-                    <TextBlock Text="{Binding Threshold, StringFormat='≥ {0:F2}'}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" HorizontalAlignment="Right" />
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+          </Grid>
 
-        <!-- Recent detection events -->
-        <TextBlock Text="{Binding [Analytics.RecentDetections], Source={x:Static svc:Localizer.Instance}}"
-                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
-        <ItemsControl ItemsSource="{Binding RecentDetections}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="vm:DetectionEventRow">
-              <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
-                <TextBlock Grid.Column="0" Text="{Binding CameraName}" FontWeight="Medium" Foreground="{StaticResource TextPrimaryBrush}" MinWidth="120" />
-                <TextBlock Grid.Column="1" Text="{Binding Summary}" Foreground="{StaticResource TextSecondaryBrush}" Margin="8,0,0,0" />
-                <TextBlock Grid.Column="2" Text="{Binding OccurredAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
-                           Foreground="{StaticResource TextTertiaryBrush}" FontFamily="{StaticResource FontMono}" FontSize="11" />
-              </Grid>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+          <Border Classes="card" Padding="14,12" IsVisible="{Binding !HasCameras}">
+            <TextBlock TextWrapping="Wrap"
+                       Text="{Binding [Analytics.NoCameras], Source={x:Static svc:Localizer.Instance}}"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+          </Border>
+
+          <Border Classes="card" Padding="4" IsVisible="{Binding HasCameras}">
+            <ItemsControl ItemsSource="{Binding Cameras}" Grid.IsSharedSizeScope="True">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:AiCameraRow">
+                  <Grid Margin="8,6">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="Settings" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ToggleSwitch IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                  OnContent="" OffContent="" MinWidth="0"
+                                  VerticalAlignment="Center" Margin="0,0,8,0" />
+
+                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                      <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4">
+                        <TextBlock IsVisible="{Binding AllClasses}"
+                                   Text="{Binding [Analytics.AllClasses], Source={x:Static svc:Localizer.Instance}}"
+                                   FontSize="{StaticResource FontSizeSm}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <ItemsControl ItemsSource="{Binding Classes}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="svc:DetectionClassChip">
+                              <Border Classes="class-chip">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                  <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                    <Path Classes="lucide" Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyConverter.Instance}}"
+                                          Stroke="{StaticResource TextSecondaryBrush}" MaxWidth="12" MaxHeight="12"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                  </Panel>
+                                  <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSizeSm}"
+                                             Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                </StackPanel>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </WrapPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
+                                VerticalAlignment="Center" Margin="12,0,0,0">
+                      <TextBlock Text="{Binding SettingsLabel}" VerticalAlignment="Center"
+                                 FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                      <Border IsVisible="{Binding AutoRecord}" Background="#26ef4444"
+                              CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                        <TextBlock Text="● REC" FontSize="11" Foreground="{StaticResource DangerBrush}" />
+                      </Border>
+                      <TextBlock Text="{Binding Detections24h}" VerticalAlignment="Center"
+                                 FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                 Foreground="{StaticResource TextTertiaryBrush}" />
+                    </StackPanel>
+
+                    <Button Grid.Column="3" Margin="12,0,0,0" Padding="10,5" CornerRadius="6"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            Content="{Binding [Analytics.Configure], Source={x:Static svc:Localizer.Instance}}"
+                            Command="{Binding $parent[ItemsControl].((vm:AnalyticsPageViewModel)DataContext).ConfigureCameraCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+        </StackPanel>
+
+        <!-- Last 24 hours: which classes showed up, with a way into Events. -->
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding [Analytics.RecentDetections], Source={x:Static svc:Localizer.Instance}}"
+                       FontWeight="SemiBold" FontSize="{StaticResource FontSizeMd}"
+                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="link"
+                    Command="{Binding ShowAllDetectionsCommand}"
+                    Content="{Binding [Analytics.AllDetections], Source={x:Static svc:Localizer.Instance}}" />
+          </Grid>
+          <TextBlock IsVisible="{Binding !HasClassSummary}"
+                     Text="{Binding [Analytics.NoDetections24h], Source={x:Static svc:Localizer.Instance}}"
+                     Foreground="{StaticResource TextSecondaryBrush}" />
+          <ItemsControl ItemsSource="{Binding ClassSummary}" IsVisible="{Binding HasClassSummary}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="svc:DetectionClassChip">
+                <Border Classes="tile" MinWidth="0" Padding="12,8">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Panel Width="18" Height="18" VerticalAlignment="Center">
+                      <Path Classes="lucide" Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyConverter.Instance}}"
+                            Stroke="{StaticResource AccentHoverBrush}" MaxWidth="18" MaxHeight="18"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Panel>
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <TextBlock Text="{Binding Count}" VerticalAlignment="Center"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
 
       </StackPanel>
     </ScrollViewer>

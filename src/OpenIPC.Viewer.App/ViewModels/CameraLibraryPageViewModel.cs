@@ -54,6 +54,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private readonly ManageGroupsDialogFactory _manageGroupsFactory;
     private bool _autoScanRanThisSession;
     private readonly ILayoutRepository _layouts;
+    private readonly CameraEditService _editService;
     private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
     private IReadOnlyList<GridLayout> _allLayouts = Array.Empty<GridLayout>();
     private Dictionary<GroupId, string> _groupNames = new();
@@ -176,6 +177,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         IReachabilityProbe reachability,
         CameraStatusRegistry statusRegistry,
         ILayoutRepository layouts,
+        CameraEditService editService,
         ILogger<CameraLibraryPageViewModel> logger)
     {
         _directory = directory;
@@ -191,6 +193,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         _reachability = reachability;
         _statusRegistry = statusRegistry;
         _layouts = layouts;
+        _editService = editService;
         _logger = logger;
         WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
         // Toggling "risky device tools" in Settings shows/hides the Files button
@@ -700,22 +703,8 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         if (row is null)
             return;
 
-        var creds = await _directory.GetCredentialsAsync(row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
-        var sshCreds = await _directory.GetSshCredentialsAsync(row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
-        var editor = _editorFactory.CreateForEdit(row.Camera, creds, sshCreds);
-        var result = await _dialogs.ShowCameraEditorAsync(editor).ConfigureAwait(true);
-        if (result?.UpdateRequest is not { } req)
-            return;
-
-        try
-        {
-            await _directory.UpdateAsync(row.Camera.Id, req, CancellationToken.None).ConfigureAwait(true);
+        if (await _editService.EditAsync(row.Camera).ConfigureAwait(true))
             await LoadAsync(CancellationToken.None).ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update camera {Id}", row.Camera.Id);
-        }
     }
 
     [RelayCommand]

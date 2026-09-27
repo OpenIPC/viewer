@@ -15,6 +15,9 @@ public sealed record OpenRecordingMessage(Recording Recording, string CameraName
 
 public sealed record GoBackToRecordingsMessage;
 
+// AI page → Events filtered to AI detections.
+public sealed record ShowDetectionEventsMessage;
+
 public sealed record WindowMinimizedMessage;
 
 public sealed record WindowRestoredMessage;
