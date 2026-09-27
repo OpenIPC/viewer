@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,6 +13,7 @@ using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels.Dialogs;
 using OpenIPC.Viewer.Core.Entities;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
+using OpenIPC.Viewer.Core.Persistence;
 using OpenIPC.Viewer.Core.Services;
 using OpenIPC.Viewer.Core.Status;
 
@@ -50,15 +53,114 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private readonly CameraStatusRegistry _statusRegistry;
     private readonly ManageGroupsDialogFactory _manageGroupsFactory;
     private bool _autoScanRanThisSession;
-    private System.Collections.Generic.IReadOnlyList<Camera> _allCameras = System.Array.Empty<Camera>();
-    // CameraIds in the active layout (Phase 19.1) — drives the "in grid" checkbox.
-    private System.Collections.Generic.HashSet<CameraId> _gridMembership = new();
+    private readonly ILayoutRepository _layouts;
+    private IReadOnlyList<Camera> _allCameras = Array.Empty<Camera>();
+    private IReadOnlyList<GridLayout> _allLayouts = Array.Empty<GridLayout>();
+    private Dictionary<GroupId, string> _groupNames = new();
 
     public ObservableCollection<CameraGroup?> AvailableGroups { get; } = new();
 
-    [ObservableProperty] private CameraGroup? _selectedGroupFilter;
+    // Every layout, for the row menu's "Layouts ▸" submenu.
+    public IReadOnlyList<GridLayout> AllLayouts => _allLayouts;
 
-    partial void OnSelectedGroupFilterChanged(CameraGroup? value) => RefilterCameras();
+    // --- Filters ------------------------------------------------------------
+    // Rows are built once per load; group / search / status only re-slice them
+    // into PageRows, so typing in the search box doesn't re-probe every camera.
+    [ObservableProperty] private CameraGroup? _selectedGroupFilter;
+    [ObservableProperty] private string _searchText = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterAll))]
+    [NotifyPropertyChangedFor(nameof(IsFilterOnline))]
+    [NotifyPropertyChangedFor(nameof(IsFilterOffline))]
+    [NotifyPropertyChangedFor(nameof(IsFilterAttention))]
+    private LibraryStatusFilter _statusFilter;
+
+    // One flag per status chip (RadioButtons bind TwoWay to these).
+    public bool IsFilterAll { get => StatusFilter == LibraryStatusFilter.All; set { if (value) StatusFilter = LibraryStatusFilter.All; } }
+    public bool IsFilterOnline { get => StatusFilter == LibraryStatusFilter.Online; set { if (value) StatusFilter = LibraryStatusFilter.Online; } }
+    public bool IsFilterOffline { get => StatusFilter == LibraryStatusFilter.Offline; set { if (value) StatusFilter = LibraryStatusFilter.Offline; } }
+    public bool IsFilterAttention { get => StatusFilter == LibraryStatusFilter.Attention; set { if (value) StatusFilter = LibraryStatusFilter.Attention; } }
+
+    // Chip counters — over the rows that pass the group + search filters.
+    [ObservableProperty] private int _totalCount;
+    [ObservableProperty] private int _onlineCount;
+    [ObservableProperty] private int _offlineCount;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAttention))]
+    private int _attentionCount;
+    public bool HasAttention => AttentionCount > 0 || StatusFilter == LibraryStatusFilter.Attention;
+
+    // Cameras exist but the filters hide all of them.
+    [ObservableProperty] private bool _hasNoMatches;
+
+    // A new filter starts from the first page; a probe landing only re-clamps.
+    partial void OnSelectedGroupFilterChanged(CameraGroup? value) => ApplyFilters(resetPage: true);
+    partial void OnSearchTextChanged(string value) => ApplyFilters(resetPage: true);
+    partial void OnStatusFilterChanged(LibraryStatusFilter value)
+    {
+        OnPropertyChanged(nameof(HasAttention));
+        ApplyFilters(resetPage: true);
+    }
+
+    // --- Pagination -----------------------------------------------------------
+    // Only the current page's rows are materialised (PageRows). Reachability
+    // probes still cover every camera — a TCP connect is cheap and the status
+    // chips need the full counts — but anything heavier per row (preview
+    // stills) should run for PageRows only.
+    public const int PageSize = 20;
+
+    public ObservableCollection<CameraRowViewModel> PageRows { get; } = new();
+
+    // 1-based page numbers for the pager buttons.
+    public ObservableCollection<int> Pages { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPageDisplay))]
+    [NotifyPropertyChangedFor(nameof(CanPrevPage))]
+    [NotifyPropertyChangedFor(nameof(CanNextPage))]
+    private int _currentPage; // 0-based
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMultiplePages))]
+    [NotifyPropertyChangedFor(nameof(CanNextPage))]
+    private int _pageCount = 1;
+
+    public int CurrentPageDisplay => CurrentPage + 1;
+    public bool HasMultiplePages => PageCount > 1;
+    public bool CanPrevPage => CurrentPage > 0;
+    public bool CanNextPage => CurrentPage + 1 < PageCount;
+
+    [RelayCommand]
+    private void PrevPage()
+    {
+        if (!CanPrevPage) return;
+        CurrentPage--;
+        ApplyFilters(resetPage: false);
+    }
+
+    [RelayCommand]
+    private void NextPage()
+    {
+        if (!CanNextPage) return;
+        CurrentPage++;
+        ApplyFilters(resetPage: false);
+    }
+
+    // CommandParameter is the boxed 1-based page number from the Pages binding
+    // (object? sidesteps the RelayCommand<int> XAML render crash).
+    [RelayCommand]
+    private void GoToPage(object? page)
+    {
+        if (page is null) return;
+        int oneBased;
+        try { oneBased = Convert.ToInt32(page, System.Globalization.CultureInfo.InvariantCulture); }
+        catch (Exception) { return; }
+        var target = oneBased - 1;
+        if (target < 0 || target >= PageCount || target == CurrentPage) return;
+        CurrentPage = target;
+        ApplyFilters(resetPage: false);
+    }
 
     public CameraLibraryPageViewModel(
         CameraDirectoryService directory,
@@ -73,6 +175,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         IDiscoveryService discovery,
         IReachabilityProbe reachability,
         CameraStatusRegistry statusRegistry,
+        ILayoutRepository layouts,
         ILogger<CameraLibraryPageViewModel> logger)
     {
         _directory = directory;
@@ -87,6 +190,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         _discovery = discovery;
         _reachability = reachability;
         _statusRegistry = statusRegistry;
+        _layouts = layouts;
         _logger = logger;
         WeakReferenceMessenger.Default.Register<ConfigImportedMessage>(this);
         // Toggling "risky device tools" in Settings shows/hides the Files button
@@ -133,12 +237,10 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         try
         {
             _allCameras = await _directory.ListAsync(ct).ConfigureAwait(true);
-            // "In grid" now means membership in the active layout (Phase 19.1),
-            // so the checkbox reflects the tab the grid is currently showing.
-            var members = await _directory.GetActiveLayoutCameraIdsAsync(ct).ConfigureAwait(true);
-            _gridMembership = new System.Collections.Generic.HashSet<CameraId>(members);
             await ReloadGroupsAsync(ct).ConfigureAwait(true);
-            RefilterCameras();
+            RebuildRows();
+            await LoadLayoutMembershipAsync(ct).ConfigureAwait(true);
+            ApplyFilters();
             IsLoaded = true;
         }
         finally
@@ -228,6 +330,7 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
     private async Task ReloadGroupsAsync(CancellationToken ct)
     {
         var groups = await _directory.ListGroupsAsync(ct).ConfigureAwait(true);
+        _groupNames = groups.ToDictionary(g => g.Id, g => g.Name);
         // Preserve the current selection's Id across reloads (record identity
         // changes when we re-query the DB).
         var prevId = SelectedGroupFilter?.Id;
@@ -243,26 +346,130 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         SelectedGroupFilter = null;
     }
 
-    private void RefilterCameras()
+    private void RebuildRows()
     {
-        var filtered = SelectedGroupFilter is null
-            ? _allCameras
-            : (System.Collections.Generic.IReadOnlyList<Camera>)
-                System.Linq.Enumerable.ToList(
-                    System.Linq.Enumerable.Where(_allCameras, c => c.GroupId.Equals(SelectedGroupFilter.Id)));
-
+        foreach (var old in Cameras) old.PropertyChanged -= OnRowPropertyChanged;
         Cameras.Clear();
-        foreach (var camera in filtered)
+        foreach (var camera in _allCameras)
         {
-            var row = new CameraRowViewModel(camera, _directory, _reachability, _statusRegistry, _logger, _gridMembership.Contains(camera.Id));
+            var row = new CameraRowViewModel(camera, _directory, _reachability, _statusRegistry, _logger)
+            {
+                GroupName = camera.GroupId is { } gid && _groupNames.TryGetValue(gid, out var name) ? name : null,
+            };
             // Seed from whatever the registry already knows (e.g. a live grid session).
             row.ApplyStatus(_statusRegistry.Get(camera.Id).Status);
+            row.PropertyChanged += OnRowPropertyChanged;
             Cameras.Add(row);
         }
 
         // Kick off reachability probes for the freshly-built rows. Fire-and-forget:
         // each row updates its own Status independently, in parallel.
         _ = ProbeReachabilityAsync();
+    }
+
+    // A probe / registry verdict landed — counters and the status filter move.
+    private void OnRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CameraRowViewModel.Status))
+            ApplyFilters();
+    }
+
+    private void ApplyFilters(bool resetPage = false)
+    {
+        var query = SearchText?.Trim() ?? "";
+        var group = SelectedGroupFilter;
+        int total = 0, online = 0, offline = 0, attention = 0;
+        var shown = new List<CameraRowViewModel>();
+        foreach (var row in Cameras)
+        {
+            var matches = (group is null || row.Camera.GroupId.Equals(group.Id)) && row.Matches(query);
+            if (matches)
+            {
+                total++;
+                switch (row.Status)
+                {
+                    case CameraStatus.Online: online++; break;
+                    case CameraStatus.Offline: offline++; break;
+                    case CameraStatus.Attention: attention++; break;
+                }
+            }
+            var passesStatus = StatusFilter switch
+            {
+                LibraryStatusFilter.Online => row.Status == CameraStatus.Online,
+                LibraryStatusFilter.Offline => row.Status == CameraStatus.Offline,
+                LibraryStatusFilter.Attention => row.Status == CameraStatus.Attention,
+                _ => true,
+            };
+            if (matches && passesStatus) shown.Add(row);
+        }
+        TotalCount = total;
+        OnlineCount = online;
+        OfflineCount = offline;
+        AttentionCount = attention;
+        HasNoMatches = Cameras.Count > 0 && shown.Count == 0;
+
+        var pageCount = Math.Max(1, (shown.Count + PageSize - 1) / PageSize);
+        if (pageCount != PageCount || Pages.Count != pageCount)
+        {
+            PageCount = pageCount;
+            Pages.Clear();
+            for (var i = 1; i <= pageCount; i++) Pages.Add(i);
+        }
+        CurrentPage = resetPage ? 0 : Math.Min(CurrentPage, pageCount - 1);
+
+        // Swap the visible rows only when the page's set actually changed — a
+        // probe verdict under the "All" filter must not re-template the list.
+        var page = shown.Skip(CurrentPage * PageSize).Take(PageSize).ToList();
+        if (!page.SequenceEqual(PageRows))
+        {
+            PageRows.Clear();
+            foreach (var row in page) PageRows.Add(row);
+        }
+    }
+
+    // --- Layout membership (replaces the old "in grid" checkbox) -----------
+    // A camera can sit in any number of layouts; the row shows them and its
+    // menu toggles each one.
+    private async Task LoadLayoutMembershipAsync(CancellationToken ct)
+    {
+        _allLayouts = await _layouts.GetAllAsync(ct).ConfigureAwait(true);
+        var byCamera = new Dictionary<CameraId, List<GridLayout>>();
+        foreach (var layout in _allLayouts)
+        {
+            foreach (var id in await _layouts.GetTilesAsync(layout.Id, ct).ConfigureAwait(true))
+            {
+                if (!byCamera.TryGetValue(id, out var list)) byCamera[id] = list = new List<GridLayout>();
+                list.Add(layout);
+            }
+        }
+        foreach (var row in Cameras)
+            row.SetLayouts(byCamera.TryGetValue(row.Camera.Id, out var m) ? m : new List<GridLayout>());
+    }
+
+    /// <summary>
+    /// Re-reads layout membership for the rows on screen — layouts may have
+    /// changed on the Live page since the library was loaded.
+    /// </summary>
+    public async Task RefreshLayoutMembershipAsync()
+    {
+        try { await LoadLayoutMembershipAsync(CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Layout membership refresh failed"); }
+    }
+
+    public async Task ToggleLayoutMembershipAsync(CameraRowViewModel row, GridLayout layout)
+    {
+        try
+        {
+            if (row.IsInLayout(layout.Id))
+                await _layouts.RemoveTileAsync(layout.Id, row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
+            else
+                await _layouts.AddTileAsync(layout.Id, row.Camera.Id, CancellationToken.None).ConfigureAwait(true);
+            await LoadLayoutMembershipAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Toggling layout {Layout} for {CameraId} failed", layout.Name, row.Camera.Id);
+        }
     }
 
     /// <summary>
@@ -326,8 +533,8 @@ public sealed partial class CameraLibraryPageViewModel : ViewModelBase, IRecipie
         // the discovery dialog reopens with the SAME scan results and creds
         // (DiscoverySessionCache), so several cameras go in from one scan.
         // Only cancelling the discovery dialog itself exits.
-        var knownHosts = new System.Collections.Generic.HashSet<string>(
-            System.Linq.Enumerable.Select(_allCameras, c => c.Host),
+        var knownHosts = new HashSet<string>(
+            _allCameras.Select(c => c.Host),
             StringComparer.OrdinalIgnoreCase);
 
         while (true)
@@ -556,7 +763,26 @@ public sealed partial class CameraRowViewModel : ViewModelBase
         ? Camera.Host
         : $"{Camera.Host}:{Camera.HttpPort}";
 
-    [ObservableProperty] private bool _isIncludedInGrid;
+    public string? GroupName { get; init; }
+    public bool HasGroup => !string.IsNullOrEmpty(GroupName);
+
+    // Layouts this camera is a tile of, as a "Default, Yard" label.
+    private HashSet<LayoutId> _layoutIds = new();
+    [ObservableProperty] private string _layoutsLabel = "—";
+
+    public bool IsInLayout(LayoutId id) => _layoutIds.Contains(id);
+
+    public void SetLayouts(IReadOnlyCollection<GridLayout> layouts)
+    {
+        _layoutIds = layouts.Select(l => l.Id).ToHashSet();
+        LayoutsLabel = layouts.Count == 0 ? "—" : string.Join(", ", layouts.Select(l => l.Name));
+    }
+
+    internal bool Matches(string query) =>
+        query.Length == 0
+        || Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+        || HostAndPort.Contains(query, StringComparison.OrdinalIgnoreCase)
+        || (GroupName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
 
     // Displayed status, pushed from the shared CameraStatusRegistry via the page's
     // Changed handler. The registry merges this row's own probe with any live grid
@@ -581,16 +807,13 @@ public sealed partial class CameraRowViewModel : ViewModelBase
     public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, ILogger? logger)
         : this(camera, directory, null, null, logger) { }
 
-    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, CameraStatusRegistry? statusRegistry, ILogger? logger, bool? includedInGrid = null)
+    public CameraRowViewModel(Camera camera, CameraDirectoryService? directory, IReachabilityProbe? reachability, CameraStatusRegistry? statusRegistry, ILogger? logger)
     {
         Camera = camera;
         _directory = directory;
         _reachability = reachability;
         _statusRegistry = statusRegistry;
         _logger = logger;
-        // Field (not property) so seeding the checkbox doesn't trigger a persist.
-        // Defaults to the active-layout membership (Phase 19.1), else the flag.
-        _isIncludedInGrid = includedInGrid ?? camera.IncludedInGrid;
     }
 
     /// <summary>
@@ -615,22 +838,12 @@ public sealed partial class CameraRowViewModel : ViewModelBase
         else
             _statusRegistry.ReportReachability(Camera.Id, reachable);
     }
+}
 
-    partial void OnIsIncludedInGridChanged(bool value)
-    {
-        if (_directory is null) return;
-        _ = PersistGridFlagAsync(value);
-    }
-
-    private async Task PersistGridFlagAsync(bool value)
-    {
-        try
-        {
-            await _directory!.SetIncludedInGridAsync(Camera.Id, value, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Failed to persist IncludedInGrid for {CameraId}", Camera.Id);
-        }
-    }
+public enum LibraryStatusFilter
+{
+    All,
+    Online,
+    Offline,
+    Attention,
 }

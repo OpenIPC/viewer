@@ -119,4 +119,12 @@
   <StreamGeometry x:Key="IconGrid4">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,7.5 H21 M3,12 H21 M3,16.5 H21 M7.5,3 V21 M12,3 V21 M16.5,3 V21</StreamGeometry>
   <StreamGeometry x:Key="IconGrid5">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,6.6 H21 M3,10.2 H21 M3,13.8 H21 M3,17.4 H21 M6.6,3 V21 M10.2,3 V21 M13.8,3 V21 M17.4,3 V21</StreamGeometry>
 
+  <!-- Cameras page. Lucide "cpu", "folder", "tag", "rotate-cw"; IconGlobe and
+       IconTerminalBox are Tabler "world" / "terminal-2" (MIT, same 24×24 stroke grid). -->
+  <StreamGeometry x:Key="IconGlobe">M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M3.6,9 H20.4 M3.6,15 H20.4 M11.5,3 A17,17 0 0 0 11.5,21 M12.5,3 A17,17 0 0 1 12.5,21</StreamGeometry>
+  <StreamGeometry x:Key="IconTerminalBox">M8,9 L11,12 L8,15 M13,15 H16 M5,4 H19 A2,2 0 0 1 21,6 V18 A2,2 0 0 1 19,20 H5 A2,2 0 0 1 3,18 V6 A2,2 0 0 1 5,4 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconCpu">M6,4 H18 A2,2 0 0 1 20,6 V18 A2,2 0 0 1 18,20 H6 A2,2 0 0 1 4,18 V6 A2,2 0 0 1 6,4 Z M10,9 H14 A1,1 0 0 1 15,10 V14 A1,1 0 0 1 14,15 H10 A1,1 0 0 1 9,14 V10 A1,1 0 0 1 10,9 Z M15,2 V4 M15,20 V22 M2,15 H4 M2,9 H4 M20,15 H22 M20,9 H22 M9,2 V4 M9,20 V22</StreamGeometry>
+  <StreamGeometry x:Key="IconFolder">M20,20 a2,2 0 0 0 2,-2 V8 a2,2 0 0 0 -2,-2 h-7.9 a2,2 0 0 1 -1.69,-0.9 L9.6,3.9 A2,2 0 0 0 7.93,3 H4 a2,2 0 0 0 -2,2 v13 a2,2 0 0 0 2,2 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconTag">M12.586,2.586 A2,2 0 0 0 11.172,2 H4 a2,2 0 0 0 -2,2 v7.172 a2,2 0 0 0 0.586,1.414 l8.704,8.704 a2.426,2.426 0 0 0 3.42,0 l6.58,-6.58 a2.426,2.426 0 0 0 0,-3.42 Z M7,7.5 A0.5,0.5 0 1 0 8,7.5 A0.5,0.5 0 1 0 7,7.5 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconRefresh">M21,12 a9,9 0 1 1 -9,-9 c2.52,0 4.93,1 6.74,2.74 L21,8 M21,3 v5 h-5</StreamGeometry>
 </ResourceDictionary>
