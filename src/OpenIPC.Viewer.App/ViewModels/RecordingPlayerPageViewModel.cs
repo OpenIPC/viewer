@@ -73,6 +73,9 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
         Segments = new[] { new TimelineSegment(TimelineStart, TimelineEnd) };
     }
 
+    // Initial seek applied once playback starts (e.g. opened from an event).
+    public TimeSpan? StartAt { get; set; }
+
     public string Title => Path.GetFileName(_recording.FilePath);
     public string CameraName { get; }
 
@@ -213,6 +216,8 @@ public sealed partial class RecordingPlayerPageViewModel : ViewModelBase, IAsync
             _playback = session;
             VideoSession = session;
             await session.StartAsync(ct).ConfigureAwait(true);
+            if (StartAt is { } start && start > TimeSpan.FromSeconds(1))
+                await SeekToAsync(start).ConfigureAwait(true);
         }
         catch (Exception ex)
         {

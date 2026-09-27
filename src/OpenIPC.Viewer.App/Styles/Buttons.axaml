@@ -96,6 +96,26 @@
     <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
   </Style>
+  <!-- Fluent's ToggleButton:checked / :pointerover styles paint the presenter
+       (named PART_ContentPresenter) accent blue; pseudo-class styles outrank
+       template values, so neutralise them with same-shaped selectors here. -->
+  <Style Selector=":is(ToggleButton).chip /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector=":is(ToggleButton).chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector=":is(ToggleButton).chip:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector=":is(ToggleButton).chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector=":is(ToggleButton).chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
   <Style Selector=":is(ToggleButton).chip:checked">
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>

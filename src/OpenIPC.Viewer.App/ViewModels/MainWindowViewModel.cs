@@ -221,6 +221,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         {
             _ = DisposeActivePlayerAsync();
             _activePlayer = _playerFactory.Create(message.Recording, message.CameraName);
+            _activePlayer.StartAt = message.StartAt;
             CurrentPage = _activePlayer;
         }
         catch (Exception ex)

@@ -127,4 +127,6 @@
   <StreamGeometry x:Key="IconFolder">M20,20 a2,2 0 0 0 2,-2 V8 a2,2 0 0 0 -2,-2 h-7.9 a2,2 0 0 1 -1.69,-0.9 L9.6,3.9 A2,2 0 0 0 7.93,3 H4 a2,2 0 0 0 -2,2 v13 a2,2 0 0 0 2,2 Z</StreamGeometry>
   <StreamGeometry x:Key="IconTag">M12.586,2.586 A2,2 0 0 0 11.172,2 H4 a2,2 0 0 0 -2,2 v7.172 a2,2 0 0 0 0.586,1.414 l8.704,8.704 a2.426,2.426 0 0 0 3.42,0 l6.58,-6.58 a2.426,2.426 0 0 0 0,-3.42 Z M7,7.5 A0.5,0.5 0 1 0 8,7.5 A0.5,0.5 0 1 0 7,7.5 Z</StreamGeometry>
   <StreamGeometry x:Key="IconRefresh">M21,12 a9,9 0 1 1 -9,-9 c2.52,0 4.93,1 6.74,2.74 L21,8 M21,3 v5 h-5</StreamGeometry>
+  <!-- Events page. IconWalk is Tabler "walk" (MIT) — motion events. -->
+  <StreamGeometry x:Key="IconWalk">M13,4 A1,1 0 1 0 15,4 A1,1 0 1 0 13,4 Z M7,21 L10,17 M16,21 L14,17 L11,14 L12,8 M6,12 L8,9 L12,8 L15,11 L18,12</StreamGeometry>
 </ResourceDictionary>

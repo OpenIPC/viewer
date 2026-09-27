@@ -9,8 +9,9 @@ public sealed record GoBackToLibraryMessage;
 
 // Phase 16: open the recordings player on a recorded segment, and return to
 // the recordings list. CameraName travels with the message so the player can
-// label itself without another directory lookup.
-public sealed record OpenRecordingMessage(Recording Recording, string CameraName);
+// label itself without another directory lookup. StartAt (offset into the
+// file) lets the Events page open a recording at the moment of an event.
+public sealed record OpenRecordingMessage(Recording Recording, string CameraName, TimeSpan? StartAt = null);
 
 public sealed record GoBackToRecordingsMessage;
 
