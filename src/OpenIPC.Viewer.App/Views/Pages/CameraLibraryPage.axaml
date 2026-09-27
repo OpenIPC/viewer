@@ -9,22 +9,64 @@
 
   <UserControl.Styles>
     <!-- Wide: host and layouts get their own aligned columns. Compact (<700px):
-         those columns drop and the host moves under the camera name; the header
-         actions wrap below the search row. -->
-    <Style Selector="Grid.compact TextBlock.wide-only">
+         those columns drop and the host moves under the camera name. The header
+         has its own, wider breakpoint (it needs ~880px on one line). -->
+    <Style Selector="Grid.compact :is(Control).wide-only">
       <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="TextBlock.compact-only">
+    <Style Selector=":is(Control).compact-only">
       <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="Grid.compact TextBlock.compact-only">
+    <Style Selector="Grid.compact :is(Control).compact-only">
       <Setter Property="IsVisible" Value="True" />
     </Style>
+
+    <!-- Header. Wide: title, then [search · group · tag · refresh] on the left
+         and the add actions on the right. Compact: the add actions join the
+         title row (icon-only "find"), search takes a full-width row and the
+         group filter stretches beside the tag / refresh buttons.
+         Everything that moves is placed by styles only — a local Grid.Row /
+         Column / Margin would outrank the compact setters. -->
+    <Style Selector="StackPanel.header-actions">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Margin" Value="16,12,0,0" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
     <Style Selector="Grid.compact StackPanel.header-actions">
+      <Setter Property="Grid.Row" Value="0" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.filters">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Grid.compact Grid.filters">
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Grid.filters > TextBox">
+      <Setter Property="Width" Value="240" />
+    </Style>
+    <Style Selector="Grid.compact Grid.filters > TextBox">
+      <Setter Property="Width" Value="NaN" />
+      <Setter Property="Grid.ColumnSpan" Value="4" />
+    </Style>
+    <Style Selector="Grid.filters > ComboBox">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="Grid.compact Grid.filters > ComboBox">
       <Setter Property="Grid.Row" Value="1" />
       <Setter Property="Grid.Column" Value="0" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="Grid.filters > Button">
+      <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="Grid.compact Grid.filters > Button">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Margin" Value="8,8,0,0" />
     </Style>
 
     <Style Selector="Border.camera-row">
@@ -47,80 +89,91 @@
 
   <Grid RowDefinitions="Auto,Auto,*,Auto" b:Adaptive.CompactBelow="700">
 
-    <!-- Header: title, then search + group filter on the left and the add
-         actions on the right (wrapping below on a narrow viewport). -->
-    <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,12">
+    <!-- Header: title, filters and add actions (see the header styles above
+         for the wide / compact placement). -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,12"
+          b:Adaptive.CompactBelow="900">
       <TextBlock Text="{Binding [Library.Title], Source={x:Static svc:Localizer.Instance}}"
                  FontSize="{StaticResource FontSizeXl}"
                  FontWeight="SemiBold"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis"
                  Foreground="{StaticResource TextPrimaryBrush}" />
-      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-        <WrapPanel Grid.Column="0" Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-          <TextBox Text="{Binding SearchText, Mode=TwoWay}"
-                   Classes="clearButton"
-                   Width="240"
-                   VerticalContentAlignment="Center"
-                   PlaceholderText="{Binding [Library.SearchPlaceholder], Source={x:Static svc:Localizer.Instance}}">
-            <TextBox.InnerLeftContent>
-              <Path Classes="lucide" Data="{StaticResource IconSearch}"
-                    Stroke="{StaticResource TextTertiaryBrush}"
-                    Width="14" Height="14" Margin="10,0,0,0" VerticalAlignment="Center" />
-            </TextBox.InnerLeftContent>
-          </TextBox>
-          <ComboBox ItemsSource="{Binding AvailableGroups}"
-                    SelectedItem="{Binding SelectedGroupFilter, Mode=TwoWay}"
-                    MinWidth="150"
-                    VerticalAlignment="Center"
-                    PlaceholderText="{Binding [Library.AllGroups], Source={x:Static svc:Localizer.Instance}}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate>
-                <TextBlock Text="{Binding Name, FallbackValue='', TargetNullValue=''}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <Button Classes="header"
-                  Command="{Binding ManageGroupsCommand}"
-                  ToolTip.Tip="{Binding [Library.Tooltip.ManageGroups], Source={x:Static svc:Localizer.Instance}}">
-            <Path Classes="lucide" Data="{StaticResource IconTag}"
-                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
-          </Button>
-          <Button Classes="header"
-                  Command="{Binding RefreshCommand}"
-                  ToolTip.Tip="{Binding [Library.Tooltip.Refresh], Source={x:Static svc:Localizer.Instance}}">
-            <Path Classes="lucide" Data="{StaticResource IconRefresh}"
-                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
-          </Button>
-        </WrapPanel>
 
-        <StackPanel Grid.Column="1" Classes="header-actions"
-                    Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
-          <Button Classes="header" Command="{Binding DiscoverCameraCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <Path Classes="lucide" Data="{StaticResource IconRadar}"
-                    Stroke="{StaticResource TextPrimaryBrush}"
-                    Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding [Library.FindOnNetwork], Source={x:Static svc:Localizer.Instance}}"
-                         VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-          <Button Classes="header"
-                  Command="{Binding ScanQrCommand}"
-                  ToolTip.Tip="{Binding [Library.ScanQr], Source={x:Static svc:Localizer.Instance}}">
-            <Path Classes="lucide" Data="{StaticResource IconQr}"
-                  Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
-          </Button>
-          <Button Command="{Binding AddCameraCommand}"
-                  Padding="12,7"
-                  Background="{StaticResource AccentBrush}"
-                  Foreground="White"
-                  CornerRadius="8"
-                  VerticalAlignment="Center">
-            <TextBlock Text="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}"
-                       VerticalAlignment="Center" />
-          </Button>
-        </StackPanel>
+      <Grid Grid.Row="1" Classes="filters" Margin="0,12,0,0"
+            ColumnDefinitions="*,Auto,Auto,Auto" RowDefinitions="Auto,Auto">
+        <TextBox Text="{Binding SearchText, Mode=TwoWay}"
+                 Classes="clearButton"
+                 VerticalContentAlignment="Center"
+                 PlaceholderText="{Binding [Library.SearchPlaceholder], Source={x:Static svc:Localizer.Instance}}">
+          <TextBox.InnerLeftContent>
+            <Path Classes="lucide" Data="{StaticResource IconSearch}"
+                  Stroke="{StaticResource TextTertiaryBrush}"
+                  Width="14" Height="14" Margin="10,0,0,0" VerticalAlignment="Center" />
+          </TextBox.InnerLeftContent>
+        </TextBox>
+        <ComboBox ItemsSource="{Binding AvailableGroups}"
+                  SelectedItem="{Binding SelectedGroupFilter, Mode=TwoWay}"
+                  MinWidth="150"
+                  VerticalAlignment="Center"
+                  PlaceholderText="{Binding [Library.AllGroups], Source={x:Static svc:Localizer.Instance}}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name, FallbackValue='', TargetNullValue=''}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Grid.Column="2" Classes="header"
+                Command="{Binding ManageGroupsCommand}"
+                ToolTip.Tip="{Binding [Library.Tooltip.ManageGroups], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconTag}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+        </Button>
+        <Button Grid.Column="3" Classes="header"
+                Command="{Binding RefreshCommand}"
+                ToolTip.Tip="{Binding [Library.Tooltip.Refresh], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconRefresh}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+        </Button>
       </Grid>
-    </StackPanel>
+
+      <StackPanel Grid.Column="1" Classes="header-actions" Orientation="Horizontal" Spacing="8">
+        <Button Classes="header" Command="{Binding DiscoverCameraCommand}"
+                ToolTip.Tip="{Binding [Library.FindOnNetwork], Source={x:Static svc:Localizer.Instance}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="lucide" Data="{StaticResource IconRadar}"
+                  Stroke="{StaticResource TextPrimaryBrush}"
+                  Width="16" Height="16" VerticalAlignment="Center" />
+            <TextBlock Classes="wide-only" VerticalAlignment="Center"
+                       Text="{Binding [Library.FindOnNetwork], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+        </Button>
+        <Button Classes="header"
+                Command="{Binding ScanQrCommand}"
+                ToolTip.Tip="{Binding [Library.ScanQr], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconQr}"
+                Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+        </Button>
+        <Button Command="{Binding AddCameraCommand}"
+                Padding="12,7"
+                Background="{StaticResource AccentBrush}"
+                Foreground="White"
+                CornerRadius="8"
+                VerticalAlignment="Stretch"
+                VerticalContentAlignment="Center">
+          <Panel>
+            <TextBlock Classes="wide-only" VerticalAlignment="Center"
+                       Text="{Binding [Common.AddCamera], Source={x:Static svc:Localizer.Instance}}" />
+            <StackPanel Classes="compact-only" Orientation="Horizontal" Spacing="6">
+              <Path Classes="lucide" Data="{StaticResource IconPlus}"
+                    Stroke="White" StrokeThickness="2.2" Width="14" Height="14" VerticalAlignment="Center" />
+              <TextBlock VerticalAlignment="Center"
+                         Text="{Binding [Library.AddShort], Source={x:Static svc:Localizer.Instance}}" />
+            </StackPanel>
+          </Panel>
+        </Button>
+      </StackPanel>
+    </Grid>
 
     <!-- Status filter chips with live counters. -->
     <WrapPanel Grid.Row="1" Orientation="Horizontal" ItemSpacing="6" LineSpacing="6"

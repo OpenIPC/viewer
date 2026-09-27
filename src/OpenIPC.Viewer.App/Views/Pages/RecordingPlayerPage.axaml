@@ -28,6 +28,61 @@
       <Setter Property="Margin" Value="16,10,16,14" />
     </Style>
 
+    <!-- Narrow controls: a clock row under the timeline, the transport centred
+         on its own, then one row of equal pills (sound · speed · clip) instead
+         of the desktop's slider + speed segment + chip mix. The clip bar's
+         Cancel / Save drop under its bounds. -->
+    <Style Selector=":is(Control).compact-only">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.controls.compact :is(Control).compact-only">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="StackPanel.controls.compact :is(Control).wide-only">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.controls.compact WrapPanel.transportbar">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="StackPanel.clipactions">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="StackPanel.controls.compact StackPanel.clipactions">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
+
+    <!-- Equal-height pill for the phone tool row (Button and ToggleButton). -->
+    <Style Selector=":is(Button).pill">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinWidth" Value="52" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+    </Style>
+    <Style Selector=":is(Button).pill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector=":is(Button).pill:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+    </Style>
+    <Style Selector="ToggleButton.pill:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
     <Style Selector="Button.outline">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
@@ -358,7 +413,7 @@
     </Grid>
 
     <!-- Timeline + transport + clip bar -->
-    <StackPanel Grid.Row="2" Classes="controls" Spacing="10">
+    <StackPanel Grid.Row="2" Classes="controls" Spacing="10" b:Adaptive.CompactBelow="620">
 
       <!-- Canvas timeline: segments + motion/detection markers, wheel-zoom to
            cursor, click/marker-tap to seek, drag to select a clip (16.4). -->
@@ -376,9 +431,22 @@
                                 PlayheadBrush="{StaticResource AccentBrush}"
                                 LabelBrush="{StaticResource TextSecondaryBrush}" />
 
+      <Grid Classes="compact-only" ColumnDefinitions="*,Auto" Margin="2,0">
+        <TextBlock Text="{Binding WallClockLabel}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="18" FontWeight="SemiBold"
+                   VerticalAlignment="Center"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Grid.Column="1" Text="{Binding ProgressLabel}"
+                   FontFamily="{StaticResource FontMono}"
+                   FontSize="{StaticResource FontSizeSm}"
+                   VerticalAlignment="Center"
+                   Foreground="{StaticResource TextTertiaryBrush}" />
+      </Grid>
+
       <!-- Transport: −10 · ▶ · +10 · wall clock | speed · clip.
            WrapPanel so the right cluster drops below on a narrow viewport. -->
-      <WrapPanel Orientation="Horizontal" ItemSpacing="24" LineSpacing="10">
+      <WrapPanel Classes="transportbar" Orientation="Horizontal" ItemSpacing="24" LineSpacing="10">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Button Classes="transport" Command="{Binding SkipBackCommand}"
                   AutomationProperties.Name="{Binding [Player.SkipBack], Source={x:Static svc:Localizer.Instance}}"
@@ -425,7 +493,7 @@
             </Panel>
           </Button>
 
-          <StackPanel Spacing="0" Margin="10,0,0,0" VerticalAlignment="Center">
+          <StackPanel Classes="wide-only" Spacing="0" Margin="10,0,0,0" VerticalAlignment="Center">
             <TextBlock Text="{Binding WallClockLabel}"
                        FontFamily="{StaticResource FontMono}"
                        FontSize="20" FontWeight="SemiBold"
@@ -437,7 +505,7 @@
           </StackPanel>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <StackPanel Classes="wide-only" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <!-- Sound (1x only): mute + volume, shared with the live page. -->
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                       IsVisible="{Binding CanListen}">
@@ -491,13 +559,50 @@
         </StackPanel>
       </WrapPanel>
 
+      <!-- Phone tool row: sound (volume = the hardware keys) · speed menu · clip. -->
+      <StackPanel Classes="compact-only" Orientation="Horizontal" Spacing="10"
+                  HorizontalAlignment="Center">
+        <Button Classes="pill" Command="{Binding ToggleMuteCommand}"
+                IsVisible="{Binding CanListen}"
+                AutomationProperties.Name="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}"
+                ToolTip.Tip="{Binding [Player.Mute], Source={x:Static svc:Localizer.Instance}}">
+          <Panel Width="18" Height="18">
+            <Path Classes="lucide" Data="{StaticResource IconVolume}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="18" VerticalAlignment="Center"
+                  IsVisible="{Binding !IsMuted}" />
+            <Path Classes="lucide" Data="{StaticResource IconVolumeMuted}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="18" VerticalAlignment="Center"
+                  IsVisible="{Binding IsMuted}" />
+          </Panel>
+        </Button>
+        <Button Classes="pill" Click="OnSpeedClick"
+                AutomationProperties.Name="{Binding [Player.Speed], Source={x:Static svc:Localizer.Instance}}"
+                ToolTip.Tip="{Binding [Player.Speed], Source={x:Static svc:Localizer.Instance}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="{Binding RateLabel}" FontFamily="{StaticResource FontMono}"
+                       VerticalAlignment="Center" />
+            <Path Classes="lucide" Data="{StaticResource IconChevronDown}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="12" Height="12"
+                  VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <ToggleButton Classes="pill" IsChecked="{Binding IsClipMode, Mode=TwoWay}"
+                      ToolTip.Tip="{Binding [Player.Clip.Tooltip], Source={x:Static svc:Localizer.Instance}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="lucide" Data="{StaticResource IconScissors}"
+                  Stroke="{StaticResource TextPrimaryBrush}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding [Player.Clip], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
+      </StackPanel>
+
       <!-- Clip bar (16.5): bounds from the playhead or a timeline drag,
            fast (keyframe) or precise (re-encode) cut, save. -->
       <Border IsVisible="{Binding IsClipMode}"
               Background="{StaticResource Bg1Brush}"
               BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
               CornerRadius="8" Padding="10,8">
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
           <WrapPanel Grid.Column="0" Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
             <Button Classes="outline" Padding="10,5" FontSize="{StaticResource FontSizeSm}"
                     Command="{Binding SetInCommand}"
@@ -514,7 +619,7 @@
             <ProgressBar Width="120" Minimum="0" Maximum="1" Value="{Binding ExportFraction}"
                          IsVisible="{Binding IsExporting}" VerticalAlignment="Center" />
           </WrapPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="8,0,0,0">
+          <StackPanel Classes="clipactions" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <Button Command="{Binding CancelClipCommand}"
                     Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}"
                     Background="Transparent" BorderThickness="0" CornerRadius="6" Padding="10,5"

@@ -2,8 +2,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:pages="using:OpenIPC.Viewer.App.Views.Pages"
              x:Class="OpenIPC.Viewer.App.Views.Pages.ArchiveCalendarView"
              x:DataType="vm:ArchiveCalendarViewModel">
+
+  <UserControl.Resources>
+    <!-- Recording days: accent fill (brighter = more recordings), bold number.
+         Event-only days: a small dot, not selectable. Shared by the month grid
+         and the phone week strip. -->
+    <DataTemplate x:Key="DayCell" DataType="vm:CalendarDayCell">
+      <Button Classes="day"
+              Classes.outmonth="{Binding !InMonth}"
+              Classes.selected="{Binding IsSelected}"
+              Classes.hasrec="{Binding HasRecordings}"
+              ToolTip.Tip="{Binding Tooltip}"
+              Command="{Binding $parent[ItemsControl].((vm:ArchiveCalendarViewModel)DataContext).SelectDayCommand}"
+              CommandParameter="{Binding}">
+        <Panel>
+          <Border CornerRadius="4"
+                  Background="{StaticResource AccentBrush}"
+                  Opacity="{Binding Shade}" />
+          <Border Classes.today="{Binding IsToday}" CornerRadius="4" />
+          <TextBlock Text="{Binding DayNumber}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     FontSize="12" />
+          <Ellipse Width="4" Height="4"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3"
+                   Fill="{StaticResource WarningBrush}"
+                   IsVisible="{Binding HasEventsOnly}" />
+        </Panel>
+      </Button>
+    </DataTemplate>
+  </UserControl.Resources>
 
   <UserControl.Styles>
     <Style Selector="Button.nav">
@@ -43,94 +74,191 @@
       <Setter Property="BorderBrush" Value="{StaticResource TextSecondaryBrush}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
+
+    <!-- Wide: the fixed month column. Phone (:compact): the card below. -->
+    <Style Selector="pages|ArchiveCalendarView :is(Control).compact-only">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="pages|ArchiveCalendarView:compact :is(Control).compact-only">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="pages|ArchiveCalendarView:compact :is(Control).wide-only">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="pages|ArchiveCalendarView:compact Button.day">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Button.reset">
+      <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,3,8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Path.chevron">
+      <Setter Property="RenderTransform" Value="rotate(0deg)" />
+    </Style>
+    <Style Selector="Path.chevron.up">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
   </UserControl.Styles>
 
-  <StackPanel Spacing="8" Width="240">
+  <Panel>
 
-    <!-- Month nav -->
-    <Grid ColumnDefinitions="Auto,*,Auto">
-      <Button Grid.Column="0" Classes="nav" Command="{Binding PrevMonthCommand}">
-        <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
-              Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
-      </Button>
-      <TextBlock Grid.Column="1"
-                 Text="{Binding MonthLabel}"
+    <!-- Wide: month column next to the list. -->
+    <StackPanel Classes="wide-only" Spacing="8" Width="240">
+
+      <!-- Month nav -->
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Grid.Column="0" Classes="nav" Command="{Binding PrevMonthCommand}">
+          <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+                Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+        </Button>
+        <TextBlock Grid.Column="1"
+                   Text="{Binding MonthLabel}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <Button Grid.Column="2" Classes="nav" Command="{Binding NextMonthCommand}">
+          <Path Classes="lucide" Data="{StaticResource IconChevronRight}"
+                Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+        </Button>
+      </Grid>
+
+      <!-- Weekday header -->
+      <UniformGrid Columns="7">
+        <TextBlock Text="{Binding [Calendar.Mon], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Tue], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Wed], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Thu], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Fri], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Sat], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        <TextBlock Text="{Binding [Calendar.Sun], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+      </UniformGrid>
+
+      <!-- Day grid -->
+      <ItemsControl ItemsSource="{Binding Days}" ItemTemplate="{StaticResource DayCell}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="7" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+      </ItemsControl>
+
+      <TextBlock Text="{Binding MonthSummary}"
                  HorizontalAlignment="Center"
-                 VerticalAlignment="Center"
-                 FontWeight="SemiBold"
-                 Foreground="{StaticResource TextPrimaryBrush}" />
-      <Button Grid.Column="2" Classes="nav" Command="{Binding NextMonthCommand}">
-        <Path Classes="lucide" Data="{StaticResource IconChevronRight}"
-              Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
-      </Button>
-    </Grid>
+                 FontSize="{StaticResource FontSizeSm}"
+                 Foreground="{StaticResource TextSecondaryBrush}" />
 
-    <!-- Weekday header -->
-    <UniformGrid Columns="7">
-      <TextBlock Text="{Binding [Calendar.Mon], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Tue], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Wed], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Thu], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Fri], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Sat], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-      <TextBlock Text="{Binding [Calendar.Sun], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
-    </UniformGrid>
+      <!-- Empty month: jump to the nearest month that has recordings. -->
+      <Button Classes="nav"
+              HorizontalAlignment="Center"
+              IsVisible="{Binding HasNearestMonth}"
+              Command="{Binding JumpToNearestMonthCommand}"
+              Foreground="{StaticResource AccentBrush}"
+              Content="{Binding NearestMonthLabel}" />
 
-    <!-- Day grid -->
-    <ItemsControl ItemsSource="{Binding Days}">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <UniformGrid Columns="7" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-      <ItemsControl.ItemTemplate>
-        <DataTemplate DataType="vm:CalendarDayCell">
-          <!-- Recording days: accent fill (brighter = more recordings), bold
-               number. Event-only days: a small dot, not selectable. -->
-          <Button Classes="day"
-                  Classes.outmonth="{Binding !InMonth}"
-                  Classes.selected="{Binding IsSelected}"
-                  Classes.hasrec="{Binding HasRecordings}"
-                  ToolTip.Tip="{Binding Tooltip}"
-                  Command="{Binding $parent[ItemsControl].((vm:ArchiveCalendarViewModel)DataContext).SelectDayCommand}"
-                  CommandParameter="{Binding}">
-            <Panel>
-              <Border CornerRadius="4"
-                      Background="{StaticResource AccentBrush}"
-                      Opacity="{Binding Shade}" />
-              <Border Classes.today="{Binding IsToday}" CornerRadius="4" />
-              <TextBlock Text="{Binding DayNumber}"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center"
-                         FontSize="12" />
-              <Ellipse Width="4" Height="4"
-                       HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3"
-                       Fill="{StaticResource WarningBrush}"
-                       IsVisible="{Binding HasEventsOnly}" />
-            </Panel>
+      <Button Classes="nav"
+              HorizontalAlignment="Center"
+              Command="{Binding ShowAllCommand}"
+              Content="{Binding [Common.All], Source={x:Static svc:Localizer.Instance}}" />
+
+    </StackPanel>
+
+    <!-- Phone: full-width card — month nav + the selected day's reset chip,
+         one week of days, the whole month on demand. -->
+    <Border Classes="compact-only"
+            Background="{StaticResource Bg2Brush}"
+            BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
+            CornerRadius="10" Padding="8,6,8,8">
+      <StackPanel Spacing="6">
+
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+          <Button Grid.Column="0" Classes="nav" Padding="8,6" Command="{Binding PrevMonthCommand}">
+            <Path Classes="lucide" Data="{StaticResource IconChevronLeft}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
           </Button>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
+          <Button Grid.Column="1" Classes="nav" Padding="2,6" Command="{Binding ToggleExpandedCommand}">
+            <TextBlock Text="{Binding MonthLabel}"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimaryBrush}" />
+          </Button>
+          <Button Grid.Column="2" Classes="nav" Padding="8,6" Command="{Binding NextMonthCommand}">
+            <Path Classes="lucide" Data="{StaticResource IconChevronRight}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+          </Button>
 
-    <TextBlock Text="{Binding MonthSummary}"
-               HorizontalAlignment="Center"
-               FontSize="{StaticResource FontSizeSm}"
-               Foreground="{StaticResource TextSecondaryBrush}" />
+          <Button Grid.Column="4" Classes="reset"
+                  IsVisible="{Binding HasSelectedDate}"
+                  Command="{Binding ShowAllCommand}"
+                  ToolTip.Tip="{Binding [Common.All], Source={x:Static svc:Localizer.Instance}}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="{Binding SelectedDateLabel}" FontSize="{StaticResource FontSizeSm}"
+                         VerticalAlignment="Center" />
+              <Path Classes="lucide" Data="{StaticResource IconClose}"
+                    Stroke="{StaticResource TextSecondaryBrush}" Width="10" Height="10"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
 
-    <!-- Empty month: jump to the nearest month that has recordings. -->
-    <Button Classes="nav"
-            HorizontalAlignment="Center"
-            IsVisible="{Binding HasNearestMonth}"
-            Command="{Binding JumpToNearestMonthCommand}"
-            Foreground="{StaticResource AccentBrush}"
-            Content="{Binding NearestMonthLabel}" />
+          <Button Grid.Column="5" Classes="nav" Padding="8,6" Margin="4,0,0,0"
+                  Command="{Binding ToggleExpandedCommand}"
+                  ToolTip.Tip="{Binding [Calendar.ToggleMonth], Source={x:Static svc:Localizer.Instance}}">
+            <Path Classes="lucide chevron" Classes.up="{Binding IsExpanded}"
+                  Data="{StaticResource IconChevronDown}"
+                  RenderTransformOrigin="50%,50%"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+          </Button>
+        </Grid>
 
-    <Button Classes="nav"
-            HorizontalAlignment="Center"
-            Command="{Binding ShowAllCommand}"
-            Content="{Binding [Common.All], Source={x:Static svc:Localizer.Instance}}" />
+        <UniformGrid Columns="7">
+          <TextBlock Text="{Binding [Calendar.Mon], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Tue], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Wed], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Thu], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Fri], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Sat], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+          <TextBlock Text="{Binding [Calendar.Sun], Source={x:Static svc:Localizer.Instance}}" HorizontalAlignment="Center" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" />
+        </UniformGrid>
 
-  </StackPanel>
+        <ItemsControl ItemsSource="{Binding WeekDays}" ItemTemplate="{StaticResource DayCell}"
+                      IsVisible="{Binding !IsExpanded}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="7" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+        <ItemsControl ItemsSource="{Binding Days}" ItemTemplate="{StaticResource DayCell}"
+                      IsVisible="{Binding IsExpanded}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="7" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <!-- Month total, or the jump to the nearest month with recordings. -->
+        <Panel HorizontalAlignment="Center">
+          <TextBlock Text="{Binding MonthSummary}"
+                     IsVisible="{Binding !HasNearestMonth}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     Foreground="{StaticResource TextTertiaryBrush}" />
+          <Button Classes="nav" Padding="6,0"
+                  IsVisible="{Binding HasNearestMonth}"
+                  Command="{Binding JumpToNearestMonthCommand}"
+                  FontSize="{StaticResource FontSizeSm}"
+                  Foreground="{StaticResource AccentBrush}"
+                  Content="{Binding NearestMonthLabel}" />
+        </Panel>
+
+      </StackPanel>
+    </Border>
+
+  </Panel>
 
 </UserControl>
