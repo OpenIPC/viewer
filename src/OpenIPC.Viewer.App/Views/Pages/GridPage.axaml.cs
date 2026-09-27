@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -150,6 +151,52 @@ public sealed partial class GridPage : UserControl
         catch (Exception ex)
         {
             Trace.WriteLine($"[GridPage] tab drop failed: {ex}");
+        }
+    }
+
+    // --- Layout tab menu ("⋯" on the active tab, or right-click any tab) ----
+    // The menu is the tab's ContextFlyout; the "⋯" button just opens it. Opening
+    // captures which tab it belongs to — a right-clicked inactive tab is
+    // switched to first, since the VM commands act on ActiveLayout.
+    private OpenIPC.Viewer.Core.Entities.GridLayout? _menuLayout;
+
+    private void OnTabMoreClick(object? sender, RoutedEventArgs e)
+    {
+        var tab = (sender as Control)?.FindAncestorOfType<Border>();
+        tab?.ContextFlyout?.ShowAt(tab);
+    }
+
+    private void OnTabMenuOpening(object? sender, EventArgs e)
+    {
+        if (sender is not MenuFlyout flyout) return;
+        _menuLayout = flyout.Target?.DataContext as OpenIPC.Viewer.Core.Entities.GridLayout;
+        var canDelete = DataContext is GridPageViewModel { CanDeleteLayout: true };
+        foreach (var item in flyout.Items.OfType<MenuItem>())
+            if (Equals(item.Tag, "delete")) item.IsEnabled = canDelete;
+    }
+
+    private async void OnTabMenuCamerasClick(object? sender, RoutedEventArgs e)
+        => await RunOnMenuLayoutAsync(vm => vm.ManageCamerasCommand.ExecuteAsync(null));
+
+    private async void OnTabMenuRenameClick(object? sender, RoutedEventArgs e)
+        => await RunOnMenuLayoutAsync(vm => vm.RenameLayoutCommand.ExecuteAsync(null));
+
+    private async void OnTabMenuDeleteClick(object? sender, RoutedEventArgs e)
+        => await RunOnMenuLayoutAsync(vm => vm.DeleteLayoutCommand.ExecuteAsync(null));
+
+    private async Task RunOnMenuLayoutAsync(Func<GridPageViewModel, Task> action)
+    {
+        try
+        {
+            if (DataContext is not GridPageViewModel vm || _menuLayout is not { } layout) return;
+            _menuLayout = null;
+            if (vm.ActiveLayout?.Id != layout.Id)
+                await vm.SwitchLayoutCommand.ExecuteAsync(layout);
+            await action(vm);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[GridPage] tab menu action failed: {ex}");
         }
     }
 

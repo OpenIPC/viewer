@@ -68,10 +68,12 @@ public sealed partial class GridPageViewModel : ViewModelBase,
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Columns))]
     [NotifyPropertyChangedFor(nameof(Rows))]
+    [NotifyPropertyChangedFor(nameof(LayoutSizeLabel))]
     private int _layoutSize = 2;
 
     public int Columns => LayoutSize;
     public int Rows => LayoutSize;
+    public string LayoutSizeLabel => $"{LayoutSize}×{LayoutSize}";
 
     // Pagination within a layout. The visual grid (LayoutSize² cells) is one
     // page; a layout can hold more cameras than fit, so the member list is
@@ -349,7 +351,18 @@ public sealed partial class GridPageViewModel : ViewModelBase,
 
     // --- Stills mode (grid-wide) --------------------------------------------
     // Every tile shows a periodic HTTP snapshot instead of a live RTSP session.
-    [ObservableProperty] private bool _stillsMode;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LiveMode))]
+    private bool _stillsMode;
+
+    // Inverse of StillsMode for the "Live | Stills" segmented switch — each
+    // segment binds TwoWay to its own flag.
+    public bool LiveMode
+    {
+        get => !StillsMode;
+        set => StillsMode = !value;
+    }
+
     [ObservableProperty] private int _stillsIntervalSeconds;
 
     public int[] StillsIntervalOptions { get; } = { 2, 5, 10, 30, 60 };

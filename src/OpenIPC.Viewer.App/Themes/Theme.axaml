@@ -104,4 +104,19 @@
   <!-- IconPower — Lucide "power", tray menu exit. -->
   <StreamGeometry x:Key="IconPower">M12,2 V12 M18.36,6.64 A9,9 0 1 1 5.63,6.64</StreamGeometry>
 
+  <!-- Grid page toolbar. IconPlus / IconEllipsis / IconTrash / IconChevronDown /
+       IconVideoCam are Lucide "plus", "ellipsis", "trash-2", "chevron-down", "video". -->
+  <StreamGeometry x:Key="IconPlus">M5,12 H19 M12,5 V19</StreamGeometry>
+  <StreamGeometry x:Key="IconEllipsis">M11,12 A1,1 0 1 0 13,12 A1,1 0 1 0 11,12 Z M18,12 A1,1 0 1 0 20,12 A1,1 0 1 0 18,12 Z M4,12 A1,1 0 1 0 6,12 A1,1 0 1 0 4,12 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconTrash">M10,11 V17 M14,11 V17 M19,6 V20 a2,2 0 0 1 -2,2 H7 a2,2 0 0 1 -2,-2 V6 M3,6 H21 M8,6 V4 a2,2 0 0 1 2,-2 h4 a2,2 0 0 1 2,2 v2</StreamGeometry>
+  <StreamGeometry x:Key="IconChevronDown">M6,9 L12,15 L18,9</StreamGeometry>
+  <StreamGeometry x:Key="IconVideoCam">M16,13 L21.223,16.482 a0.5,0.5 0 0 0 0.777,-0.416 V7.87 a0.5,0.5 0 0 0 -0.752,-0.432 L16,10.5 M4,6 H14 A2,2 0 0 1 16,8 V16 A2,2 0 0 1 14,18 H4 A2,2 0 0 1 2,16 V8 A2,2 0 0 1 4,6 Z</StreamGeometry>
+  <!-- IconGrid1..5 — N×N grid-size glyphs (Lucide "square" / "grid-3x3" style,
+       extended to 4×4 and 5×5). Same outer box so they align in the size menu. -->
+  <StreamGeometry x:Key="IconGrid1">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconGrid2">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,12 H21 M12,3 V21</StreamGeometry>
+  <StreamGeometry x:Key="IconGrid3">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,9 H21 M3,15 H21 M9,3 V21 M15,3 V21</StreamGeometry>
+  <StreamGeometry x:Key="IconGrid4">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,7.5 H21 M3,12 H21 M3,16.5 H21 M7.5,3 V21 M12,3 V21 M16.5,3 V21</StreamGeometry>
+  <StreamGeometry x:Key="IconGrid5">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M3,6.6 H21 M3,10.2 H21 M3,13.8 H21 M3,17.4 H21 M6.6,3 V21 M10.2,3 V21 M13.8,3 V21 M17.4,3 V21</StreamGeometry>
+
 </ResourceDictionary>

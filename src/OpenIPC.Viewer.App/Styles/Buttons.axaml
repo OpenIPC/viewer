@@ -21,4 +21,64 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
 
+  <!-- Segmented control: RadioButtons inside a bordered track (Border.segmented).
+       The checked segment is an accent pill; the rest stay flat. -->
+  <Style Selector="Border.segmented">
+    <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="2" />
+  </Style>
+  <Style Selector="RadioButton.segment">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="root"
+                Background="{TemplateBinding Background}"
+                CornerRadius="4"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalContentAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.segment:pointerover /template/ Border#root">
+    <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked /template/ Border#root">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="RadioButton.segment Path.lucide">
+    <Setter Property="Stroke" Value="{Binding $parent[RadioButton].Foreground}" />
+  </Style>
+
+  <!-- Small borderless icon button living inside another chip (the "⋯" on the
+       active layout tab). -->
+  <Style Selector="Button.chip-icon">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.chip-icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#33FFFFFF" />
+  </Style>
+  <Style Selector="Button.chip-icon:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#4DFFFFFF" />
+  </Style>
+
 </Styles>
