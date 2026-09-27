@@ -180,7 +180,7 @@
     <ScrollViewer Grid.Row="2" x:Name="ListScroll" IsVisible="{Binding HasCameras}">
       <Border Background="{StaticResource Bg2Brush}"
               BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
-              CornerRadius="10" Padding="4">
+              CornerRadius="10" Padding="4" VerticalAlignment="Top">
         <Panel>
           <TextBlock IsVisible="{Binding HasNoMatches}"
                      Text="{Binding [Library.NoMatches], Source={x:Static svc:Localizer.Instance}}"

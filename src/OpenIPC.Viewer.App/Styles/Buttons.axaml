@@ -63,8 +63,8 @@
     <Setter Property="Stroke" Value="{Binding $parent[RadioButton].Foreground}" />
   </Style>
 
-  <!-- Filter chip: pill-shaped RadioButton (cameras-page status filter). -->
-  <Style Selector="RadioButton.chip">
+  <!-- Filter chip: pill-shaped RadioButton (one-of filters) or ToggleButton (on/off). -->
+  <Style Selector=":is(ToggleButton).chip">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -89,14 +89,14 @@
       </ControlTemplate>
     </Setter>
   </Style>
-  <Style Selector="RadioButton.chip:pointerover /template/ Border#root">
+  <Style Selector=":is(ToggleButton).chip:pointerover /template/ Border#root">
     <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
   </Style>
-  <Style Selector="RadioButton.chip:checked /template/ Border#root">
+  <Style Selector=":is(ToggleButton).chip:checked /template/ Border#root">
     <Setter Property="Background" Value="{StaticResource AccentTintBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
   </Style>
-  <Style Selector="RadioButton.chip:checked">
+  <Style Selector=":is(ToggleButton).chip:checked">
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
