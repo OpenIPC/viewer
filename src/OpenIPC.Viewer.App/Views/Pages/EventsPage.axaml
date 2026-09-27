@@ -39,7 +39,7 @@
             <MenuItem Header="{Binding [Events.Button.SimulateMotion], Source={x:Static svc:Localizer.Instance}}"
                       Command="{Binding SimulateMotionCommand}">
               <MenuItem.Icon>
-                <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource TextSecondaryBrush}" Width="14" Height="14" />
+                <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource TextSecondaryBrush}" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </MenuItem.Icon>
             </MenuItem>
           </MenuFlyout>
@@ -59,7 +59,7 @@
         <RadioButton Classes="chip" GroupName="EventKind" VerticalAlignment="Center"
                      IsChecked="{Binding IsKindMotion, Mode=TwoWay}">
           <StackPanel Orientation="Horizontal" Spacing="5">
-            <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource WarningBrush}" Width="12" Height="12" />
+            <Path Classes="lucide" Data="{StaticResource IconWalk}" Stroke="{StaticResource WarningBrush}" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
             <TextBlock Text="{Binding [Events.Kind.Motion], Source={x:Static svc:Localizer.Instance}}" />
           </StackPanel>
         </RadioButton>
@@ -157,7 +157,7 @@
                     </Border>
                     <Border Classes="kind-icon" Background="#33f59e0b" IsVisible="{Binding IsMotion}">
                       <Path Classes="lucide" Data="{StaticResource IconWalk}"
-                            Stroke="{StaticResource WarningBrush}" Width="14" Height="14" />
+                            Stroke="{StaticResource WarningBrush}" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                   </Panel>
 
