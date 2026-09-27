@@ -59,9 +59,29 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(MonthLabel))]
     private int _month;
 
-    [ObservableProperty] private DateTime? _selectedDate;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedDate))]
+    [NotifyPropertyChangedFor(nameof(SelectedDateLabel))]
+    private DateTime? _selectedDate;
+
+    public bool HasSelectedDate => SelectedDate is not null;
+
+    // "27 сентября" — the compact calendar's reset chip.
+    public string SelectedDateLabel => SelectedDate is { } d ? d.ToString("d MMMM", UiCulture) : "";
 
     public ObservableCollection<CalendarDayCell> Days { get; } = new();
+
+    // One row of Days (same cell instances) for the collapsed phone calendar:
+    // the selected day's week, else this week if it has recordings, else the
+    // latest week with recordings, else this week / the month's first week.
+    public ObservableCollection<CalendarDayCell> WeekDays { get; } = new();
+
+    // Phone calendar: week strip (false) or the whole month (true). Picking a
+    // day folds it back so the list gets the screen again.
+    [ObservableProperty] private bool _isExpanded;
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     public string MonthLabel =>
         UiCulture.TextInfo.ToTitleCase(new DateTime(Year, Month, 1).ToString("MMMM yyyy", UiCulture));
@@ -191,6 +211,37 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
             };
             Days.Add(cell);
         }
+        UpdateWeek();
+    }
+
+    private void UpdateWeek()
+    {
+        WeekDays.Clear();
+        if (Days.Count < 7) return;
+
+        var today = DateTime.Now.Date;
+        int WeekOf(Func<CalendarDayCell, bool> match)
+        {
+            for (var i = 0; i < Days.Count; i++)
+                if (match(Days[i])) return i / 7;
+            return -1;
+        }
+        bool WeekHasRecordings(int week) =>
+            week >= 0 && Enumerable.Range(week * 7, 7).Any(i => Days[i].InMonth && Days[i].HasRecordings);
+
+        var thisWeek = WeekOf(c => c.InMonth && c.Date == today);
+        var lastRecordingWeek = -1;
+        for (var i = Days.Count - 1; i >= 0 && lastRecordingWeek < 0; i--)
+            if (Days[i].InMonth && Days[i].HasRecordings) lastRecordingWeek = i / 7;
+
+        var week = SelectedDate is { } sel ? WeekOf(c => c.Date == sel.Date) : -1;
+        if (week < 0 && WeekHasRecordings(thisWeek)) week = thisWeek;
+        if (week < 0) week = lastRecordingWeek;
+        if (week < 0) week = thisWeek;
+        if (week < 0) week = WeekOf(c => c.InMonth);
+
+        for (var i = 0; i < 7; i++)
+            WeekDays.Add(Days[week * 7 + i]);
     }
 
     [RelayCommand]
@@ -228,6 +279,8 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
         }
         SelectedDate = cell.Date.Date;
         foreach (var c in Days) c.IsSelected = c.Date.Date == cell.Date.Date;
+        IsExpanded = false;
+        UpdateWeek();
         DaySelected?.Invoke(cell.Date.Date);
     }
 
@@ -236,6 +289,7 @@ public sealed partial class ArchiveCalendarViewModel : ViewModelBase
     {
         SelectedDate = null;
         foreach (var c in Days) c.IsSelected = false;
+        UpdateWeek();
         DaySelected?.Invoke(null);
     }
 }

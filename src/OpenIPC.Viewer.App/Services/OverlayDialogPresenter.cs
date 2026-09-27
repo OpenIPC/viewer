@@ -42,6 +42,9 @@ public static class OverlayDialogPresenter
     // keeps the card's top edge clear of the status bar / notch.
     private const double TopPeek = 56;
 
+    // Air between a sheet's last row and the navigation bar / gesture pill.
+    private const double SheetBottomGap = 14;
+
     // Number of overlay dialogs currently on screen. Mobile dialogs live in the
     // TopLevel.OverlayLayer; the dim Border does not reliably intercept taps on
     // the bottom nav, so the shell gates navigation on this instead. Desktop
@@ -118,14 +121,15 @@ public static class OverlayDialogPresenter
                 },
         };
 
-        // Full-screen pages cover the whole TopLevel, including under the status
-        // bar — inset the top so the title clears the clock/notch. Use the real
-        // safe-area when the platform exposes it, else a sensible default.
-        if (fullScreen)
-        {
-            var safeTop = top?.InsetsManager?.SafeAreaPadding.Top ?? 0;
-            card.Padding = new Thickness(0, safeTop > 0 ? safeTop : 28, 0, 0);
-        }
+        // The overlay layer sits above the shell, so it doesn't inherit the
+        // safe-area padding MainView applies to itself. Full-screen pages cover
+        // the status bar — inset the top so the title clears the clock/notch.
+        // A sheet reaches the bottom edge: lift its action row clear of the
+        // navigation bar / gesture pill, plus a little air above it.
+        var safe = top?.InsetsManager?.SafeAreaPadding ?? default;
+        card.Padding = fullScreen
+            ? new Thickness(0, safe.Top > 0 ? safe.Top : 28, 0, 0)
+            : new Thickness(0, 0, 0, safe.Bottom + SheetBottomGap);
 
         var dim = new Border
         {

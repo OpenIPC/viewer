@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using OpenIPC.Viewer.App.ViewModels;
@@ -102,5 +103,24 @@ public sealed partial class RecordingPlayerPage : UserControl
                 return;
         }
         e.Handled = true;
+    }
+
+    // Phone speed pill: the rates as a one-tap menu above the button.
+    private void OnSpeedClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control anchor || Vm is not { } vm) return;
+        var menu = new MenuFlyout { Placement = PlacementMode.Top };
+        foreach (var option in vm.RateOptions)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = option.Label,
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = option.IsActive,
+                Command = vm.SetRateCommand,
+                CommandParameter = option.Parameter,
+            });
+        }
+        menu.ShowAt(anchor);
     }
 }

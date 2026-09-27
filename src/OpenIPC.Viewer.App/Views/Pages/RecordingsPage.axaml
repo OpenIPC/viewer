@@ -11,10 +11,16 @@
 
   <UserControl.Styles>
     <!-- Narrow viewport: the activity calendar drops from the left column to a
-         band above the list so the list keeps the full width instead of being
-         crushed into ~80px next to a fixed 240px calendar. Size also drops. -->
+         full-width card above the list (a week strip that expands to the
+         month) so the list keeps the width and most of the height. Margin
+         lives in styles only: a local value would outrank the compact one. -->
+    <Style Selector="DockPanel &gt; pages|ArchiveCalendarView">
+      <Setter Property="Margin" Value="0,0,16,16" />
+    </Style>
     <Style Selector="DockPanel.compact &gt; pages|ArchiveCalendarView">
       <Setter Property="(DockPanel.Dock)" Value="Top" />
+      <Setter Property="IsCompact" Value="True" />
+      <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
     <Style Selector="DockPanel.compact TextBlock.wide-only">
       <Setter Property="IsVisible" Value="False" />
@@ -86,10 +92,9 @@
     <DockPanel Grid.Row="1" IsVisible="{Binding ShowRecordings}"
                b:Adaptive.CompactBelow="620" LastChildFill="True">
 
-      <!-- Activity calendar. Default Dock is Left; trailing margin works for
-           both orientations. -->
+      <!-- Activity calendar. Default Dock is Left; dock, margin and the phone
+           layout come from the styles above. -->
       <pages:ArchiveCalendarView DataContext="{Binding Calendar}"
-                                 Margin="0,0,16,16"
                                  VerticalAlignment="Top" />
 
       <Grid RowDefinitions="Auto,*,Auto">
