@@ -25,18 +25,24 @@ with four choices:
 1. **Scan local network** — aggregated discovery: ONVIF WS-Discovery and mDNS
    run together, with an optional *Deep scan* subnet sweep for cameras that
    announce nothing. Most cameras with a working ONVIF responder are picked up
-   within ~5 s. See [Adding your first camera](first-camera.md).
+   within ~5 s; each result has its own *Add*. See
+   [Adding your first camera](first-camera.md).
 2. **Scan QR code** — pick a saved QR image (screenshot, photo, sticker) and
    the camera editor opens pre-filled from it.
-3. **Add manually** — host + RTSP path form. Use this if discovery misses the
-   camera or if it's on a different VLAN.
-4. **Skip** — opens an empty library; add cameras later from `+ Add camera`.
+3. **Add manually** — type the address and login and press *Connect*; the
+   editor detects the camera type and fills in the streams. Use this if
+   discovery misses the camera or if it's on a different VLAN.
+4. **Skip** — opens an empty library; add cameras later from *Add* or *Find
+   on network* in the Library header.
 
 The "show this once" flag is persisted; dismissing it once means the dialog
 doesn't reappear even if you later delete every camera.
 
 ## Tuning
 
+- **Settings → Appearance → Start page** — open on the Library (default) or
+  straight on Live. When starting on Live, *Layout at startup* picks the
+  layout it opens on; *Last used* keeps whatever was open when you quit.
 - **Settings → Video → Show telemetry overlay** — toggles the live-view
   badges (codec / fps / frames). Off by default for a cleaner picture during
   recordings.
@@ -48,11 +54,18 @@ doesn't reappear even if you later delete every camera.
 
 ## Moving to another machine
 
-*Settings → Backup → Export config* writes cameras and layouts to a single
-JSON; *Import* reads it back on the other machine, showing a preview of how many
-cameras and layouts will be added or updated before it commits. Passwords stay
-out of the file unless you tick *include credentials* and set a passphrase in
-the config-sync section — then they travel encrypted with it.
+*Settings → Backup & restore → Export…* writes cameras and layouts to a single
+JSON; *Import…* reads it back on the other machine, showing a preview of how
+many cameras and layouts will be added or updated before it commits. Layouts
+are matched by name, so importing the same file twice doesn't duplicate tabs.
+Passwords stay out of the file unless you tick *Sync camera passwords
+(encrypted)* and set a shared passphrase in the *Network config auto-update*
+section — then they travel encrypted with it.
+
+That same section can keep several machines in step: point it at a shared
+JSON (a local or network path) and every start mirrors cameras and layouts from
+it. The file wins — cameras and layouts missing from it are removed locally —
+and if the path is unreachable the last working config keeps running.
 
 ## Running it as a server
 

@@ -51,6 +51,13 @@ permanently once and it goes away (or re-add the camera).
 
 ## Android
 
+**"App not installed" / "package appears to be corrupt".** Check you took
+`org.openipc.viewer-Signed.apk` (arm64) — the `-x64-` one is for emulators and
+won't install on a phone. `v0.3.4` and `v0.3.6` shipped broken APKs; any later
+release is fine. If Android reports a conflict with an installed package, the
+old build was signed with a different key: uninstall it first (export your
+config from *Settings → Backup & restore* beforehand).
+
 **Recording stops when app goes to background.** Foreground service
 notification was dismissed by the user. Android kills services whose
 notification is swiped away. Don't dismiss it.
@@ -93,6 +100,10 @@ to private ranges (`10/8`, `172.16/12`, `192.168/16`) and refuses its own
 loopback. Anything else has to be reached from the desktop app instead.
 
 ## Cross-platform
+
+**Every camera shows offline, but the video plays.** Fixed in `v0.3.10`: the
+status probe used an IPv6 socket that failed on IPv4 cameras when IPv6 was
+disabled or dropped by a VPN. Update.
 
 **App opens with no cameras after upgrade.** Database lives in the
 AppData root and survives upgrades. If you see empty: check whether

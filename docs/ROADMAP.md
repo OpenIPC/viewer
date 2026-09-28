@@ -5,10 +5,10 @@ phase ends with a demonstrable, releasable increment. This page tracks where
 things stand; it is a summary, not a commitment to dates.
 
 > **Current status:** public beta, shipping regularly — latest release
-> **`v0.3.8`** for Windows / Linux / macOS / Android. Every feature phase
-> through 21 is done; what remains from the plan is **distribution**
-> (native installers, in-app auto-update, code signing, F-Droid) plus
-> on-device validation across the non-Windows heads.
+> **`v0.3.10`** (September 2026) for Windows / Linux / macOS / Android. Every
+> feature phase through 21 is done; what remains from the plan is
+> **distribution** (native installers, in-app auto-update, code signing,
+> F-Droid) plus on-device validation across the non-Windows heads.
 
 ## Phases
 
@@ -34,7 +34,8 @@ things stand; it is a summary, not a commitment to dates.
 - **`v0.2.x-beta` (mobile)** — Phases 9–10. Android + iOS heads.
 - **`v0.3.x` (current)** — post-MVP phases 12–17 and 19–21: AI detection,
   two-way audio, archive pro, tabbed layouts, the self-hosted web console,
-  aggregated discovery, and a long tail of platform fixes.
+  aggregated discovery, and a long tail of platform fixes. `v0.3.9`–`v0.3.10`
+  added PTZ stepping, digital zoom and a redesign of the main pages.
 
 ## Phase 11 — remaining
 
@@ -94,6 +95,19 @@ in the 0.3.x line:
   single-instance mode.
 - **Mobile UX** — safe-area insets, soft-keyboard handling for the SSH
   terminal, mobile splash, and a gate on risky device tools.
+- **PTZ stepping** (`v0.3.9`) — a step keypad, home and move speed next to
+  the joystick, offered only where the camera reports it can do them; ONVIF
+  client hardened against firmwares that advertise wrong service addresses,
+  answer only SOAP 1.1 or use digest auth.
+- **Digital zoom** (`v0.3.10`) — up to 8× in live view and the recording
+  player: zoom at the cursor, pan, zoom into a drawn box, minimap.
+- **UI redesign** (`v0.3.10`) — add-camera dialog that connects and
+  auto-detects first; find-cameras dialog with an instant quick scan; dense
+  library list with search and status filters; recordings grouped by day with
+  a clearer calendar; events with filters, episodes and jump-to-recording; a
+  rebuilt recording player (speed, frame step, sound, fullscreen, clip mode);
+  a new AI page; a regrouped live toolbar; phone-width polish throughout.
+- **Start page** (`v0.3.9`) — open in Library or Live, on a chosen layout.
 
 > **Phase 18** is the viewer side of our own **Streq** cloud (WireGuard/n3n
 > overlay + go2rtc/MediaMTX media relay) for remote multistreaming across

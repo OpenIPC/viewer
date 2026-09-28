@@ -17,34 +17,58 @@ Built with .NET 9 / 10 and Avalonia 12.
 
 - **Live RTSP** — h264 / h265, software + hardware decode (D3D11VA / VAAPI /
   VideoToolbox / Android MediaCodec), auto-reconnect, auto SD/HD switching.
-- **Multi-camera grid** — up to 25 streams, tabbed layouts, drag-reorder,
-  fullscreen kiosk mode, low-cost "stills" mode (periodic HTTP snapshots).
+- **Multi-camera grid** — up to 25 streams, tabbed layouts with their own
+  grid size, drag-reorder that sticks per layout, fullscreen kiosk mode, and a
+  *Live | Stills* switch for a low-cost mode (periodic HTTP snapshots instead
+  of video).
 - **Single-camera view** — PTZ joystick for sweeping plus a step keypad for
   framing (one nudge per press, home position, move speed), presets,
-  telemetry overlay, digital zoom (pinch / Ctrl+wheel), snapshot to disk +
-  share. Which PTZ controls appear is read from the camera, so a device that
-  cannot step or go home is not offered buttons that would fail.
+  telemetry overlay, snapshot to disk + share. Which PTZ controls appear is
+  read from the camera, so a device that cannot step or go home is not
+  offered buttons that would fail.
+- **Digital zoom** — up to 8× in live view and in the recording player:
+  wheel or pinch zooms at the cursor, drag pans, Shift+drag (or the
+  zoom-to-area button) draws a box to zoom into, with a minimap while zoomed.
+  Detection boxes follow the zoom.
+- **Adding cameras** — type an address and login, press *Connect*: the editor
+  detects OpenIPC / ONVIF, fills in streams, ports and name and shows a live
+  frame — or says plainly what failed (unreachable, wrong login, no video). A
+  pasted `rtsp://` link is split into fields; everything else sits under
+  collapsible *Advanced* rows. QR-code add from an image.
+- **Camera discovery** — *Find on network* starts a quick ONVIF + mDNS scan
+  as soon as it opens, recognises OpenIPC by its web fingerprint, and adds
+  each result with one click; an opt-in deep scan sweeps subnets and IP
+  ranges for cameras that announce nothing.
+- **Camera library** — dense list with search by name / IP / group, status
+  filters with live counts, a pager, and a per-row menu (edit, device tools,
+  files, which layouts the camera is in).
+- **Recording & archive** — segmented MP4 via `-c copy`. Recordings are
+  grouped by day with camera / period / motion-only filters and an activity
+  calendar. The player has 0.5×–8× speed, frame stepping, sound, fullscreen,
+  clip export, save-frame-to-snapshots and auto-continue into the next
+  recording, all with keyboard shortcuts.
+- **Events** — motion and AI detections filtered by camera / type / period,
+  bursts folded into one episode, what was detected shown as class icons, and
+  a jump straight to the recording at the moment of the event.
 - **AI detection (local)** — ONNX object detection on-device (person / car /
-  animal…), boxes in the grid and single view, auto-record on detection.
-  No cloud: the model runs in-process.
+  bike / animal…), boxes in the grid and single view, auto-record on
+  detection. The AI page shows engine status, per-camera switches and a 24-hour
+  summary. No cloud: the model runs in-process.
 - **Audio** — one-tap listen (AAC/PCM) and push-to-talk to cameras with an
   RTSP backchannel.
-- **Recording & archive** — segmented MP4 via `-c copy`, in-app player with
-  seek, clip export.
-- **Camera discovery** — ONVIF / mDNS / opt-in subnet sweep with OpenIPC
-  web fingerprinting, multi-add from one scan, manual add, QR-code add.
 - **Majestic integration** — read / apply config with diff preview, raw JSON
   editor, RTMP push, day / night / auto mode.
 - **Device tools** — SSH terminal, remote file manager, reboot / clock / log
   snapshots over SSH.
 - **Health & status** — unified per-camera verdict (online / attention /
   offline) across grid, library and a Health Center overview.
-- **Events & notifications** — motion + detection log, system notifications
-  with quiet hours.
+- **Notifications** — system notifications for motion and detections, with
+  quiet hours.
 - **Desktop niceties** — tray icon with quick actions, optional
-  close-to-tray, light/dark themes with accent colors.
+  close-to-tray, choice of start page (Library or Live) and startup layout,
+  light/dark themes with accent colors.
 - **Camera groups**, English / Russian UI (runtime switch), responsive layout
-  (sidebar ↔ bottom tab strip).
+  (sidebar on desktop, bottom tab strip and bottom sheets on phones).
 - **Web console (self-host)** — run the same binary with `--server-only` for a
   browser UI to your cameras over the LAN: live grid with saved layouts, PTZ,
   network discovery, camera management, config backup, and accounts with
@@ -82,7 +106,8 @@ installer is required for the beta — download, extract, run:
 | Windows x64 | `openipc-viewer-win-x64.zip` | extract, run `OpenIPC.Viewer.Desktop.exe` (accept the SmartScreen prompt — builds are unsigned for now) |
 | Linux x64 | `openipc-viewer-linux-x64.tar.gz` | extract, `chmod +x`, run `./OpenIPC.Viewer.Desktop` |
 | macOS arm64 | `openipc-viewer-osx-arm64.tar.gz` | extract, right-click the app → *Open* (Gatekeeper blocks unsigned builds on first launch) |
-| Android arm64 | `*-Signed.apk` | sideload (debug-signed, not Play-signed) |
+| Android arm64 | `org.openipc.viewer-Signed.apk` | sideload on Android 12+ (not on Google Play yet) |
+| Android x64 | `org.openipc.viewer-x64-Signed.apk` | the same for emulators and x86-64 Android devices — phones want the arm64 one |
 
 Each build is self-contained (bundles the .NET runtime), so there's nothing
 to install alongside it. Native installers and in-app auto-update may come in

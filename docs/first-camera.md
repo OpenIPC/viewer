@@ -1,19 +1,30 @@
 # Adding your first camera
 
-Three paths, listed cheapest-to-most-manual.
+Three paths, listed cheapest-to-most-manual. All three end in the same camera
+editor, which checks the camera before it is saved.
 
 ## 1. Network discovery (LAN scan)
 
-Library → `Discover`. A scan runs two passive sources at once — ONVIF
-WS-Discovery (multicast `239.255.255.250:3702`) and mDNS — and merges the
-answers into one list, deduplicated per device, each entry tagged with what
-found it and how confident that is. Cameras with an ONVIF responder show up
-within ~5 s, with their advertised model and RTSP URI; OpenIPC devices
+Library → *Find on network* (also on the first-run welcome screen, and at the
+bottom of the *Add camera* dialog). The dialog starts a **quick scan** the
+moment it opens: two passive sources at once — ONVIF WS-Discovery (multicast
+`239.255.255.250:3702`) and mDNS — merged into one list, deduplicated per
+device. Cameras with an ONVIF responder show up within ~5 s; OpenIPC devices
 without ONVIF are recognised by their web fingerprint.
 
-Pick a camera → enter credentials → the editor pre-fills name / host /
-RTSP / ONVIF profile. Save. The dialog stays open with the scan results, so
-several cameras can be added from one scan.
+Each row says what the device is (*OpenIPC camera*, *ONVIF camera*, or just
+*answers RTSP* / *answers HTTP*), its model and address, and has its own
+*Add*. Cameras you already have are listed separately under *Already in
+library*, so they don't crowd the new ones.
+
+*Add* opens the camera editor for that address and **connects straight away**
+(see [Manual](#2-manual) below for what Connect does). The login you type
+there is remembered for the rest of the session and tried on the next camera,
+and closing the editor brings you back to the same scan list — so several
+cameras from one scan are a few clicks each.
+
+If the quick scan finds nothing, the empty state points at the two ways on:
+a deep scan, or entering the address yourself.
 
 ### Deep scan and where it sweeps
 
@@ -22,12 +33,12 @@ link. *Deep scan* adds an active sweep — a TCP knock on each host — which
 is how a camera that answers neither, or sits on a subnet multicast can't
 cross, gets found.
 
-The dialog lists the subnets it can sweep, read from the machine's routing
-table:
+Open the *Deep scan* footer at the bottom of the dialog. It lists the
+subnets it can sweep, read from the machine's routing table:
 
-- Subnets **this machine is on** are ticked by default.
-- Subnets reachable only **through a route** (another VLAN, or a VPN /
-  mesh tunnel) are listed but left unticked — tick the ones you mean to
+- Subnets **this machine is on** (*this network*) are ticked by default.
+- Subnets reachable only **through a route** (*through a VPN or route* —
+  another VLAN, or a VPN / mesh tunnel) are listed but left unticked — tick the ones you mean to
   sweep. This is the case that needs no typing: the camera's subnet shows
   up on its own, you just tick it.
 
@@ -43,10 +54,12 @@ Accepted:
 | `192.168.1.10-200`            | the same, last octet only     |
 | `192.168.1.64`                | one host                      |
 
-Several at once, separated by commas or spaces. Typing a range also
-switches the sweep on by itself. The running total is shown before you
-scan; at most 4096 addresses per scan, so if the ticked subnets plus the
-typed range exceed that, untick one or narrow the range.
+Several at once, separated by commas or spaces. The running total is shown
+before you scan; at most 4096 addresses per scan, so if the ticked subnets
+plus the typed range exceed that, untick one or narrow the range. Press
+*Scan deeper*; progress and the number found so far update live, and *Stop*
+ends it early. Scan results, the ticked subnets and the typed range are kept
+for the rest of the session, so reopening the dialog doesn't start over.
 
 On the [web console](web-server.md) the typed range must stay inside a
 private network (`10/8`, `172.16/12`, `192.168/16`) — a server accepts a
@@ -64,17 +77,40 @@ If discovery turns up nothing:
 
 ## 2. Manual
 
-Library → `+ Add camera`. Fill in:
+Library → *Add*. The dialog asks for two things first:
 
-- **Host** — IP or hostname.
-- **RTSP main** — full URI, e.g. `rtsp://192.168.1.50:554/0`. Path varies
-  by firmware: OpenIPC mainline uses `/0` (main) and `/1` (sub).
-- **Credentials** — kept in the platform keystore (DPAPI / Keychain /
-  libsecret) or AES-GCM file fallback.
+- **Address** — an IP, `ip:port`, or a whole `rtsp://` link. A pasted link is
+  split up for you: host, port, path and any `user:pass@` land in their own
+  fields.
+- **Username / password** — OpenIPC ships with `root` / `12345`. Credentials
+  are kept in the platform keystore (DPAPI / Keychain / libsecret) or an
+  AES-GCM file fallback, never inside the saved RTSP URL.
+
+Then press **Connect**. The editor works out whether it is an OpenIPC
+(Majestic) or ONVIF camera, fills in the main and sub streams, the HTTP /
+ONVIF / SSH ports and a name, and shows a live frame with the resolution and
+whether there is audio. If it can't, a card says which of these it was:
+
+| Card | Usually means |
+|---|---|
+| *The camera doesn't respond* | wrong address, or the camera isn't on a network this machine can reach |
+| *Wrong username or password* / *needs a username and password* | fix the login and press Connect again |
+| *The camera answers, but the video stream didn't open* | the stream path is wrong — see below |
+
+Everything else sits under **Advanced**, one collapsible row each with a
+one-line summary: *Streams* (main / sub RTSP URLs, plus *Vendor templates* for
+cameras that don't use OpenIPC's paths), *Ports*, *SSH access* (leave empty to
+reuse the main login), *Grid quality* (auto SD/HD, always HD, always SD) and
+*AI detection*. For OpenIPC mainline the streams are `rtsp://<host>:554/0`
+(main) and `/1` (sub).
+
+A camera can be put into a group from the same dialog, including a new group
+made on the spot.
 
 ## 3. QR code
 
-Library → `Scan QR` (also offered in the first-run welcome dialog). Pick a
+Library → the QR button (also offered in the first-run welcome dialog and at
+the bottom of the *Add camera* dialog). Pick a
 saved QR **image** — a screenshot, a photo, or the sticker sheet a camera
 shipped with — and the app decodes it and opens the camera editor pre-filled,
 so you review the fields before saving. Three payload shapes are understood:
@@ -92,9 +128,10 @@ is not implemented yet.
 
 ## Common issues
 
-- **"Failed to connect" / connection timeouts** — wrong RTSP path. Camera
-  vendors love to pick different defaults (`/cam/realmonitor`, `/stream1`,
-  `/h264`). Check the vendor docs.
+- **"The camera answers, but the video stream didn't open"** — wrong RTSP
+  path. Camera vendors love to pick different defaults (`/cam/realmonitor`,
+  `/stream1`, `/h264`). Try *Advanced → Streams → Vendor templates*, or check
+  the vendor docs.
 - **Auth loops** — the URI takes plain user/password but credentials live
   in the keystore separately. Setting them in both places is fine; just
   the keystore copy is preferred (URI auth shows up in logs).

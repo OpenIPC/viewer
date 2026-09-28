@@ -11,7 +11,9 @@ LAN. No cloud, no extra services — one admin password and a port.
 * **Camera management** — add / edit / delete, groups, import/export config backup.
 * **Find cameras on the network** — ONVIF, mDNS and an opt-in subnet sweep, then
   add what you found without leaving the browser.
-* **PTZ** — pan/tilt/zoom and presets for cameras that support it.
+* **PTZ** — pan/tilt/zoom and presets for cameras that support it. A tap on
+  the pad nudges the camera one step, a hold sweeps; home and step keys appear
+  only where the camera says it can do them.
 * **Snapshots** — grab a still from any camera and download it.
 * **Archive** — record a camera from the browser, then browse by calendar, play,
   download, and export a marked fragment; seeking works because playback is a
