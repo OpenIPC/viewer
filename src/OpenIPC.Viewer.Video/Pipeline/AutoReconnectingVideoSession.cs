@@ -14,13 +14,18 @@ namespace OpenIPC.Viewer.Video.Pipeline;
 // attempts with no frame the wrapper surfaces Offline (the interactive error
 // cell) while still probing at the 30s cadence. A watchdog forces a reconnect
 // when a "Playing" stream stops delivering frames — FFmpeg can sit on a dead
-// RTSP socket without erroring. Auth errors (401, Unauthorized, EACCES) abort
+// RTSP socket without erroring — or when an attempt never gets past
+// "Connecting" (issue #77: tiles stuck until an app restart). Auth errors (401, Unauthorized, EACCES) abort
 // permanently — we never retry against a wrong password (would lock the camera
 // out / DDoS it). Phase 12.3.
 internal sealed class AutoReconnectingVideoSession : IVideoSession
 {
     // No decoded frame for this long while Playing → treat the stream as hung.
-    private const long FrameTimeoutTicks = 5 * TimeSpan.TicksPerSecond;
+    private const long FrameTimeoutMs = 5_000;
+    // Stuck in Connecting this long → abandon the attempt. Above the inner
+    // session's own open + probe budgets, so it only fires when something it
+    // can't interrupt (e.g. HW decoder setup) wedges the connect.
+    private const long ConnectTimeoutMs = 45_000;
     // Consecutive failed attempts (no successful frame) before going Offline.
     private const int ColdFailures = 5;
 
@@ -36,11 +41,13 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     private SessionState _state = SessionState.Idle;
     private string? _lastError;
 
-    // Watchdog shared state. _lastActivityTicks is the UTC tick of the last
-    // frame (or the moment Playing was reached); _watching gates the watchdog
-    // so it only fires while the inner session believes it is Playing.
-    private long _lastActivityTicks;
+    // Watchdog shared state. _lastActivityMs is the Environment.TickCount64 of
+    // the last frame (or the moment Playing/Connecting was reached) — monotonic,
+    // so an NTP clock step can't blind the watchdog. _watching gates the stall
+    // check to Playing, _connecting the connect-timeout check to Connecting.
+    private long _lastActivityMs;
     private volatile bool _watching;
+    private volatile bool _connecting;
     // Transition-only logging — avoids a log line per retry attempt.
     private SessionState _lastLoggedState = SessionState.Idle;
 
@@ -137,7 +144,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
 
             using var framesSub = inner.Frames.Subscribe(f =>
             {
-                Volatile.Write(ref _lastActivityTicks, DateTime.UtcNow.Ticks);
+                Volatile.Write(ref _lastActivityMs, Environment.TickCount64);
                 // A real decoded frame means the connection is healthy — reset the
                 // backoff so a later blip starts again from 1s, not the capped 30s.
                 if (!sawFrame) { sawFrame = true; attempt = 0; }
@@ -149,13 +156,21 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
             {
                 if (s == SessionState.Playing)
                 {
-                    Volatile.Write(ref _lastActivityTicks, DateTime.UtcNow.Ticks);
+                    Volatile.Write(ref _lastActivityMs, Environment.TickCount64);
+                    _connecting = false;
                     _watching = true;
                     LogTransition(SessionState.Playing, null);
+                }
+                else if (s == SessionState.Connecting)
+                {
+                    Volatile.Write(ref _lastActivityMs, Environment.TickCount64);
+                    _watching = false;
+                    _connecting = true;
                 }
                 else
                 {
                     _watching = false;
+                    _connecting = false;
                 }
                 SetState(s);
                 if (s is SessionState.Failed or SessionState.Idle)
@@ -172,6 +187,7 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
                 {
                     var error = await failed.Task.ConfigureAwait(false);
                     _watching = false;
+                    _connecting = false;
 
                     if (IsAuthFailure(error))
                     {
@@ -220,9 +236,10 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
     }
 
     // Background frame watchdog. While the inner session reports Playing, a gap
-    // of FrameTimeoutTicks with no decoded frame means the stream is hung — push
-    // the same failure path as an explicit disconnect. Disposing the returned
-    // handle cancels the loop.
+    // of FrameTimeoutMs with no decoded frame means the stream is hung; while it
+    // reports Connecting, ConnectTimeoutMs without reaching Playing means the
+    // connect is wedged. Either pushes the same failure path as an explicit
+    // disconnect. Disposing the returned handle cancels the loop.
     private IDisposable StartWatchdog(TaskCompletionSource<string?> failed, CancellationToken ct)
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -233,11 +250,15 @@ internal sealed class AutoReconnectingVideoSession : IVideoSession
                 while (!cts.IsCancellationRequested)
                 {
                     await Task.Delay(1000, cts.Token).ConfigureAwait(false);
-                    if (!_watching) continue;
-                    var idle = DateTime.UtcNow.Ticks - Volatile.Read(ref _lastActivityTicks);
-                    if (idle > FrameTimeoutTicks)
+                    var idle = Environment.TickCount64 - Volatile.Read(ref _lastActivityMs);
+                    if (_watching && idle > FrameTimeoutMs)
                     {
                         failed.TrySetResult("Stream stalled (no frames for 5s)");
+                        return;
+                    }
+                    if (_connecting && idle > ConnectTimeoutMs)
+                    {
+                        failed.TrySetResult("Connect timed out (no stream after 45s)");
                         return;
                     }
                 }
