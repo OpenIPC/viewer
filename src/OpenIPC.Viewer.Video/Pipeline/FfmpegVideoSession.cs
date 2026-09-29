@@ -42,6 +42,22 @@ internal sealed class FfmpegVideoSession : IVideoSession
     // so the single-camera page (EnableAudio=true) starts with audio ready.
     private volatile bool _audioEnabled;
 
+    // Wall-clock budgets for each blocking libavformat call, enforced by the
+    // interrupt callback. The socket timeout alone doesn't bound a camera that
+    // accepts the TCP connection and then never answers (or trickles bytes), so
+    // without these avformat_open_input could block forever and the tile sat on
+    // "Connecting…" until an app restart (issue #77).
+    private const long ConnectBudgetMs = 15_000;
+    private const long ReadBudgetMs = 10_000;
+    private const long CloseBudgetMs = 1_000;
+    // Environment.TickCount64 deadline for the call in flight — monotonic, so an
+    // NTP clock step during a long run can't stretch or skip it.
+    private long _ioDeadlineMs = long.MaxValue;
+    // Set by DisposeAsync: aborts whatever FFmpeg call is blocking right now.
+    private volatile bool _abortIo;
+    // Rooted so the unmanaged function pointer stays valid for the demuxer's life.
+    private AVIOInterruptCB_callback? _interruptDelegate;
+
     private int _framesDecoded;
     private DateTime _lastFpsTick;
     private int _framesSinceFpsTick;
@@ -149,6 +165,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
     public async ValueTask DisposeAsync()
     {
+        _abortIo = true;
         _cts?.Cancel();
         // Unblock the decode gate so a paused thread observes cancellation and
         // exits instead of parking forever.
@@ -185,13 +202,26 @@ internal sealed class FfmpegVideoSession : IVideoSession
         {
             BuildOpts(&opts);
             fmtCtx = ffmpeg.avformat_alloc_context();
+            // Wire the interrupt callback before open so the budget and Dispose
+            // cover the connect/handshake too, not just the read loop.
+            _interruptDelegate = OnInterrupt;
+            fmtCtx->interrupt_callback = new AVIOInterruptCB
+            {
+                callback = new AVIOInterruptCB_callback_func
+                {
+                    Pointer = Marshal.GetFunctionPointerForDelegate(_interruptDelegate),
+                },
+                opaque = null,
+            };
             var url = BuildUrlWithCredentials(_options.RtspUri, _options.Credentials);
 
+            ArmIoDeadline(ConnectBudgetMs);
             var ret = ffmpeg.avformat_open_input(&fmtCtx, url, null, &opts);
-            FfmpegError.ThrowIfError(ret, "avformat_open_input");
+            ThrowIfIoError(ret, "avformat_open_input", ConnectBudgetMs);
 
+            ArmIoDeadline(ConnectBudgetMs);
             ret = ffmpeg.avformat_find_stream_info(fmtCtx, null);
-            FfmpegError.ThrowIfError(ret, "avformat_find_stream_info");
+            ThrowIfIoError(ret, "avformat_find_stream_info", ConnectBudgetMs);
 
             for (var i = 0; i < (int)fmtCtx->nb_streams; i++)
             {
@@ -275,6 +305,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
                     audioProbedNoTrack = false; // a later re-enable should retry setup
                 }
 
+                ArmIoDeadline(ReadBudgetMs);
                 ret = ffmpeg.av_read_frame(fmtCtx, packet);
                 if (ret < 0)
                 {
@@ -372,12 +403,33 @@ internal sealed class FfmpegVideoSession : IVideoSession
             if (packet != null) { var p = packet; ffmpeg.av_packet_free(&p); }
             if (codecCtx != null) { var p = codecCtx; ffmpeg.avcodec_free_context(&p); }
             if (hwDeviceCtx != null) { var p = hwDeviceCtx; ffmpeg.av_buffer_unref(&p); }
+            // Close sends RTSP TEARDOWN — give it a short budget so a dead camera
+            // can't wedge the thread on the way out either.
+            ArmIoDeadline(CloseBudgetMs);
             if (fmtCtx != null) ffmpeg.avformat_close_input(&fmtCtx);
             if (opts != null) ffmpeg.av_dict_free(&opts);
         }
 
         SetState(SessionState.Idle);
     }
+
+    // The RTSP demuxer reports an interrupted read as "Invalid data found", so
+    // key off the expired budget rather than the error code and name it as the
+    // timeout it is — the error banner and logs then say why.
+    private void ThrowIfIoError(int ret, string operation, long budgetMs)
+    {
+        if (ret < 0 && !_abortIo && Environment.TickCount64 > Volatile.Read(ref _ioDeadlineMs))
+            throw new TimeoutException($"{operation} timed out after {budgetMs / 1000}s");
+        FfmpegError.ThrowIfError(ret, operation);
+    }
+
+    private void ArmIoDeadline(long budgetMs) =>
+        Volatile.Write(ref _ioDeadlineMs, Environment.TickCount64 + budgetMs);
+
+    // Returns 1 to make libavformat abort the blocking call in flight: on
+    // Dispose, or once the current call has overrun its budget.
+    private unsafe int OnInterrupt(void* opaque) =>
+        _abortIo || Environment.TickCount64 > Volatile.Read(ref _ioDeadlineMs) ? 1 : 0;
 
     private unsafe bool TryEnableHw(AVCodecContext* ctx, HwAccelHint hint, AVBufferRef** outDeviceCtx)
     {
@@ -534,7 +586,10 @@ internal sealed class FfmpegVideoSession : IVideoSession
             _ => "tcp",
         };
         ffmpeg.av_dict_set(opts, "rtsp_transport", transport, 0);
-        ffmpeg.av_dict_set(opts, "stimeout", "5000000", 0);          // 5s socket timeout (µs)
+        // 5s socket I/O timeout (µs). "stimeout" was renamed to "timeout" and is
+        // silently ignored by the n7.1 build we bundle, so live view had no socket
+        // timeout at all.
+        ffmpeg.av_dict_set(opts, "timeout", "5000000", 0);
         ffmpeg.av_dict_set(opts, "max_delay", "200000", 0);          // 200ms reorder window
         ffmpeg.av_dict_set(opts, "buffer_size", "1048576", 0);
         ffmpeg.av_dict_set(opts, "reorder_queue_size", "0", 0);
