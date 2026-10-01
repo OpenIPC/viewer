@@ -21,7 +21,7 @@ namespace OpenIPC.Viewer.App.ViewModels;
 /// the OS file pickers (no local FS panel) so there are no desktop-only paths
 /// or mobile sandbox issues. Root-level deletes are refused.
 /// </summary>
-public sealed partial class FileManagerViewModel : ViewModelBase, IAsyncDisposable
+public sealed partial class FileManagerViewModel : ViewModelBase, IAsyncDisposable, IBackNavigable
 {
     private readonly Camera _camera;
     private readonly CameraDirectoryService _directory;
@@ -91,6 +91,15 @@ public sealed partial class FileManagerViewModel : ViewModelBase, IAsyncDisposab
     {
         RemotePath = CoreRemotePath.Parent(RemotePath);
         return LoadEntriesAsync();
+    }
+
+    // System Back climbs to the parent folder; at "/" it closes the manager.
+    public bool TryGoBack()
+    {
+        if ((RemotePath ?? "/").Trim('/').Length == 0)
+            return false;
+        _ = NavigateUpAsync();
+        return true;
     }
 
     [RelayCommand]

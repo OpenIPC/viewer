@@ -194,8 +194,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     /// <summary>
     /// System Back (Android button / edge swipe, mouse back button) walks up one
     /// level: the topmost sheet, then fullscreen, then the page a camera or
-    /// recording was opened from, then a settings section back to its list,
-    /// then the start page. False at the root, so the platform takes over
+    /// recording was opened from, then the page's own levels (a settings section
+    /// back to its list), then the start page. False at the root, so the platform takes over
     /// (Android sends the app to the background).
     /// </summary>
     public bool TryGoBack()
@@ -224,8 +224,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
             case SingleCameraPageViewModel:
                 Receive(new GoBackToLibraryMessage());
                 return true;
-            case SettingsPageViewModel settings when settings.ShowBackButton:
-                settings.BackToListCommand.Execute(null);
+            case IBackNavigable page when page.TryGoBack():
                 return true;
         }
 

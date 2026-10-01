@@ -50,7 +50,7 @@ public static class OverlayDialogPresenter
     // TopLevel.OverlayLayer; the dim Border does not reliably intercept taps on
     // the bottom nav, so the shell gates navigation on this instead. Desktop
     // uses real modal Windows (ShowDialog) and never goes through here.
-    private static readonly List<TaskCompletionSource> Open = new();
+    private static readonly List<OpenDialog> Open = new();
 
     /// <summary>True while at least one overlay (mobile modal) dialog is open.</summary>
     public static bool IsAnyOpen => Open.Count > 0;
@@ -59,9 +59,10 @@ public static class OverlayDialogPresenter
     public static event Action? ActiveChanged;
 
     /// <summary>
-    /// Cancels the topmost overlay dialog, as if the user had hit Cancel, and
-    /// reports whether there was one. Wired to the system Back button/gesture:
-    /// the caller is parked on the dialog's TaskCompletionSource, so tearing the
+    /// System Back over the overlays: the topmost dialog first steps up its own
+    /// levels (<see cref="IBackNavigable"/>, e.g. the file manager's folders),
+    /// then is cancelled as if the user had hit Cancel. False when none is open.
+    /// The caller is parked on the dialog's TaskCompletionSource, so tearing the
     /// sheet down any other way would leave every command that awaits a dialog
     /// (Add camera, Discover, …) disabled for good.
     /// </summary>
@@ -69,9 +70,14 @@ public static class OverlayDialogPresenter
     {
         if (Open.Count == 0)
             return false;
-        Open[^1].TrySetResult();
+        var top = Open[^1];
+        var inner = top.Content as IBackNavigable ?? top.Content.DataContext as IBackNavigable;
+        if (inner?.TryGoBack() != true)
+            top.Dismissed.TrySetResult();
         return true;
     }
+
+    private sealed record OpenDialog(Control Content, TaskCompletionSource Dismissed);
 
     // fullScreen → fill the whole TopLevel (no bottom-sheet card / scroll wrapper).
     // Used for the SSH terminal and file manager, which are full-screen pages on
@@ -183,9 +189,9 @@ public static class OverlayDialogPresenter
             sizeSub = top.GetObservable(TopLevel.ClientSizeProperty).Subscribe(ApplySize);
         }
 
-        var dismissed = new TaskCompletionSource();
+        var entry = new OpenDialog(content, new TaskCompletionSource());
         overlay.Children.Add(dim);
-        Open.Add(dismissed);
+        Open.Add(entry);
         ActiveChanged?.Invoke();
         // Kick the transitions after the first layout pass — set synchronously
         // the Avalonia renderer treats them as initial state and skips the
@@ -199,7 +205,7 @@ public static class OverlayDialogPresenter
 
         try
         {
-            var finished = await Task.WhenAny(completion, dismissed.Task).ConfigureAwait(true);
+            var finished = await Task.WhenAny(completion, entry.Dismissed.Task).ConfigureAwait(true);
             // Dismissed (Back) delivers the same "no result" the Cancel button does.
             return ReferenceEquals(finished, completion)
                 ? await completion.ConfigureAwait(true)
@@ -209,7 +215,7 @@ public static class OverlayDialogPresenter
         {
             sizeSub?.Dispose();
             overlay.Children.Remove(dim);
-            Open.Remove(dismissed);
+            Open.Remove(entry);
             ActiveChanged?.Invoke();
         }
     }

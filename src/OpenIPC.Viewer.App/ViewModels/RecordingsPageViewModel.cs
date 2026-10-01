@@ -22,7 +22,7 @@ public enum MediaTab { Recordings, Snapshots }
 
 public enum RecordingPeriod { All, Today, Days7, Days30 }
 
-public sealed partial class RecordingsPageViewModel : ViewModelBase
+public sealed partial class RecordingsPageViewModel : ViewModelBase, IBackNavigable
 {
     private readonly IRecordingRepository _repo;
     private readonly CameraDirectoryService _cameras;
@@ -38,6 +38,16 @@ public sealed partial class RecordingsPageViewModel : ViewModelBase
 
     // Phase 16.3: archive activity calendar. Selecting a day filters the list.
     public ArchiveCalendarViewModel Calendar { get; }
+
+    // Phone: Back folds an expanded month calendar back to its week strip
+    // before leaving the page.
+    public bool TryGoBack()
+    {
+        if (!ShowRecordings || !Calendar.IsExpanded)
+            return false;
+        Calendar.IsExpanded = false;
+        return true;
+    }
 
     // Phase 14: the Recordings page doubles as the captured-media browser. A
     // segmented header flips between the recordings list and the snapshot
