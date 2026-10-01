@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Platform;
+using Avalonia.Interactivity;
 using OpenIPC.Viewer.App.ViewModels;
 
 namespace OpenIPC.Viewer.App.Views;
@@ -49,6 +50,7 @@ public partial class MainView : UserControl
     private Thickness _contentPadding = WidePadding;
     private MainWindowViewModel? _vm;
     private IInsetsManager? _insets;
+    private TopLevel? _topLevel;
 
     public bool ShowSidebar => _showSidebar;
     public bool ShowBottomNav => _showBottomNav;
@@ -72,7 +74,10 @@ public partial class MainView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        _insets = TopLevel.GetTopLevel(this)?.InsetsManager;
+        _topLevel = TopLevel.GetTopLevel(this);
+        if (_topLevel is not null)
+            _topLevel.BackRequested += OnBackRequested;
+        _insets = _topLevel?.InsetsManager;
         if (_insets is not null)
         {
             _insets.SafeAreaChanged += OnSafeAreaChanged;
@@ -83,6 +88,11 @@ public partial class MainView : UserControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        if (_topLevel is not null)
+        {
+            _topLevel.BackRequested -= OnBackRequested;
+            _topLevel = null;
+        }
         if (_insets is not null)
         {
             _insets.SafeAreaChanged -= OnSafeAreaChanged;
@@ -91,6 +101,14 @@ public partial class MainView : UserControl
     }
 
     private void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e) => ApplySafeArea();
+
+    // Android Back (button or edge swipe) and the mouse back button arrive here.
+    // Left unhandled at the root, Android sends the app to the background.
+    private void OnBackRequested(object? sender, RoutedEventArgs e)
+    {
+        if (!e.Handled && _vm?.TryGoBack() == true)
+            e.Handled = true;
+    }
 
     private void ApplySafeArea() =>
         Padding = _isFullscreen ? default : _insets?.SafeAreaPadding ?? default;

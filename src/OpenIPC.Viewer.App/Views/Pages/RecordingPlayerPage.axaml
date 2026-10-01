@@ -343,8 +343,8 @@
             </StackPanel>
           </Border>
 
-          <ScrollViewer Grid.Row="2" Padding="4,0,4,6">
-            <ItemsControl ItemsSource="{Binding EventList}">
+          <ScrollViewer Grid.Row="2">
+            <ItemsControl ItemsSource="{Binding EventList}" Margin="4,0,4,6">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:PlayerEventRow">
                   <Button Classes="evrow"

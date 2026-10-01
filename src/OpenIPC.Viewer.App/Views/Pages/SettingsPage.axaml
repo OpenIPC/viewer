@@ -82,9 +82,12 @@
     <!-- ===== Master / list pane (column 0) ===== -->
     <ScrollViewer Grid.Column="0"
                   IsVisible="{Binding ShowList}"
-                  Padding="0,0,8,24"
                   HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Spacing="12">
+      <!-- ALL inset lives on the content, never on ScrollViewer.Padding: the
+           padding is deducted from the viewport but never added to the extent,
+           so the content kept its full width and hung off the right edge, and
+           the last row could not be scrolled clear of the bottom. -->
+      <StackPanel Spacing="12" Margin="0,0,8,24">
         <TextBlock Text="{Binding [Settings.Title], Source={x:Static svc:Localizer.Instance}}"
                    FontSize="{StaticResource FontSizeXl}"
                    FontWeight="SemiBold"
@@ -191,9 +194,10 @@
     <!-- ===== Detail pane (column 1) ===== -->
     <ScrollViewer Grid.Column="1"
                   IsVisible="{Binding ShowDetail}"
-                  Padding="16,0,8,24"
                   HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Spacing="20">
+      <!-- See the master pane above: every inset goes on the content, or combo
+           boxes and wrapped paragraphs run past the right edge on a phone. -->
+      <StackPanel Spacing="20" Margin="16,0,8,24">
 
         <!-- Back link — narrow only -->
         <Button Classes="back-link"

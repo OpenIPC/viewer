@@ -488,8 +488,10 @@
                 BorderThickness="1"
                 CornerRadius="4">
           <StackPanel Spacing="6" Margin="2">
-            <ScrollViewer MaxHeight="260" Padding="8">
-              <ItemsControl ItemsSource="{Binding IspFields}">
+            <ScrollViewer MaxHeight="260">
+              <!-- Inset on the content, not ScrollViewer.Padding, which deflates the
+                   viewport without shrinking the content and clips the right edge. -->
+              <ItemsControl ItemsSource="{Binding IspFields}" Margin="8">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <Grid ColumnDefinitions="160,*,Auto" Margin="0,1">
@@ -550,8 +552,8 @@
             <TextBox Text="{Binding FieldFilter, Mode=TwoWay}"
                      PlaceholderText="{Binding [CameraPage.Majestic.Search], Source={x:Static svc:Localizer.Instance}}"
                      Margin="8,6,8,0" FontSize="11" />
-            <ScrollViewer MaxHeight="320" Padding="8">
-              <ItemsControl ItemsSource="{Binding ConfigSections}">
+            <ScrollViewer MaxHeight="320">
+              <ItemsControl ItemsSource="{Binding ConfigSections}" Margin="8">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Spacing="3" Margin="0,0,0,8"
@@ -646,8 +648,8 @@
                       Background="Transparent" BorderBrush="{StaticResource BorderMediumBrush}" BorderThickness="1"
                       CornerRadius="4" Foreground="{StaticResource TextPrimaryBrush}" />
             </Grid>
-            <ScrollViewer MaxHeight="280" Padding="8,0,8,8">
-              <ItemsControl ItemsSource="{Binding Metrics}">
+            <ScrollViewer MaxHeight="280">
+              <ItemsControl ItemsSource="{Binding Metrics}" Margin="8,0,8,8">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <Grid ColumnDefinitions="*,Auto" Margin="0,1">

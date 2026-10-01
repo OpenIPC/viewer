@@ -16,7 +16,7 @@ using OpenIPC.Viewer.Core.Ssh;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
-public sealed partial class SettingsPageViewModel : ViewModelBase
+public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigable
 {
     private readonly UserSettingsService _settings;
     private readonly IFileSystem _fs;
@@ -135,6 +135,16 @@ public sealed partial class SettingsPageViewModel : ViewModelBase
 
     [RelayCommand]
     private void BackToList() => SelectedSectionIndex = -1;
+
+    // Phone: an open section returns to the section list. Wide shows both panes,
+    // so there is no level to step up.
+    public bool TryGoBack()
+    {
+        if (!ShowBackButton)
+            return false;
+        BackToList();
+        return true;
+    }
 
     // Deep-link target for the tray "About" item — keeps the section index in
     // one place (it shifts between editions with different section sets).

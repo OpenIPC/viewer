@@ -32,6 +32,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     // Back returns there instead of always dropping to the library list.
     private ViewModelBase? _singleCameraOrigin;
 
+    // Settings → Start page: the root the system Back gesture unwinds to.
+    private readonly ViewModelBase _startPage;
+
     public GridPageViewModel Live { get; }
     public CameraLibraryPageViewModel Library { get; }
     public RecordingsPageViewModel Recordings { get; }
@@ -96,7 +99,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         _playerFactory = playerFactory;
         _logger = logger;
         // Settings → Start page (#70): open straight into the live grid if asked.
-        _currentPage = userSettings.Current.StartupPage == "live" ? live : library;
+        _startPage = userSettings.Current.StartupPage == "live" ? live : library;
+        _currentPage = _startPage;
 
         WeakReferenceMessenger.Default.Register<OpenCameraMessage>(this);
         WeakReferenceMessenger.Default.Register<GoBackToLibraryMessage>(this);
@@ -185,6 +189,52 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         if (!KioskMode) return;
         KioskMode = false;
         UpdateFullscreen();
+    }
+
+    /// <summary>
+    /// System Back (Android button / edge swipe, mouse back button) walks up one
+    /// level: the topmost sheet, then fullscreen, then the page a camera or
+    /// recording was opened from, then the page's own levels (a settings section
+    /// back to its list), then the start page. False at the root, so the platform takes over
+    /// (Android sends the app to the background).
+    /// </summary>
+    public bool TryGoBack()
+    {
+        if (OverlayDialogPresenter.TryDismissTopmost())
+            return true;
+
+        if (_playerFullscreen && CurrentPage is RecordingPlayerPageViewModel)
+        {
+            Receive(new SetPlayerFullscreenMessage(false));
+            return true;
+        }
+
+        if (KioskMode)
+        {
+            KioskMode = false;
+            UpdateFullscreen();
+            return true;
+        }
+
+        switch (CurrentPage)
+        {
+            case RecordingPlayerPageViewModel:
+                Receive(new GoBackToRecordingsMessage());
+                return true;
+            case SingleCameraPageViewModel:
+                Receive(new GoBackToLibraryMessage());
+                return true;
+            case IBackNavigable page when page.TryGoBack():
+                return true;
+        }
+
+        if (!ReferenceEquals(CurrentPage, _startPage))
+        {
+            CurrentPage = _startPage;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool CanNavigate() => !OverlayDialogPresenter.IsAnyOpen;
