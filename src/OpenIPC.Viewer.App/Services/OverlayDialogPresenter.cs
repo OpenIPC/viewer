@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
@@ -20,7 +21,7 @@ namespace OpenIPC.Viewer.App.Services;
 // returns null). This presenter adds a dim background + a bottom-sheet card
 // holding the dialog Content to the active TopLevel's OverlayLayer and awaits
 // a caller-provided TaskCompletionSource. Result is delivered when the content
-// closes itself via its TCS.
+// closes itself via its TCS, or when the dialog is dismissed (system Back).
 //
 // Layout is a bottom sheet: the card stretches full width and pins to the
 // bottom edge with rounded top corners, the native mobile pattern. Its height
@@ -45,17 +46,32 @@ public static class OverlayDialogPresenter
     // Air between a sheet's last row and the navigation bar / gesture pill.
     private const double SheetBottomGap = 14;
 
-    // Number of overlay dialogs currently on screen. Mobile dialogs live in the
+    // Dialogs currently on screen, oldest first. Mobile dialogs live in the
     // TopLevel.OverlayLayer; the dim Border does not reliably intercept taps on
     // the bottom nav, so the shell gates navigation on this instead. Desktop
     // uses real modal Windows (ShowDialog) and never goes through here.
-    private static int _activeCount;
+    private static readonly List<TaskCompletionSource> Open = new();
 
     /// <summary>True while at least one overlay (mobile modal) dialog is open.</summary>
-    public static bool IsAnyOpen => _activeCount > 0;
+    public static bool IsAnyOpen => Open.Count > 0;
 
     /// <summary>Raised on the UI thread whenever <see cref="IsAnyOpen"/> may have changed.</summary>
     public static event Action? ActiveChanged;
+
+    /// <summary>
+    /// Cancels the topmost overlay dialog, as if the user had hit Cancel, and
+    /// reports whether there was one. Wired to the system Back button/gesture:
+    /// the caller is parked on the dialog's TaskCompletionSource, so tearing the
+    /// sheet down any other way would leave every command that awaits a dialog
+    /// (Add camera, Discover, …) disabled for good.
+    /// </summary>
+    public static bool TryDismissTopmost()
+    {
+        if (Open.Count == 0)
+            return false;
+        Open[^1].TrySetResult();
+        return true;
+    }
 
     // fullScreen → fill the whole TopLevel (no bottom-sheet card / scroll wrapper).
     // Used for the SSH terminal and file manager, which are full-screen pages on
@@ -167,8 +183,9 @@ public static class OverlayDialogPresenter
             sizeSub = top.GetObservable(TopLevel.ClientSizeProperty).Subscribe(ApplySize);
         }
 
+        var dismissed = new TaskCompletionSource();
         overlay.Children.Add(dim);
-        _activeCount++;
+        Open.Add(dismissed);
         ActiveChanged?.Invoke();
         // Kick the transitions after the first layout pass — set synchronously
         // the Avalonia renderer treats them as initial state and skips the
@@ -182,13 +199,17 @@ public static class OverlayDialogPresenter
 
         try
         {
-            return await completion.ConfigureAwait(true);
+            var finished = await Task.WhenAny(completion, dismissed.Task).ConfigureAwait(true);
+            // Dismissed (Back) delivers the same "no result" the Cancel button does.
+            return ReferenceEquals(finished, completion)
+                ? await completion.ConfigureAwait(true)
+                : default!;
         }
         finally
         {
             sizeSub?.Dispose();
             overlay.Children.Remove(dim);
-            _activeCount--;
+            Open.Remove(dismissed);
             ActiveChanged?.Invoke();
         }
     }
