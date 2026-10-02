@@ -173,11 +173,14 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     // Prefer the git-tag-derived InformationalVersion (set in Directory.Build.targets)
     // over the numeric AssemblyVersion, which can't carry the -rc/-beta suffix.
     // Strip any "+metadata" just in case the SDK still appended a commit hash.
+    // Read from this assembly, not GetEntryAssembly(): Android and iOS have no
+    // managed entry point, so that returned null and About fell through to the
+    // fallback. Every project gets the same git-derived version.
     public string Version =>
-        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
-        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
+        typeof(SettingsPageViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
+        ?? typeof(SettingsPageViewModel).Assembly.GetName().Version?.ToString()
         ?? "0.1.0";
-    public string RepositoryUrl => "https://github.com/keyldev/openipc-viewer";
+    public string RepositoryUrl => "https://github.com/OpenIPC/viewer";
 
     public SettingsPageViewModel(
         UserSettingsService settings,
