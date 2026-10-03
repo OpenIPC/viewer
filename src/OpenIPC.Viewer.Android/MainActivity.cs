@@ -12,12 +12,12 @@ namespace OpenIPC.Viewer.Android;
     Theme = "@style/MyTheme.NoActionBar",
     Icon = "@mipmap/icon",
     MainLauncher = true,
-    // AdjustResize shrinks the TopLevel client area when the soft keyboard opens
-    // (instead of the keyboard overlaying content). The overlay dialog presenter
-    // caps its bottom-sheet to ClientSize and wraps content in a ScrollViewer, so
-    // this lets a focused field (e.g. ONVIF login/password at the bottom of the
-    // add sheet) scroll into view above the keyboard. StateHidden keeps the
-    // keyboard down until the user taps a field.
+    // AdjustResize asks Android to shrink the TopLevel client area when the soft keyboard opens
+    // rather than let it overlay the content. Under the edge-to-edge display a targetSdk-36 app
+    // gets, the system ignores that and slides the keyboard over the window instead — so the app
+    // pads for it itself (App.Services.SoftKeyboardInset, applied by MainView and the overlay
+    // presenter). The flag stays for the platforms where it is still honoured; the two paths are
+    // written not to double-count. StateHidden keeps the keyboard down until the user taps a field.
     WindowSoftInputMode = SoftInput.AdjustResize | SoftInput.StateHidden,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize
                           | ConfigChanges.UiMode | ConfigChanges.Density)]
