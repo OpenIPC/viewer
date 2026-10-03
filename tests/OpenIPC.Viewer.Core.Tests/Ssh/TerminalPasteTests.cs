@@ -27,7 +27,7 @@ public sealed class TerminalPasteTests
     [Fact]
     public void AsOneLine_JoinsTrimsAndDropsContinuationBackslash()
     {
-        var paste = TerminalPaste.Normalize("curl -s \\n  http://cam/x\n\n  | head\n");
+        var paste = TerminalPaste.Normalize("curl -s \\\n  http://cam/x\n\n  | head\n");
         Assert.Equal(4, TerminalPaste.LineCount(paste));
         Assert.Equal("curl -s http://cam/x | head", TerminalPaste.AsOneLine(paste));
     }
