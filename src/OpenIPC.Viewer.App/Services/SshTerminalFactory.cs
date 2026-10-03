@@ -22,5 +22,6 @@ public sealed class SshTerminalFactory
     }
 
     public SshTerminalViewModel Create(Camera camera) =>
-        new(camera, _directory, _sessions, _settings.Current.SshTerminalFontSize, _loggerFactory.CreateLogger<SshTerminalViewModel>());
+        new(camera, _directory, _sessions, _settings.Current.SshTerminalFontSize, _settings,
+            _loggerFactory.CreateLogger<SshTerminalViewModel>());
 }

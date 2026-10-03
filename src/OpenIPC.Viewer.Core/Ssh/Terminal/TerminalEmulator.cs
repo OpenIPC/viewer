@@ -17,7 +17,7 @@ public sealed class TerminalEmulator
     private const char Esc = '\x1b';
     private const char Bel = '\x07';
 
-    private enum State { Ground, Escape, Csi, Osc }
+    private enum State { Ground, Escape, Csi, String }
 
     private TerminalCell[][] _screen = Array.Empty<TerminalCell[]>();
     private readonly List<TerminalCell[]> _scrollback = new();
@@ -35,6 +35,13 @@ public sealed class TerminalEmulator
     private State _state = State.Ground;
     private readonly StringBuilder _params = new();
     private bool _privateSeq;
+    // How much of an unterminated escape we are willing to swallow before deciding the stream
+    // lied to us and going back to printing. Without a ceiling one malformed sequence eats the
+    // rest of the session: every byte after it disappears into the parser and the screen stops
+    // changing at all.
+    private const int MaxSequenceLength = 4096;
+    private const int MaxParamsLength = 64;
+    private int _stringLength;
 
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
     private char[] _charBuf = new char[1024];
@@ -51,6 +58,12 @@ public sealed class TerminalEmulator
 
     public TerminalCell[] GetRow(int row) => _screen[row];
 
+    /// <summary>Rows that have scrolled off the top and are still remembered.</summary>
+    public int ScrollbackRows => _scrollback.Count;
+
+    /// <summary>One remembered row; index 0 is the oldest.</summary>
+    public TerminalCell[] GetScrollbackRow(int index) => _scrollback[index];
+
     public void Resize(int columns, int rows)
     {
         columns = Math.Max(1, columns);
@@ -58,22 +71,51 @@ public sealed class TerminalEmulator
         if (columns == Columns && rows == Rows)
             return;
 
+        var had = _screen.Length > 0;
+
+        // Losing rows takes them off the TOP, the way a real terminal does it: the interesting end
+        // of a shell session is the bottom one. Keeping the top instead would drop the prompt every
+        // time the view got shorter — which on a phone is every time the soft keyboard opens.
+        var drop = had ? Math.Max(0, Rows - rows) : 0;
+        for (var r = 0; r < drop; r++)
+        {
+            _scrollback.Add(_screen[r]);
+            if (_scrollback.Count > MaxScrollback)
+                _scrollback.RemoveAt(0);
+        }
+
+        // And they come back when the view grows again. Without this the trip is one-way: showing
+        // and hiding the keyboard once ate a few rows of output for good, and doing it a few times
+        // scrolled a long listing off the top with no way to get it back.
+        var restore = had ? Math.Min(Math.Max(0, rows - Rows), _scrollback.Count) : 0;
+
         var next = new TerminalCell[rows][];
         for (var r = 0; r < rows; r++)
         {
             next[r] = NewBlankRow(columns);
-            if (r < Rows && _screen.Length > 0)
+
+            TerminalCell[]? source;
+            if (r < restore)
             {
-                var old = _screen[r];
-                var copy = Math.Min(columns, old.Length);
-                Array.Copy(old, next[r], copy);
+                source = _scrollback[_scrollback.Count - restore + r];
             }
+            else
+            {
+                var from = r - restore + drop;
+                source = had && from < Rows ? _screen[from] : null;
+            }
+
+            if (source is not null)
+                Array.Copy(source, next[r], Math.Min(columns, source.Length));
         }
+
+        if (restore > 0)
+            _scrollback.RemoveRange(_scrollback.Count - restore, restore);
 
         Columns = columns;
         Rows = rows;
         _screen = next;
-        _cursorRow = Math.Min(_cursorRow, rows - 1);
+        _cursorRow = Math.Clamp(_cursorRow - drop + restore, 0, rows - 1);
         _cursorCol = Math.Min(_cursorCol, columns - 1);
         Updated?.Invoke();
     }
@@ -106,10 +148,7 @@ public sealed class TerminalEmulator
             case State.Ground: ProcessGround(c); break;
             case State.Escape: ProcessEscape(c); break;
             case State.Csi: ProcessCsi(c); break;
-            case State.Osc:
-                // OS Command (e.g. window title) — swallow until BEL. Not rendered.
-                if (c == Bel) _state = State.Ground;
-                break;
+            case State.String: ProcessString(c); break;
         }
     }
 
@@ -139,8 +178,11 @@ public sealed class TerminalEmulator
                 _privateSeq = false;
                 _state = State.Csi;
                 break;
-            case ']':
-                _state = State.Osc;
+            // OSC (window title, shell integration) and the other string escapes: DCS, SOS, PM,
+            // APC. None of them render; all of them run until a terminator.
+            case ']' or 'P' or 'X' or '^' or '_':
+                _stringLength = 0;
+                _state = State.String;
                 break;
             case 'c': // RIS — full reset
                 ResetScreen();
@@ -154,22 +196,75 @@ public sealed class TerminalEmulator
         }
     }
 
+    /// <summary>
+    /// The payload of a string escape (OSC and friends) — swallowed, never drawn.
+    /// </summary>
+    /// <remarks>
+    /// A string ends at BEL <em>or</em> at ST, which is spelled ESC-backslash — and only the BEL
+    /// spelling used to be recognised here. A remote prompt that sets the window title the ST way
+    /// (most do) therefore put the parser into a state nothing could leave: every byte from then
+    /// on was swallowed, so the terminal froze mid-session with typing producing nothing on screen
+    /// — no letters, no digits, not even a new line. ESC hands the character back to the escape
+    /// parser, which is both terminators at once: ESC-backslash ends the string, and a real escape
+    /// starting mid-string (an abort) is picked up correctly too.
+    /// </remarks>
+    private void ProcessString(char c)
+    {
+        if (c == Bel)
+        {
+            _state = State.Ground;
+            return;
+        }
+        if (c == Esc)
+        {
+            _state = State.Escape;
+            return;
+        }
+        // No string escape carries a control code; one means the stream is out of sync, so drop
+        // back to printing and let Ground deal with the character.
+        if (c < ' ')
+        {
+            _state = State.Ground;
+            ProcessGround(c);
+            return;
+        }
+        if (++_stringLength > MaxSequenceLength)
+            _state = State.Ground;
+    }
+
     private void ProcessCsi(char c)
     {
-        if (c == '?')
+        // Private markers < = > ? (0x3C–0x3F) — ESC[?25l and the DA queries.
+        if (c is >= '<' and <= '?')
         {
             _privateSeq = true;
             return;
         }
-        if ((c >= '0' && c <= '9') || c == ';')
+        if ((c >= '0' && c <= '9') || c == ';' || c == ':')
         {
-            _params.Append(c);
+            // Sub-parameters (SGR 38:5:n) read the same as the ';' spelling for the colours we
+            // model, so they are folded into one syntax rather than given a parser of their own.
+            if (_params.Length < MaxParamsLength)
+                _params.Append(c == ':' ? ';' : c);
+            return;
+        }
+        // Intermediate bytes (0x20–0x2F) belong to sequences we don't implement — consume them
+        // and wait for the final byte rather than mistaking one for the end of the sequence.
+        if (c is >= ' ' and <= '/')
+            return;
+
+        // Final byte (0x40–0x7E) dispatches the command.
+        if (c is >= '@' and <= '~')
+        {
+            DispatchCsi(c, ParseParams());
+            _state = State.Ground;
             return;
         }
 
-        // Final byte (0x40–0x7E) dispatches the command.
-        DispatchCsi(c, ParseParams());
+        // A control code inside a CSI means the sequence was cut short; print it instead of
+        // waiting forever for a final byte that is never coming.
         _state = State.Ground;
+        ProcessGround(c);
     }
 
     private void DispatchCsi(char final, int[] ps)

@@ -13,7 +13,9 @@
          tap doesn't steal focus from the IME proxy (the keyboard would hide). -->
     <Style Selector="Button.termkey, ToggleButton.termkey">
       <Setter Property="Focusable" Value="False" />
-      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="Padding" Value="2,4" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
       <Setter Property="Background" Value="#1a1f28" />
@@ -56,27 +58,47 @@
     </Border>
 
     <!-- Special keys soft keyboards don't have. Shown by code-behind on
-         Android/iOS only; scrolls sideways on very narrow phones. -->
+         Android/iOS only. One row, eight equal columns: every key stays on
+         screen at any phone width, because a bar you have to scroll sideways
+         hides exactly the key you were reaching for. Copy and paste are not
+         here — they live in the long-press menu on the terminal itself. -->
     <Border Grid.Row="2" Name="KeyBar"
             IsVisible="False"
             Background="#12161d"
             BorderBrush="#2a3140" BorderThickness="0,1"
             Padding="8,6">
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <Button Classes="termkey" Name="KeyEsc" Content="Esc" />
-          <Button Classes="termkey" Name="KeyTab" Content="Tab" />
-          <ToggleButton Classes="termkey" Name="KeyCtrl" Content="Ctrl" />
-          <Button Classes="termkey" Name="KeyArrowUp" Content="↑" />
-          <Button Classes="termkey" Name="KeyArrowDown" Content="↓" />
-          <Button Classes="termkey" Name="KeyArrowLeft" Content="←" />
-          <Button Classes="termkey" Name="KeyArrowRight" Content="→" />
-        </StackPanel>
-      </ScrollViewer>
+      <UniformGrid Rows="1" Columns="8">
+        <Button Classes="termkey" Name="KeyShowKeyboard" Content="⌨" Margin="0,0,3,0" />
+        <Button Classes="termkey" Name="KeyEsc" Content="Esc" Margin="3,0" />
+        <Button Classes="termkey" Name="KeyTab" Content="Tab" Margin="3,0" />
+        <ToggleButton Classes="termkey" Name="KeyCtrl" Content="Ctrl" Margin="3,0" />
+        <Button Classes="termkey" Name="KeyArrowUp" Content="↑" Margin="3,0" />
+        <Button Classes="termkey" Name="KeyArrowDown" Content="↓" Margin="3,0" />
+        <Button Classes="termkey" Name="KeyArrowLeft" Content="←" Margin="3,0" />
+        <Button Classes="termkey" Name="KeyArrowRight" Content="→" Margin="3,0,0,0" />
+      </UniformGrid>
     </Border>
 
     <Panel Grid.Row="3">
-      <controls:TerminalView Name="Term" />
+      <controls:TerminalView Name="Term">
+        <!-- Right-click on desktop, long-press on touch (TerminalView.OnHolding). -->
+        <controls:TerminalView.ContextMenu>
+          <ContextMenu Name="TermMenu">
+            <MenuItem Name="CopyMenuItem"
+                      Header="{Binding [Ssh.Terminal.Copy], Source={x:Static svc:Localizer.Instance}}" />
+            <MenuItem Name="CopyScreenMenuItem"
+                      Header="{Binding [Ssh.Terminal.CopyScreen], Source={x:Static svc:Localizer.Instance}}" />
+            <MenuItem Name="PasteMenuItem"
+                      Header="{Binding [Ssh.Terminal.Paste], Source={x:Static svc:Localizer.Instance}}" />
+            <Separator Name="KeyboardSeparator" />
+            <!-- Mobile only (shown by code-behind): the soft keyboard's inset resizes the grid,
+                 which is the last thing you want while dragging a selection handle. -->
+            <MenuItem Name="AutoKeyboardMenuItem"
+                      ToggleType="CheckBox"
+                      Header="{Binding [Ssh.Terminal.AutoKeyboard], Source={x:Static svc:Localizer.Instance}}" />
+          </ContextMenu>
+        </controls:TerminalView.ContextMenu>
+      </controls:TerminalView>
       <!-- Invisible IME proxy (mobile only). TerminalView is a custom-drawn
            Control that never advertises text input, so Android's soft keyboard
            won't open for it. On mobile this TextBox holds focus instead: it
