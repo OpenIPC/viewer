@@ -30,7 +30,7 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
 
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="12,8">
       <TextBlock Grid.Column="0"
@@ -57,12 +57,35 @@
                  TextWrapping="Wrap" />
     </Border>
 
+    <!-- A paste that spans lines waits here: in a shell every line break is Enter, so pasting it
+         as-is runs each line. Shown by code-behind; never when the shell does bracketed paste. -->
+    <Border Grid.Row="2" Name="PasteBar"
+            IsVisible="False"
+            Background="#152033"
+            BorderBrush="#2a3140" BorderThickness="0,1"
+            Padding="8,6">
+      <StackPanel Spacing="6">
+        <TextBlock Name="PasteBarText"
+                   Foreground="#cccccc"
+                   FontSize="{StaticResource FontSizeSm}"
+                   TextWrapping="Wrap" />
+        <UniformGrid Rows="1" Columns="3">
+          <Button Classes="termkey" Name="PasteJoinButton" Margin="0,0,3,0"
+                  Content="{Binding [Ssh.Terminal.PasteJoin], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="termkey" Name="PasteRunButton" Margin="3,0"
+                  Content="{Binding [Ssh.Terminal.PasteRun], Source={x:Static svc:Localizer.Instance}}" />
+          <Button Classes="termkey" Name="PasteCancelButton" Margin="3,0,0,0"
+                  Content="{Binding [Ssh.Terminal.PasteCancel], Source={x:Static svc:Localizer.Instance}}" />
+        </UniformGrid>
+      </StackPanel>
+    </Border>
+
     <!-- Special keys soft keyboards don't have. Shown by code-behind on
          Android/iOS only. One row, eight equal columns: every key stays on
          screen at any phone width, because a bar you have to scroll sideways
          hides exactly the key you were reaching for. Copy and paste are not
          here — they live in the long-press menu on the terminal itself. -->
-    <Border Grid.Row="2" Name="KeyBar"
+    <Border Grid.Row="3" Name="KeyBar"
             IsVisible="False"
             Background="#12161d"
             BorderBrush="#2a3140" BorderThickness="0,1"
@@ -79,7 +102,7 @@
       </UniformGrid>
     </Border>
 
-    <Panel Grid.Row="3">
+    <Panel Grid.Row="4">
       <controls:TerminalView Name="Term">
         <!-- Right-click on desktop, long-press on touch (TerminalView.OnHolding). -->
         <controls:TerminalView.ContextMenu>

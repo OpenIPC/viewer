@@ -8,7 +8,9 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using OpenIPC.Viewer.App.Controls;
+using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
+using OpenIPC.Viewer.Core.Ssh.Terminal;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
 
@@ -37,6 +39,9 @@ public sealed partial class SshTerminalContent : UserControl
     // keyboard: the inset resizes the grid, rows spill into the scrollback and the selection
     // the user is still holding on to slides out from under the finger.
     private DateTime _selectionEndedAt = DateTime.MinValue;
+    // A multi-line paste waiting on the user: run its lines, join them, or drop it.
+    private string? _pendingPaste;
+    private Border? _pasteBar;
 
     public Task<bool> Completion => _tcs.Task;
 
@@ -47,6 +52,11 @@ public sealed partial class SshTerminalContent : UserControl
         var close = this.FindControl<Button>("CloseButton")!;
         close.Click += OnClose;
         _closeButton = close;
+
+        _pasteBar = this.FindControl<Border>("PasteBar");
+        this.FindControl<Button>("PasteJoinButton")!.Click += (_, _) => ResolvePaste(TerminalPaste.AsOneLine);
+        this.FindControl<Button>("PasteRunButton")!.Click += (_, _) => ResolvePaste(TerminalPaste.AsCommands);
+        this.FindControl<Button>("PasteCancelButton")!.Click += (_, _) => ResolvePaste(null);
 
         if (UseImeProxy)
             SetUpImeProxy();
@@ -233,7 +243,7 @@ public sealed partial class SshTerminalContent : UserControl
 
     // Everything user-typed funnels through here so the on-screen Ctrl key can
     // modify the next character regardless of which path produced it.
-    private void SendInput(string text, bool applyCtrl = true)
+    private void SendInput(string text)
     {
         if (DataContext is not SshTerminalViewModel vm || text.Length == 0)
             return;
@@ -245,7 +255,7 @@ public sealed partial class SshTerminalContent : UserControl
         // Soft keyboards commit Enter as '\n'; shells expect CR.
         text = text.Replace('\n', '\r');
 
-        if (applyCtrl && _ctrlKey?.IsChecked == true && text.Length == 1 && char.IsAsciiLetter(text[0]))
+        if (_ctrlKey?.IsChecked == true && text.Length == 1 && char.IsAsciiLetter(text[0]))
         {
             text = ((char)(char.ToUpperInvariant(text[0]) - 'A' + 1)).ToString();
             _ctrlKey.IsChecked = false;
@@ -275,14 +285,72 @@ public sealed partial class SshTerminalContent : UserControl
             return;
         }
 
-        if (string.IsNullOrEmpty(text))
+        if (!string.IsNullOrEmpty(text))
+            SendPaste(text);
+    }
+
+    /// <summary>
+    /// Every paste ends up here, whichever way it arrived (menu, Ctrl+V, the soft keyboard's
+    /// clipboard strip). A shell cannot tell a pasted line break from Enter, and sending them
+    /// through as CR used to run every copied line the moment it landed — so the trailing break
+    /// is dropped, and a paste that still spans lines asks first.
+    /// </summary>
+    private void SendPaste(string text)
+    {
+        var paste = TerminalPaste.Normalize(text);
+        if (paste.Length == 0)
             return;
 
-        // A shell reads Enter as CR. Normalise both spellings so a multi-line paste runs its
-        // lines instead of producing one long mangled command.
-        text = text.Replace("\r\n", "\r").Replace('\n', '\r');
-        // Ctrl-latching a paste makes no sense — the toggle applies to the next typed key.
-        SendInput(text, applyCtrl: false);
+        // The shell asked for bracketed paste: it knows pasted text from typing and will only
+        // insert it, line breaks and all. Nothing to ask.
+        if (DataContext is SshTerminalViewModel { Emulator.BracketedPaste: true })
+        {
+            HidePasteBar();
+            SendRaw(TerminalPaste.Bracketed(paste));
+            return;
+        }
+
+        if (!TerminalPaste.IsMultiline(paste))
+        {
+            HidePasteBar();
+            SendRaw(paste);
+            return;
+        }
+
+        _pendingPaste = paste;
+        if (this.FindControl<TextBlock>("PasteBarText") is { } prompt)
+            prompt.Text = string.Format(Localizer.Instance["Ssh.Terminal.PasteMultilineFormat"],
+                TerminalPaste.LineCount(paste));
+        if (_pasteBar is not null)
+            _pasteBar.IsVisible = true;
+    }
+
+    private void ResolvePaste(Func<string, string>? shape)
+    {
+        var paste = _pendingPaste;
+        HidePasteBar();
+        if (paste is not null && shape is not null)
+            SendRaw(shape(paste));
+        // The bar's buttons don't take focus, but on a phone the keyboard may be down by now;
+        // the user is about to type into what they just pasted.
+        AutoFocusInput();
+    }
+
+    private void HidePasteBar()
+    {
+        _pendingPaste = null;
+        if (_pasteBar is not null)
+            _pasteBar.IsVisible = false;
+    }
+
+    // Pasted text goes down the PTY as it is: SendInput's soft-keyboard Enter rewrite and the
+    // Ctrl latch are both about a single typed key, not a paste.
+    private void SendRaw(string text)
+    {
+        if (DataContext is not SshTerminalViewModel vm || text.Length == 0)
+            return;
+        _term?.ScrollToLive();
+        _ = vm.SendAsync(text);
     }
 
     /// <summary>
@@ -349,13 +417,24 @@ public sealed partial class SshTerminalContent : UserControl
             return;
 
         if (text.StartsWith(Sentinel, StringComparison.Ordinal))
-            SendInput(text[Sentinel.Length..]);          // typed characters
+            SendTyped(text[Sentinel.Length..]);          // typed characters
         else if (text.Length < Sentinel.Length)
             SendInput("\x7f");                           // IME ate the sentinel → backspace
         else
-            SendInput(text);                             // IME replaced everything (autocorrect) — best effort
+            SendTyped(text);                             // IME replaced everything (autocorrect) — best effort
 
         ResetProxy();
+    }
+
+    // What the soft keyboard committed. One "\n" is its Enter key; text that carries a line break
+    // along with anything else is a paste from the keyboard's clipboard strip, and gets the same
+    // treatment as a paste from the menu.
+    private void SendTyped(string text)
+    {
+        if (text.Length > 1 && text.IndexOfAny(new[] { '\n', '\r' }) >= 0)
+            SendPaste(text);
+        else
+            SendInput(text);
     }
 
     private void ResetProxy()

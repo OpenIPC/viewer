@@ -174,4 +174,44 @@ public sealed class TerminalEmulatorTests
         t.Feed("ok");
         Assert.Equal("ok", RowText(t, 0));
     }
+
+    [Fact]
+    public void Autowrap_MarksTheRowAsContinued()
+    {
+        var t = new TerminalEmulator(5, 3);
+        t.Feed("abcdefg\r\nx");
+        Assert.True(t.IsWrapped(t.GetRow(0)));     // "abcde" ran on into "fg"
+        Assert.False(t.IsWrapped(t.GetRow(1)));    // "fg" ended with a line break
+        Assert.False(t.IsWrapped(t.GetRow(2)));
+    }
+
+    [Fact]
+    public void WrapMark_FollowsTheRowIntoScrollback()
+    {
+        var t = new TerminalEmulator(4, 2);
+        t.Feed("abcdef\r\ng\r\nh");
+        Assert.Equal(2, t.ScrollbackRows);
+        Assert.True(t.IsWrapped(t.GetScrollbackRow(0)));
+        Assert.False(t.IsWrapped(t.GetScrollbackRow(1)));
+    }
+
+    [Fact]
+    public void EraseToEndOfLine_ClearsTheWrapMark()
+    {
+        var t = new TerminalEmulator(4, 3);
+        t.Feed("abcdef");
+        t.Feed("\x1b[1;3H\x1b[K");                 // line editor shortens the command
+        Assert.False(t.IsWrapped(t.GetRow(0)));
+    }
+
+    [Fact]
+    public void BracketedPasteMode_FollowsPrivateMode2004()
+    {
+        var t = new TerminalEmulator(10, 2);
+        Assert.False(t.BracketedPaste);
+        t.Feed("\x1b[?2004h");
+        Assert.True(t.BracketedPaste);
+        t.Feed("\x1b[?2004l");
+        Assert.False(t.BracketedPaste);
+    }
 }

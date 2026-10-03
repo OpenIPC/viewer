@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace OpenIPC.Viewer.Core.Ssh.Terminal;
@@ -22,6 +23,14 @@ public sealed class TerminalEmulator
     private TerminalCell[][] _screen = Array.Empty<TerminalCell[]>();
     private readonly List<TerminalCell[]> _scrollback = new();
     private const int MaxScrollback = 1000;
+
+    // Rows that ran out of width and carried on in the row below (autowrap), as opposed to rows a
+    // line break ended. Copying needs the difference: a long command wraps across two or three rows
+    // of a phone-width terminal, and copying it back with a break between each row turns one
+    // command into several — each of which a paste then runs on its own. The mark rides on the row
+    // object itself, so it follows the row into the scrollback and is gone when the row is.
+    private readonly ConditionalWeakTable<TerminalCell[], object> _wrapped = new();
+    private static readonly object WrapMark = new();
 
     private int _cursorRow;
     private int _cursorCol;
@@ -50,6 +59,19 @@ public sealed class TerminalEmulator
     public int Rows { get; private set; }
     public int CursorRow => _cursorRow;
     public int CursorColumn => _cursorCol;
+
+    /// <summary>
+    /// The remote turned on bracketed paste (CSI ?2004h): pasted text is to be sent between
+    /// ESC[200~ and ESC[201~, and the shell will insert it rather than run its lines.
+    /// </summary>
+    public bool BracketedPaste { get; private set; }
+
+    /// <summary>
+    /// True when <paramref name="row"/> (from <see cref="GetRow"/> or
+    /// <see cref="GetScrollbackRow"/>) continues in the next row — the text ran past the right
+    /// edge rather than ending in a line break.
+    /// </summary>
+    public bool IsWrapped(TerminalCell[] row) => _wrapped.TryGetValue(row, out _);
 
     /// <summary>Raised after a <see cref="Feed(byte[])"/> batch mutates the grid.</summary>
     public event Action? Updated;
@@ -106,7 +128,11 @@ public sealed class TerminalEmulator
             }
 
             if (source is not null)
+            {
                 Array.Copy(source, next[r], Math.Min(columns, source.Length));
+                if (IsWrapped(source))
+                    MarkWrapped(next[r], true);
+            }
         }
 
         if (restore > 0)
@@ -186,6 +212,7 @@ public sealed class TerminalEmulator
                 break;
             case 'c': // RIS — full reset
                 ResetScreen();
+                BracketedPaste = false;
                 _state = State.Ground;
                 break;
             default:
@@ -269,10 +296,14 @@ public sealed class TerminalEmulator
 
     private void DispatchCsi(char final, int[] ps)
     {
-        // Private sequences (ESC[?…) are mode toggles like cursor visibility —
-        // we don't model them, just consume.
+        // Private sequences (ESC[?…) are mode toggles. The one we model is bracketed paste; the
+        // rest (cursor visibility, alt screen, …) are consumed and ignored.
         if (_privateSeq)
+        {
+            if (final is 'h' or 'l' && Array.IndexOf(ps, 2004) >= 0)
+                BracketedPaste = final == 'h';
             return;
+        }
 
         switch (final)
         {
@@ -349,6 +380,7 @@ public sealed class TerminalEmulator
     {
         if (_cursorCol >= Columns)
         {
+            MarkWrapped(_screen[_cursorRow], true);
             _cursorCol = 0;
             LineFeed();
         }
@@ -386,6 +418,10 @@ public sealed class TerminalEmulator
         };
         for (var c = from; c <= to && c < Columns; c++)
             row[c] = BlankCell();
+        // A line editor redraws a shortened command by erasing to the end of the row; whatever
+        // follows starts on a line of its own.
+        if (mode != 1)
+            MarkWrapped(row, false);
     }
 
     private void EraseInDisplay(int mode)
@@ -401,6 +437,7 @@ public sealed class TerminalEmulator
                 break;
             default:
                 for (var c = _cursorCol; c < Columns; c++) _screen[_cursorRow][c] = BlankCell();
+                MarkWrapped(_screen[_cursorRow], false);
                 for (var r = _cursorRow + 1; r < Rows; r++) ClearRow(r);
                 break;
         }
@@ -411,6 +448,15 @@ public sealed class TerminalEmulator
         var r = _screen[row];
         for (var c = 0; c < Columns; c++)
             r[c] = BlankCell();
+        MarkWrapped(r, false);
+    }
+
+    private void MarkWrapped(TerminalCell[] row, bool wrapped)
+    {
+        if (wrapped)
+            _wrapped.AddOrUpdate(row, WrapMark);
+        else
+            _wrapped.Remove(row);
     }
 
     private void ResetScreen()

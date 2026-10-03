@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using OpenIPC.Viewer.Core.Ssh.Terminal;
 
 namespace OpenIPC.Viewer.App.Controls;
@@ -104,6 +106,14 @@ public sealed class TerminalView : Control
     private Vector _grabOffset;
 
     private enum Handle { None, Start, End }
+
+    // Auto-scroll while a selection drag sits against the top or bottom edge. Timer-driven, at a
+    // fixed pace: stepping once per pointer event made the speed depend on how much the finger
+    // trembled, and a resting fingertip produces a stream of them.
+    private DispatcherTimer? _edgeScroll;
+    private int _edgeDirection;
+    private Point _selectPoint;
+    private static readonly TimeSpan EdgeScrollInterval = TimeSpan.FromMilliseconds(110);
 
     private const double HandleRadius = 9;
     // Generous, because a fingertip is: the knob is 18px across and the nearest one inside this
@@ -220,10 +230,19 @@ public sealed class TerminalView : Control
 
         var rowTop = anchor.Y - _cellHeight / 2;
         context.FillRectangle(HandleBrush, new Rect(anchor.X - 1, rowTop, 2, _cellHeight));
+        context.DrawEllipse(HandleBrush, null, KnobCenter(anchor), HandleRadius, HandleRadius);
+    }
 
+    // Where the knob of a handle is drawn, and therefore where a finger has to land to pick it up.
+    // One place for both: on the bottom row the knob flips above the row, and hit-testing used to
+    // keep looking for it below, so the knob you could see there could not be grabbed and the
+    // press scrolled the terminal instead.
+    private Point KnobCenter(Point anchor)
+    {
+        var rowTop = anchor.Y - _cellHeight / 2;
         var below = rowTop + _cellHeight + HandleRadius;
         var y = below + HandleRadius <= Bounds.Height ? below : rowTop - HandleRadius;
-        context.DrawEllipse(HandleBrush, null, new Point(anchor.X, y), HandleRadius, HandleRadius);
+        return new Point(anchor.X, y);
     }
 
     // Where a handle points: the middle of its end of the selection, in view coordinates. Null
@@ -242,8 +261,7 @@ public sealed class TerminalView : Control
         return new Point(col * _cellWidth, viewRow * _cellHeight + _cellHeight / 2);
     }
 
-    // The handle a finger landed on, if it landed on one. The knob is below the row it belongs
-    // to, so the whole span from the row down past the knob counts as a hit.
+    // The handle a finger landed on, if it landed on one: the nearest knob within reach.
     private Handle HandleAt(Point point)
     {
         if (!_handlesVisible)
@@ -256,7 +274,7 @@ public sealed class TerminalView : Control
             if (HandleAnchor(start) is not { } anchor)
                 continue;
             // Measured from the knob, which is where the finger aims.
-            var knob = new Point(anchor.X, anchor.Y + _cellHeight / 2 + HandleRadius);
+            var knob = KnobCenter(anchor);
             var distance = Math.Sqrt(
                 ((point.X - knob.X) * (point.X - knob.X)) + ((point.Y - knob.Y) * (point.Y - knob.Y)));
             if (distance >= bestDistance)
@@ -359,15 +377,15 @@ public sealed class TerminalView : Control
             return null;
 
         var (start, end) = selection;
-        var lines = new List<string>();
+        var text = new LineJoiner(emu);
         for (var row = start.Row; row <= end.Row; row++)
         {
             var cells = RowAt(emu, row);
             var from = row == start.Row ? Math.Clamp(start.Col, 0, cells.Length) : 0;
             var to = row == end.Row ? Math.Clamp(end.Col, 0, cells.Length) : cells.Length;
-            lines.Add(TextOf(cells, from, to));
+            text.Add(cells, from, to, last: row == end.Row);
         }
-        return string.Join(Environment.NewLine, lines);
+        return text.ToString();
     }
 
     /// <summary>Everything on screen right now — what a touch user gets when copying without a highlight.</summary>
@@ -378,19 +396,42 @@ public sealed class TerminalView : Control
             return "";
 
         var top = emu.ScrollbackRows - _scrollOffset;
-        var lines = new List<string>();
+        var text = new LineJoiner(emu);
         for (var row = 0; row < emu.Rows; row++)
         {
             var cells = RowAt(emu, top + row);
-            lines.Add(TextOf(cells, 0, cells.Length));
+            text.Add(cells, 0, cells.Length, last: row == emu.Rows - 1);
         }
         // Trailing blank rows are the unused part of the screen, not content.
-        while (lines.Count > 0 && lines[^1].Length == 0)
-            lines.RemoveAt(lines.Count - 1);
-        return string.Join(Environment.NewLine, lines);
+        return text.ToString().TrimEnd();
     }
 
-    private static string TextOf(TerminalCell[] cells, int from, int to)
+    // Rows back into lines of text. A row the emulator wrapped runs straight on into the next one
+    // with no break, and keeps its trailing blanks, which are real spaces when the wrap fell
+    // between two words. Every other row ends its line.
+    private readonly struct LineJoiner
+    {
+        private readonly TerminalEmulator _emu;
+        private readonly StringBuilder _text;
+
+        public LineJoiner(TerminalEmulator emu)
+        {
+            _emu = emu;
+            _text = new StringBuilder();
+        }
+
+        public void Add(TerminalCell[] cells, int from, int to, bool last)
+        {
+            var continues = !last && to == cells.Length && cells.Length > 0 && _emu.IsWrapped(cells);
+            _text.Append(TextOf(cells, from, to, trim: !continues));
+            if (!last && !continues)
+                _text.Append(Environment.NewLine);
+        }
+
+        public override string ToString() => _text.ToString();
+    }
+
+    private static string TextOf(TerminalCell[] cells, int from, int to, bool trim = true)
     {
         var buffer = new char[Math.Max(0, to - from)];
         for (var i = 0; i < buffer.Length; i++)
@@ -399,7 +440,8 @@ public sealed class TerminalView : Control
             // A never-written cell holds NUL; on the way out it is a space like any other blank.
             buffer[i] = ch < ' ' ? ' ' : ch;
         }
-        return new string(buffer).TrimEnd();
+        var text = new string(buffer);
+        return trim ? text.TrimEnd() : text;
     }
 
     private static TerminalCell[] RowAt(TerminalEmulator emu, int absoluteRow)
@@ -527,17 +569,9 @@ public sealed class TerminalView : Control
             if (_selectingByTouch && e.Pointer.Captured != this)
                 e.Pointer.Capture(this);
 
-            // Dragging against either edge walks the view, so a selection can run past the top of
-            // the screen into the scrollback and past the bottom into the newest output.
-            if (_cellHeight > 0)
-            {
-                if (at.Y < _cellHeight)
-                    ScrollBy(-1);
-                else if (at.Y > Bounds.Height - _cellHeight)
-                    ScrollBy(1);
-            }
-
-            _selFocus = CellAt(_grabbed == Handle.None ? at : at + _grabOffset);
+            _selectPoint = _grabbed == Handle.None ? at : at + _grabOffset;
+            UpdateEdgeScroll(at);
+            _selFocus = CellAt(_selectPoint);
             InvalidateVisual();
             return;
         }
@@ -555,10 +589,59 @@ public sealed class TerminalView : Control
         ScrollBy(rows);
     }
 
+    // Dragging a selection against either edge walks the view, so it can run past the top of the
+    // screen into the scrollback and past the bottom into the newest output. Top is back in time
+    // (a bigger offset), bottom is towards the live screen. This used to be the other way round,
+    // so a selection dragged down to the last rows sent the view racing off into the history.
+    private void UpdateEdgeScroll(Point at)
+    {
+        var zone = _cellHeight / 2;
+        _edgeDirection = _cellHeight <= 0 ? 0
+            : at.Y < zone ? 1
+            : at.Y > Bounds.Height - zone ? -1
+            : 0;
+
+        if (_edgeDirection == 0)
+        {
+            _edgeScroll?.Stop();
+            return;
+        }
+
+        if (_edgeScroll is null)
+        {
+            _edgeScroll = new DispatcherTimer { Interval = EdgeScrollInterval };
+            _edgeScroll.Tick += (_, _) => EdgeScrollStep();
+        }
+        // The first step waits a beat too: brushing the edge on the way to the last row must not
+        // move anything.
+        if (!_edgeScroll.IsEnabled)
+            _edgeScroll.Start();
+    }
+
+    private void EdgeScrollStep()
+    {
+        if (!_selecting || _edgeDirection == 0)
+        {
+            StopEdgeScroll();
+            return;
+        }
+        ScrollBy(_edgeDirection);
+        // The finger has not moved, but the text under it has.
+        _selFocus = CellAt(_selectPoint);
+        InvalidateVisual();
+    }
+
+    private void StopEdgeScroll()
+    {
+        _edgeDirection = 0;
+        _edgeScroll?.Stop();
+    }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
         _dragging = false;
+        StopEdgeScroll();
 
         if (!_selecting)
             return;
@@ -591,6 +674,7 @@ public sealed class TerminalView : Control
         base.OnPointerCaptureLost(e);
         _dragging = false;
         _selecting = false;
+        StopEdgeScroll();
         _grabbed = Handle.None;
 
         // Something took the gesture away mid-selection (the system, or a popup opening). The
