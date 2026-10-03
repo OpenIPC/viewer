@@ -44,6 +44,10 @@ public sealed record UserSettings(
     bool SshStrictHostKey = true,
     int SshDefaultPort = 22,
     int SshTerminalFontSize = 14,
+    // Whether a tap on the terminal raises the soft keyboard (mobile). Off means the keyboard
+    // only ever appears when the user asks for it with the key-bar button — which is what you
+    // want while selecting text, because the keyboard's inset resizes the grid under you.
+    bool SshTerminalAutoKeyboard = true,
     string MajesticConfigPath = "/etc/majestic.yaml",
     // Local AI analytics (Phase 15.2). "auto" lets the detector pick the
     // platform execution provider with a CPU fallback; "force-cpu" pins CPU.

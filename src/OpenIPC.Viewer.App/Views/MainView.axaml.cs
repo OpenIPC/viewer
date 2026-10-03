@@ -50,6 +50,7 @@ public partial class MainView : UserControl
     private Thickness _contentPadding = WidePadding;
     private MainWindowViewModel? _vm;
     private IInsetsManager? _insets;
+    private IDisposable? _keyboardSub;
     private TopLevel? _topLevel;
 
     public bool ShowSidebar => _showSidebar;
@@ -79,10 +80,11 @@ public partial class MainView : UserControl
             _topLevel.BackRequested += OnBackRequested;
         _insets = _topLevel?.InsetsManager;
         if (_insets is not null)
-        {
             _insets.SafeAreaChanged += OnSafeAreaChanged;
-            ApplySafeArea();
-        }
+
+        // Edge-to-edge means the soft keyboard covers the page instead of resizing it away.
+        _keyboardSub = Services.SoftKeyboardInset.Subscribe(_topLevel, ApplySafeArea);
+        ApplySafeArea();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -98,6 +100,8 @@ public partial class MainView : UserControl
             _insets.SafeAreaChanged -= OnSafeAreaChanged;
             _insets = null;
         }
+        _keyboardSub?.Dispose();
+        _keyboardSub = null;
     }
 
     private void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e) => ApplySafeArea();
@@ -110,8 +114,16 @@ public partial class MainView : UserControl
             e.Handled = true;
     }
 
-    private void ApplySafeArea() =>
-        Padding = _isFullscreen ? default : _insets?.SafeAreaPadding ?? default;
+    private void ApplySafeArea()
+    {
+        var safe = _isFullscreen ? default : _insets?.SafeAreaPadding ?? default;
+        var keyboard = Services.SoftKeyboardInset.Of(TopLevel.GetTopLevel(this));
+        // Max, not sum: the keyboard covers the navigation bar, so the bar's inset is already
+        // inside it. Adding the two lifts the page a nav-bar's worth too far.
+        Padding = keyboard > safe.Bottom
+            ? new Thickness(safe.Left, safe.Top, safe.Right, keyboard)
+            : safe;
+    }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {

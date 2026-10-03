@@ -6,7 +6,10 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Platform;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Transformation;
@@ -33,7 +36,7 @@ namespace OpenIPC.Viewer.App.Services;
 // own background via Bg1Brush, the wrapper provides the modal affordances.
 // Designed to share the SAME content UserControl as the desktop Window
 // wrapper — each dialog moves its inner Grid/StackPanel into a *Content UC
-// that owns the TCS; the Window wrapper just bridges TCS → Window.Close.
+// that owns the TCS; the Window wrapper just bridges TCS to Window.Close.
 public static class OverlayDialogPresenter
 {
     private static readonly TimeSpan FadeIn = TimeSpan.FromMilliseconds(180);
@@ -42,6 +45,11 @@ public static class OverlayDialogPresenter
     // sheet sitting over the page rather than a full-screen takeover. Also
     // keeps the card's top edge clear of the status bar / notch.
     private const double TopPeek = 56;
+
+    // Ceiling on the safe-area inset we pad the sheet by. System bars are ~24-48dp; a larger value
+    // means the platform folded the soft keyboard into the inset, and it would be counted twice —
+    // SoftKeyboardInset adds the keyboard's own height on top of this.
+    private const double MaxSafeInset = 80;
 
     // Air between a sheet's last row and the navigation bar / gesture pill.
     private const double SheetBottomGap = 14;
@@ -143,15 +151,47 @@ public static class OverlayDialogPresenter
                 },
         };
 
-        // The overlay layer sits above the shell, so it doesn't inherit the
-        // safe-area padding MainView applies to itself. Full-screen pages cover
-        // the status bar — inset the top so the title clears the clock/notch.
-        // A sheet reaches the bottom edge: lift its action row clear of the
-        // navigation bar / gesture pill, plus a little air above it.
-        var safe = top?.InsetsManager?.SafeAreaPadding ?? default;
-        card.Padding = fullScreen
-            ? new Thickness(0, safe.Top > 0 ? safe.Top : 28, 0, 0)
-            : new Thickness(0, 0, 0, safe.Bottom + SheetBottomGap);
+        // Keep whatever the user is typing into visible: the card's bottom padding takes the
+        // keyboard's height, and a field below the fold (the login/password pair at the bottom of
+        // the add-camera form) has to be scrolled back up inside it. Nudge the focused control into
+        // view when focus moves, when the viewport changes, and when the keyboard opens.
+        void ScrollFocusedIntoView() => Dispatcher.UIThread.Post(
+            () => (top?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView(),
+            DispatcherPriority.Background);
+
+        // The overlay layer sits ABOVE the shell, so it does not inherit the
+        // safe-area padding MainView applies to itself — without this the sheet's
+        // action row (Cancel / Add selected) rendered underneath the Android
+        // navigation bar. Full-screen pages also need the status-bar inset.
+        var insets = top?.InsetsManager;
+
+        void ApplySafeArea()
+        {
+            var pad = insets?.SafeAreaPadding ?? default;
+            var left = Clamp(pad.Left);
+            var right = Clamp(pad.Right);
+            // The keyboard is not a system bar and is not subject to MaxSafeInset — it is ~300dp of
+            // screen, and under edge-to-edge it can land on top of the card rather than resize the
+            // window out from under it. A full-screen page (the SSH terminal) shows it worst: the
+            // prompt ends up behind the keys being typed on. Max rather than sum — the keyboard
+            // covers the navigation bar, so the bar's inset is already part of it.
+            var bottom = Math.Max(Clamp(pad.Bottom) + (fullScreen ? 0 : SheetBottomGap), SoftKeyboardInset.Of(top));
+            card.Padding = fullScreen
+                ? new Thickness(left, pad.Top > 0 ? Clamp(pad.Top) : 28, right, bottom)
+                : new Thickness(left, 0, right, bottom);
+        }
+
+        void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e) => ApplySafeArea();
+
+        ApplySafeArea();
+        if (insets is not null)
+            insets.SafeAreaChanged += OnSafeAreaChanged;
+
+        var keyboardSub = SoftKeyboardInset.Subscribe(top, () =>
+        {
+            ApplySafeArea();
+            ScrollFocusedIntoView();
+        });
 
         var dim = new Border
         {
@@ -169,6 +209,9 @@ public static class OverlayDialogPresenter
             Child = card,
         };
 
+        card.AddHandler(InputElement.GotFocusEvent, (object? _, RoutedEventArgs _) => ScrollFocusedIntoView(),
+            RoutingStrategies.Bubble);
+
         // Drive the dim to cover the full client area and cap the sheet to that
         // height (minus the top peek) so long forms scroll inside the card
         // instead of pushing their title off-screen.
@@ -177,9 +220,12 @@ public static class OverlayDialogPresenter
             if (s.Width <= 0 || s.Height <= 0) return;
             dim.Width = s.Width;
             dim.Height = s.Height;
+            // Rotation arrives here and nowhere else, and it changes what the keyboard is covering.
+            ApplySafeArea();
             // Sheet leaves a top peek of the page; a full-screen page fills all.
             if (!fullScreen)
                 card.MaxHeight = Math.Max(0, s.Height - TopPeek);
+            ScrollFocusedIntoView();
         }
 
         IDisposable? sizeSub = null;
@@ -214,11 +260,17 @@ public static class OverlayDialogPresenter
         finally
         {
             sizeSub?.Dispose();
+            keyboardSub.Dispose();
+            if (insets is not null)
+                insets.SafeAreaChanged -= OnSafeAreaChanged;
             overlay.Children.Remove(dim);
             Open.Remove(entry);
             ActiveChanged?.Invoke();
         }
     }
+
+    private static double Clamp(double inset) => Math.Clamp(inset, 0, MaxSafeInset);
+
 
     private static IBrush? ResolveBrush(string key) =>
         Application.Current is not null

@@ -23,6 +23,7 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
     private readonly Camera _camera;
     private readonly CameraDirectoryService _directory;
     private readonly ISshSessionFactory _sessions;
+    private readonly UserSettingsService _settings;
     private readonly ILogger<SshTerminalViewModel> _logger;
 
     private ISshSession? _session;
@@ -34,6 +35,13 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
     public string Title => $"SSH — {_camera.Name}";
     public double FontSize { get; }
 
+    /// <summary>Whether a tap on the terminal is allowed to raise the soft keyboard.</summary>
+    public bool AutoKeyboard => _settings.Current.SshTerminalAutoKeyboard;
+
+    /// <summary>Flips <see cref="AutoKeyboard"/> and remembers it for the next session.</summary>
+    public Task SetAutoKeyboardAsync(bool enabled) =>
+        _settings.UpdateAsync(_settings.Current with { SshTerminalAutoKeyboard = enabled });
+
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isConnected;
 
@@ -42,11 +50,13 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
         CameraDirectoryService directory,
         ISshSessionFactory sessions,
         double fontSize,
+        UserSettingsService settings,
         ILogger<SshTerminalViewModel> logger)
     {
         _camera = camera;
         _directory = directory;
         _sessions = sessions;
+        _settings = settings;
         FontSize = fontSize >= 8 ? fontSize : 14;
         _logger = logger;
     }
