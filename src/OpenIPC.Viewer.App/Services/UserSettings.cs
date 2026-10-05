@@ -48,6 +48,12 @@ public sealed record UserSettings(
     // only ever appears when the user asks for it with the key-bar button — which is what you
     // want while selecting text, because the keyboard's inset resizes the grid under you.
     bool SshTerminalAutoKeyboard = true,
+    // Terminal look: a TerminalTheme.Id, a TerminalCursorStyle name (outline = the original
+    // hollow box), blink, and how many rows of history the terminal keeps.
+    string SshTerminalTheme = "default",
+    string SshTerminalCursorStyle = "outline",
+    bool SshTerminalCursorBlink = false,
+    int SshTerminalScrollback = 1000,
     string MajesticConfigPath = "/etc/majestic.yaml",
     // Local AI analytics (Phase 15.2). "auto" lets the detector pick the
     // platform execution provider with a CPU fallback; "force-cpu" pins CPU.

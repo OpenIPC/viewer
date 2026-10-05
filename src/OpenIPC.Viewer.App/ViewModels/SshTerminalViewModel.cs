@@ -31,9 +31,12 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
     private int _columns = 80;
     private int _rows = 24;
 
-    public TerminalEmulator Emulator { get; } = new(80, 24);
+    public TerminalEmulator Emulator { get; }
     public string Title => $"SSH — {_camera.Name}";
     public double FontSize { get; }
+    public TerminalTheme Theme { get; }
+    public TerminalCursorStyle CursorStyle { get; }
+    public bool CursorBlink { get; }
 
     /// <summary>Whether a tap on the terminal is allowed to raise the soft keyboard.</summary>
     public bool AutoKeyboard => _settings.Current.SshTerminalAutoKeyboard;
@@ -59,6 +62,14 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
         _settings = settings;
         FontSize = fontSize >= 8 ? fontSize : 14;
         _logger = logger;
+
+        var s = settings.Current;
+        Emulator = new TerminalEmulator(80, 24, s.SshTerminalScrollback);
+        Theme = TerminalTheme.ById(s.SshTerminalTheme);
+        CursorStyle = Enum.TryParse<TerminalCursorStyle>(s.SshTerminalCursorStyle, ignoreCase: true, out var style)
+            ? style
+            : TerminalCursorStyle.Outline;
+        CursorBlink = s.SshTerminalCursorBlink;
     }
 
     public async Task ConnectAsync()

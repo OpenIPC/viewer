@@ -19,19 +19,50 @@ namespace OpenIPC.Viewer.App.Controls;
 /// </summary>
 public sealed class TerminalView : Control
 {
-    // Fixed 16-color ANSI palette (terminals don't follow the app theme).
-    private static readonly Color[] Palette =
-    {
-        Color.Parse("#1e1e1e"), Color.Parse("#cd3131"), Color.Parse("#0dbc79"), Color.Parse("#e5e510"),
-        Color.Parse("#2472c8"), Color.Parse("#bc3fbc"), Color.Parse("#11a8cd"), Color.Parse("#cccccc"),
-        Color.Parse("#666666"), Color.Parse("#f14c4c"), Color.Parse("#23d18b"), Color.Parse("#f5f543"),
-        Color.Parse("#3b8eea"), Color.Parse("#d670d6"), Color.Parse("#29b8db"), Color.Parse("#ffffff"),
-    };
+    public static readonly StyledProperty<TerminalTheme> ColorThemeProperty =
+        AvaloniaProperty.Register<TerminalView, TerminalTheme>(nameof(ColorTheme), TerminalTheme.Default,
+            // A binding that briefly resolves to nothing (a combo box between selections) must not
+            // leave the renderer without a palette.
+            coerce: (_, theme) => theme ?? TerminalTheme.Default);
 
-    private static readonly Color DefaultFg = Color.Parse("#d4d4d4");
-    private static readonly Color DefaultBg = Color.Parse("#0c0f14");
-    private static readonly IBrush DefaultFgBrush = new SolidColorBrush(DefaultFg);
-    private static readonly IBrush CursorBrush = new SolidColorBrush(Color.Parse("#d4d4d4"));
+    /// <summary>The palette the grid is drawn with (terminals don't follow the app theme).</summary>
+    public TerminalTheme ColorTheme
+    {
+        get => GetValue(ColorThemeProperty);
+        set => SetValue(ColorThemeProperty, value);
+    }
+
+    public static readonly StyledProperty<TerminalCursorStyle> CursorStyleProperty =
+        AvaloniaProperty.Register<TerminalView, TerminalCursorStyle>(nameof(CursorStyle));
+
+    public TerminalCursorStyle CursorStyle
+    {
+        get => GetValue(CursorStyleProperty);
+        set => SetValue(CursorStyleProperty, value);
+    }
+
+    public static readonly StyledProperty<bool> CursorBlinkProperty =
+        AvaloniaProperty.Register<TerminalView, bool>(nameof(CursorBlink));
+
+    public bool CursorBlink
+    {
+        get => GetValue(CursorBlinkProperty);
+        set => SetValue(CursorBlinkProperty, value);
+    }
+
+    public static readonly StyledProperty<bool> FitToEmulatorProperty =
+        AvaloniaProperty.Register<TerminalView, bool>(nameof(FitToEmulator));
+
+    /// <summary>
+    /// Size the control to the emulator's grid instead of filling the space it is given — for a
+    /// fixed-size sample such as the settings preview. A live terminal leaves this off and
+    /// resizes the emulator to fit the control instead.
+    /// </summary>
+    public bool FitToEmulator
+    {
+        get => GetValue(FitToEmulatorProperty);
+        set => SetValue(FitToEmulatorProperty, value);
+    }
 
     public static readonly StyledProperty<TerminalEmulator?> EmulatorProperty =
         AvaloniaProperty.Register<TerminalView, TerminalEmulator?>(nameof(Emulator));
@@ -73,13 +104,29 @@ public sealed class TerminalView : Control
     // If any of them resolves we get real monospace metrics; DrawRow below is correct either way.
     private const string MonoFamilies = "Cascadia Mono,Consolas,Menlo,Droid Sans Mono,Roboto Mono,monospace";
 
-    private readonly Typeface _typeface = new(new FontFamily(MonoFamilies));
-    private readonly Typeface _boldTypeface =
-        new(new FontFamily(MonoFamilies), weight: FontWeight.Bold);
+    private static readonly FontFamily Mono = new(MonoFamilies);
+    private readonly Typeface _typeface = new(Mono);
+    private readonly Typeface _boldTypeface = new(Mono, weight: FontWeight.Bold);
+    private readonly Typeface _italicTypeface = new(Mono, FontStyle.Italic);
+    private readonly Typeface _boldItalicTypeface = new(Mono, FontStyle.Italic, FontWeight.Bold);
+
+    // Only the attributes that change the glyph itself; colors are part of the key separately and
+    // lines (underline, strikethrough) are drawn over the glyph.
+    private const TerminalAttributes GlyphStyle = TerminalAttributes.Bold | TerminalAttributes.Italic;
 
     private double _cellWidth;
     private double _cellHeight;
-    private readonly Dictionary<(char Char, byte Foreground, bool Bold), FormattedText> _glyphs = new();
+    private readonly Dictionary<(char Char, uint Rgb, TerminalAttributes Style), FormattedText> _glyphs = new();
+    // One brush per color: 256-color and truecolor output can use many, and allocating a brush per
+    // cell per repaint is what the cache is for.
+    private readonly Dictionary<uint, IBrush> _brushes = new();
+
+    // Blink phase. The cursor is drawn while this is true; typing or new output sets it back so
+    // the cursor never vanishes at the moment you are looking for it.
+    private DispatcherTimer? _blinkTimer;
+    private bool _blinkOn = true;
+    private static readonly TimeSpan BlinkInterval = TimeSpan.FromMilliseconds(530);
+
     private TerminalEmulator? _subscribed;
     // Rows the view is scrolled back by; 0 is the live screen.
     private int _scrollOffset;
@@ -120,8 +167,6 @@ public sealed class TerminalView : Control
     // radius wins, so the handles stay catchable without hijacking taps elsewhere.
     private const double HandleTouchSlop = 30;
 
-    private static readonly IBrush SelectionBrush =
-        new SolidColorBrush(Color.FromArgb(0x66, 0x3b, 0x8e, 0xea));
     private static readonly IBrush HandleBrush = new SolidColorBrush(Color.Parse("#3b8eea"));
 
     public TerminalView()
@@ -142,7 +187,35 @@ public sealed class TerminalView : Control
             _glyphs.Clear();
             EnsureMetrics();
             RecomputeGrid();
+            InvalidateMeasure();
             InvalidateVisual();
+            return;
+        }
+
+        if (change.Property == ColorThemeProperty)
+        {
+            // Cached glyphs and brushes are keyed by resolved color; the old theme's are dead weight.
+            _glyphs.Clear();
+            _brushes.Clear();
+            InvalidateVisual();
+            return;
+        }
+
+        if (change.Property == CursorStyleProperty)
+        {
+            InvalidateVisual();
+            return;
+        }
+
+        if (change.Property == CursorBlinkProperty)
+        {
+            UpdateBlinkTimer();
+            return;
+        }
+
+        if (change.Property == FitToEmulatorProperty)
+        {
+            InvalidateMeasure();
             return;
         }
 
@@ -155,20 +228,94 @@ public sealed class TerminalView : Control
         if (_subscribed is not null)
             _subscribed.Updated += OnEmulatorUpdated;
         RecomputeGrid();
+        InvalidateMeasure();
         InvalidateVisual();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        if (!FitToEmulator || Emulator is not { } emu)
+            return base.MeasureOverride(availableSize);
+        return new Size(emu.Columns * _cellWidth, emu.Rows * _cellHeight);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UpdateBlinkTimer();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _blinkTimer?.Stop();
+    }
+
+    private void UpdateBlinkTimer()
+    {
+        _blinkOn = true;
+        if (!CursorBlink || VisualRoot is null)
+        {
+            _blinkTimer?.Stop();
+            InvalidateVisual();
+            return;
+        }
+
+        if (_blinkTimer is null)
+        {
+            _blinkTimer = new DispatcherTimer { Interval = BlinkInterval };
+            _blinkTimer.Tick += (_, _) =>
+            {
+                _blinkOn = !_blinkOn;
+                InvalidateVisual();
+            };
+        }
+        _blinkTimer.Stop();
+        _blinkTimer.Start();
+    }
+
+    // Show the cursor now and start the blink cycle over.
+    private void WakeCursor()
+    {
+        if (!CursorBlink || _blinkTimer is null)
+            return;
+        _blinkOn = true;
+        _blinkTimer.Stop();
+        _blinkTimer.Start();
     }
 
     // Updated fires on the UI thread (the VM marshals shell data), so a direct
     // invalidate is safe.
-    private void OnEmulatorUpdated() => InvalidateVisual();
+    private void OnEmulatorUpdated()
+    {
+        WakeCursor();
+        InvalidateVisual();
+    }
 
     private void EnsureMetrics()
     {
         var sample = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            _typeface, TerminalFontSize, DefaultFgBrush);
+            _typeface, TerminalFontSize, Brushes.White);
         _cellWidth = sample.Width;
         _cellHeight = sample.Height;
     }
+
+    private IBrush BrushFor(uint argb)
+    {
+        if (_brushes.TryGetValue(argb, out var brush))
+            return brush;
+        if (_brushes.Count > 4096)
+            _brushes.Clear();
+        brush = new SolidColorBrush(Color.FromUInt32(argb));
+        _brushes[argb] = brush;
+        return brush;
+    }
+
+    private IBrush OpaqueBrush(uint rgb) => BrushFor(0xFF00_0000 | rgb);
+
+    // A coordinate rounded to the nearest physical pixel at the render scale of this frame.
+    private double _renderScale = 1;
+    private double Snap(double v) => Math.Round(v * _renderScale) / _renderScale;
 
     private void RecomputeGrid()
     {
@@ -188,7 +335,8 @@ public sealed class TerminalView : Control
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        context.FillRectangle(new SolidColorBrush(DefaultBg), new Rect(Bounds.Size));
+        _renderScale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+        context.FillRectangle(OpaqueBrush(ColorTheme.Background), new Rect(Bounds.Size));
 
         var emu = Emulator;
         if (emu is null)
@@ -712,21 +860,34 @@ public sealed class TerminalView : Control
 
     private void DrawRow(DrawingContext context, TerminalCell[] cells, double y, int selStart, int selEnd)
     {
-        // Background fills first (only non-default cells).
-        for (var c = 0; c < cells.Length; c++)
+        var theme = ColorTheme;
+
+        // Background fills first — only where a cell's background differs from the screen's,
+        // which is also what makes an inverse cell on the default colors show up. A run of cells
+        // sharing a color is one rectangle, and every edge is snapped to a device pixel: cell
+        // widths are fractional, and abutting rectangles with antialiased edges left a visible
+        // seam between every pair of colored cells.
+        var top = Snap(y);
+        var bottom = Snap(y + _cellHeight);
+        for (var c = 0; c < cells.Length;)
         {
-            var cell = cells[c];
-            if (cell.Background == TerminalPalette.DefaultBackground)
-                continue;
-            context.FillRectangle(
-                new SolidColorBrush(Palette[cell.Background & 0x0F]),
-                new Rect(c * _cellWidth, y, _cellWidth, _cellHeight));
+            var (_, bg) = theme.ColorsOf(cells[c]);
+            var end = c + 1;
+            while (end < cells.Length && theme.ColorsOf(cells[end]).Background == bg)
+                end++;
+            if (bg != theme.Background)
+            {
+                var left = Snap(c * _cellWidth);
+                context.FillRectangle(OpaqueBrush(bg),
+                    new Rect(left, top, Snap(end * _cellWidth) - left, bottom - top));
+            }
+            c = end;
         }
 
         // Selection sits over the cell backgrounds and under the glyphs, so highlighted text
         // stays readable and coloured output keeps its own background showing through.
         if (selEnd > selStart)
-            context.FillRectangle(SelectionBrush,
+            context.FillRectangle(BrushFor(theme.Selection),
                 new Rect(selStart * _cellWidth, y, (selEnd - selStart) * _cellWidth, _cellHeight));
 
         // One character at a time, each pinned to its own cell.
@@ -744,41 +905,100 @@ public sealed class TerminalView : Control
         for (var c = 0; c < cells.Length; c++)
         {
             var cell = cells[c];
+            var (fg, _) = theme.ColorsOf(cell);
+            var x = c * _cellWidth;
+
             // Everything at or below U+0020 is blank or a control code: nothing to paint, and a
-            // default-constructed cell carries NUL rather than a space.
-            if (cell.Char <= ' ')
-                continue;
-            context.DrawText(GlyphFor(cell), new Point(c * _cellWidth, y));
+            // default-constructed cell carries NUL rather than a space. Hidden text (SGR 8) has
+            // already been given the background color, so it paints as nothing too.
+            if (cell.Char > ' ' && (cell.Attributes & TerminalAttributes.Hidden) == 0)
+                context.DrawText(GlyphFor(cell.Char, fg, cell.Attributes), new Point(x, y));
+
+            DrawLines(context, cell.Attributes, fg, x, y);
         }
     }
 
-    private FormattedText GlyphFor(TerminalCell cell)
+    // Underline and strikethrough are drawn by hand rather than as text decorations: they have to
+    // run under blanks too (an underlined field in a form is mostly spaces) and join up from one
+    // cell to the next.
+    private void DrawLines(DrawingContext context, TerminalAttributes attrs, uint fg, double x, double y)
     {
-        var key = (cell.Char, cell.Foreground, cell.Bold);
+        if ((attrs & (TerminalAttributes.Underline | TerminalAttributes.Strikethrough)) == 0 ||
+            (attrs & TerminalAttributes.Hidden) != 0)
+            return;
+
+        var thickness = Math.Max(1, Math.Round(TerminalFontSize / 14));
+        var brush = OpaqueBrush(fg);
+        if ((attrs & TerminalAttributes.Underline) != 0)
+            context.FillRectangle(brush, new Rect(x, y + _cellHeight - thickness * 2, _cellWidth, thickness));
+        if ((attrs & TerminalAttributes.Strikethrough) != 0)
+            context.FillRectangle(brush, new Rect(x, y + _cellHeight / 2, _cellWidth, thickness));
+    }
+
+    private FormattedText GlyphFor(char ch, uint rgb, TerminalAttributes attrs)
+    {
+        var style = attrs & GlyphStyle;
+        var key = (ch, rgb, style);
         if (_glyphs.TryGetValue(key, out var cached))
             return cached;
 
         // Cheap insurance against a pathological stream of distinct glyphs; the working set of a
-        // shell session is a few hundred entries.
+        // shell session is a few hundred entries, more with 256-color or truecolor output.
         if (_glyphs.Count > 4096)
             _glyphs.Clear();
 
-        var brush = cell.Foreground == TerminalPalette.DefaultForeground
-            ? DefaultFgBrush
-            : new SolidColorBrush(Palette[cell.Foreground & 0x0F]);
-        var text = new FormattedText(cell.Char.ToString(), CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, cell.Bold ? _boldTypeface : _typeface, TerminalFontSize, brush);
+        var typeface = style switch
+        {
+            TerminalAttributes.Bold => _boldTypeface,
+            TerminalAttributes.Italic => _italicTypeface,
+            GlyphStyle => _boldItalicTypeface,
+            _ => _typeface,
+        };
+        var text = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, typeface, TerminalFontSize, OpaqueBrush(rgb));
         _glyphs[key] = text;
         return text;
     }
 
     private void DrawCursor(DrawingContext context, TerminalEmulator emu)
     {
+        if (!emu.CursorVisible || (CursorBlink && !_blinkOn))
+            return;
+
+        var theme = ColorTheme;
         var x = emu.CursorColumn * _cellWidth;
         var y = emu.CursorRow * _cellHeight;
-        // Hollow block so the character under the cursor stays readable.
-        context.DrawRectangle(null, new Pen(CursorBrush, 1),
-            new Rect(x, y, _cellWidth, _cellHeight));
+        var cursor = OpaqueBrush(theme.Cursor);
+        var thickness = Math.Max(2, Math.Round(TerminalFontSize / 7));
+
+        switch (CursorStyle)
+        {
+            case TerminalCursorStyle.Block:
+            {
+                // Solid box, and the character under it redrawn in the screen color so it stays
+                // readable — the way a hardware terminal inverts the cell.
+                context.FillRectangle(cursor, new Rect(x, y, _cellWidth, _cellHeight));
+                // The column runs one past the last cell while a wrap is pending.
+                var row = emu.GetRow(emu.CursorRow);
+                var cell = emu.CursorColumn < row.Length ? row[emu.CursorColumn] : TerminalCell.Blank;
+                if (cell.Char > ' ')
+                {
+                    var (_, bg) = theme.ColorsOf(cell);
+                    context.DrawText(GlyphFor(cell.Char, bg, cell.Attributes), new Point(x, y));
+                }
+                break;
+            }
+            case TerminalCursorStyle.Bar:
+                context.FillRectangle(cursor, new Rect(x, y, thickness, _cellHeight));
+                break;
+            case TerminalCursorStyle.Underline:
+                context.FillRectangle(cursor, new Rect(x, y + _cellHeight - thickness, _cellWidth, thickness));
+                break;
+            default:
+                // Hollow box so the character under the cursor stays readable.
+                context.DrawRectangle(null, new Pen(cursor, 1), new Rect(x, y, _cellWidth, _cellHeight));
+                break;
+        }
     }
 
     protected override void OnTextInput(TextInputEventArgs e)

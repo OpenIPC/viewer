@@ -10,8 +10,9 @@ namespace OpenIPC.Viewer.Core.Ssh.Terminal;
 /// A deliberately small VT/ANSI terminal emulator (phase-13 §13.3 "basic VT" —
 /// no alt-screen, mouse, or full ncurses). Feeds UTF-8 bytes through a state
 /// machine that maintains a character grid: printable text, the common control
-/// codes, CSI cursor/erase moves, and SGR colors. Unknown escapes are consumed
-/// and ignored rather than corrupting the screen.
+/// codes, CSI cursor/erase moves, and SGR renditions (16/256/truecolor, bold, dim,
+/// italic, underline, inverse, hidden, strikethrough). Unknown escapes are
+/// consumed and ignored rather than corrupting the screen.
 /// </summary>
 public sealed class TerminalEmulator
 {
@@ -22,7 +23,11 @@ public sealed class TerminalEmulator
 
     private TerminalCell[][] _screen = Array.Empty<TerminalCell[]>();
     private readonly List<TerminalCell[]> _scrollback = new();
-    private const int MaxScrollback = 1000;
+    private int _scrollbackLimit;
+
+    public const int DefaultScrollbackLimit = 1000;
+    public const int MinScrollbackLimit = 100;
+    public const int MaxScrollbackLimit = 50_000;
 
     // Rows that ran out of width and carried on in the row below (autowrap), as opposed to rows a
     // line break ended. Copying needs the difference: a long command wraps across two or three rows
@@ -37,9 +42,9 @@ public sealed class TerminalEmulator
     private int _savedRow;
     private int _savedCol;
 
-    private byte _fg = TerminalPalette.DefaultForeground;
-    private byte _bg = TerminalPalette.DefaultBackground;
-    private bool _bold;
+    private TerminalColor _fg;
+    private TerminalColor _bg;
+    private TerminalAttributes _attrs;
 
     private State _state = State.Ground;
     private readonly StringBuilder _params = new();
@@ -49,7 +54,8 @@ public sealed class TerminalEmulator
     // rest of the session: every byte after it disappears into the parser and the screen stops
     // changing at all.
     private const int MaxSequenceLength = 4096;
-    private const int MaxParamsLength = 64;
+    // Room for a truecolor foreground and background plus a few flags in one SGR.
+    private const int MaxParamsLength = 128;
     private int _stringLength;
 
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
@@ -66,6 +72,23 @@ public sealed class TerminalEmulator
     /// </summary>
     public bool BracketedPaste { get; private set; }
 
+    /// <summary>False while the remote has hidden the cursor (CSI ?25l) — full-screen tools do.</summary>
+    public bool CursorVisible { get; private set; } = true;
+
+    /// <summary>
+    /// How many rows that scrolled off the top are remembered. Lowering it drops the oldest rows
+    /// straight away.
+    /// </summary>
+    public int ScrollbackLimit
+    {
+        get => _scrollbackLimit;
+        set
+        {
+            _scrollbackLimit = Math.Clamp(value, MinScrollbackLimit, MaxScrollbackLimit);
+            TrimScrollback();
+        }
+    }
+
     /// <summary>
     /// True when <paramref name="row"/> (from <see cref="GetRow"/> or
     /// <see cref="GetScrollbackRow"/>) continues in the next row — the text ran past the right
@@ -76,7 +99,11 @@ public sealed class TerminalEmulator
     /// <summary>Raised after a <see cref="Feed(byte[])"/> batch mutates the grid.</summary>
     public event Action? Updated;
 
-    public TerminalEmulator(int columns, int rows) => Resize(columns, rows);
+    public TerminalEmulator(int columns, int rows, int scrollbackLimit = DefaultScrollbackLimit)
+    {
+        ScrollbackLimit = scrollbackLimit;
+        Resize(columns, rows);
+    }
 
     public TerminalCell[] GetRow(int row) => _screen[row];
 
@@ -100,11 +127,8 @@ public sealed class TerminalEmulator
         // time the view got shorter — which on a phone is every time the soft keyboard opens.
         var drop = had ? Math.Max(0, Rows - rows) : 0;
         for (var r = 0; r < drop; r++)
-        {
             _scrollback.Add(_screen[r]);
-            if (_scrollback.Count > MaxScrollback)
-                _scrollback.RemoveAt(0);
-        }
+        TrimScrollback();
 
         // And they come back when the view grows again. Without this the trip is one-way: showing
         // and hiding the keyboard once ate a few rows of output for good, and doing it a few times
@@ -213,6 +237,7 @@ public sealed class TerminalEmulator
             case 'c': // RIS — full reset
                 ResetScreen();
                 BracketedPaste = false;
+                CursorVisible = true;
                 _state = State.Ground;
                 break;
             default:
@@ -269,10 +294,10 @@ public sealed class TerminalEmulator
         }
         if ((c >= '0' && c <= '9') || c == ';' || c == ':')
         {
-            // Sub-parameters (SGR 38:5:n) read the same as the ';' spelling for the colours we
-            // model, so they are folded into one syntax rather than given a parser of their own.
+            // ':' separates sub-parameters (SGR 38:2::r:g:b). They are kept as written: only SGR
+            // reads them, and everything else looks at the number before the first colon.
             if (_params.Length < MaxParamsLength)
-                _params.Append(c == ':' ? ';' : c);
+                _params.Append(c);
             return;
         }
         // Intermediate bytes (0x20–0x2F) belong to sequences we don't implement — consume them
@@ -296,18 +321,23 @@ public sealed class TerminalEmulator
 
     private void DispatchCsi(char final, int[] ps)
     {
-        // Private sequences (ESC[?…) are mode toggles. The one we model is bracketed paste; the
-        // rest (cursor visibility, alt screen, …) are consumed and ignored.
+        // Private sequences (ESC[?…) are mode toggles. The ones we model are bracketed paste and
+        // cursor visibility; the rest (alt screen, mouse, …) are consumed and ignored.
         if (_privateSeq)
         {
-            if (final is 'h' or 'l' && Array.IndexOf(ps, 2004) >= 0)
-                BracketedPaste = final == 'h';
+            if (final is 'h' or 'l')
+            {
+                if (Array.IndexOf(ps, 2004) >= 0)
+                    BracketedPaste = final == 'h';
+                if (Array.IndexOf(ps, 25) >= 0)
+                    CursorVisible = final == 'h';
+            }
             return;
         }
 
         switch (final)
         {
-            case 'm': ApplySgr(ps); break;
+            case 'm': ApplySgr(_params.ToString()); break;
             case 'H' or 'f':
                 _cursorRow = ClampRow(Arg(ps, 0, 1) - 1);
                 _cursorCol = ClampCol(Arg(ps, 1, 1) - 1);
@@ -326,54 +356,112 @@ public sealed class TerminalEmulator
         }
     }
 
-    private void ApplySgr(int[] ps)
+    // SGR arrives in two spellings for the extended colors: the common ';' one, where 38;5;n and
+    // 38;2;r;g;b borrow the parameters that follow, and the ITU ':' one, where the whole color
+    // sits inside a single parameter (38:5:n, 38:2::r:g:b, 38:2:r:g:b).
+    private void ApplySgr(string raw)
     {
-        if (ps.Length == 0)
+        if (raw.Length == 0)
         {
             ResetAttributes();
             return;
         }
 
-        for (var i = 0; i < ps.Length; i++)
+        var parts = raw.Split(';');
+        for (var i = 0; i < parts.Length; i++)
         {
-            var p = ps[i];
+            var part = parts[i];
+            if (part.IndexOf(':') >= 0)
+            {
+                ApplySgrWithSubParams(part.Split(':'));
+                continue;
+            }
+
+            var p = ParseInt(part);
             switch (p)
             {
                 case 0: ResetAttributes(); break;
-                case 1: _bold = true; break;
-                case 22: _bold = false; break;
-                case >= 30 and <= 37: _fg = (byte)(p - 30); break;
-                case 39: _fg = TerminalPalette.DefaultForeground; break;
-                case >= 40 and <= 47: _bg = (byte)(p - 40); break;
-                case 49: _bg = TerminalPalette.DefaultBackground; break;
-                case >= 90 and <= 97: _fg = (byte)(p - 90 + 8); break;
-                case >= 100 and <= 107: _bg = (byte)(p - 100 + 8); break;
-                case 38: i = ConsumeExtendedColor(ps, i, out _fg); break;
-                case 48: i = ConsumeExtendedColor(ps, i, out _bg); break;
+                case 1: _attrs |= TerminalAttributes.Bold; break;
+                case 2: _attrs |= TerminalAttributes.Dim; break;
+                case 3: _attrs |= TerminalAttributes.Italic; break;
+                case 4 or 21: _attrs |= TerminalAttributes.Underline; break;
+                case 7: _attrs |= TerminalAttributes.Inverse; break;
+                case 8: _attrs |= TerminalAttributes.Hidden; break;
+                case 9: _attrs |= TerminalAttributes.Strikethrough; break;
+                case 22: _attrs &= ~(TerminalAttributes.Bold | TerminalAttributes.Dim); break;
+                case 23: _attrs &= ~TerminalAttributes.Italic; break;
+                case 24: _attrs &= ~TerminalAttributes.Underline; break;
+                case 27: _attrs &= ~TerminalAttributes.Inverse; break;
+                case 28: _attrs &= ~TerminalAttributes.Hidden; break;
+                case 29: _attrs &= ~TerminalAttributes.Strikethrough; break;
+                case >= 30 and <= 37: _fg = TerminalColor.FromIndex(p - 30); break;
+                case 39: _fg = TerminalColor.Default; break;
+                case >= 40 and <= 47: _bg = TerminalColor.FromIndex(p - 40); break;
+                case 49: _bg = TerminalColor.Default; break;
+                case >= 90 and <= 97: _fg = TerminalColor.FromIndex(p - 90 + 8); break;
+                case >= 100 and <= 107: _bg = TerminalColor.FromIndex(p - 100 + 8); break;
+                case 38: i = ConsumeExtendedColor(parts, i, ref _fg); break;
+                case 48: i = ConsumeExtendedColor(parts, i, ref _bg); break;
                 default: break;
             }
         }
     }
 
-    // 38/48 ; 5 ; n  (256-color)  or  38/48 ; 2 ; r ; g ; b  (truecolor). We map
-    // a low index to its palette slot and fall back to default for the rest.
-    private static int ConsumeExtendedColor(int[] ps, int i, out byte color)
+    private void ApplySgrWithSubParams(string[] sub)
     {
-        color = TerminalPalette.DefaultForeground;
-        if (i + 1 >= ps.Length)
+        switch (ParseInt(sub[0]))
+        {
+            case 38: _fg = ExtendedColor(sub) ?? _fg; break;
+            case 48: _bg = ExtendedColor(sub) ?? _bg; break;
+            // 4:0 is "no underline"; 4:1..4:5 are underline styles, all drawn as one line here.
+            case 4:
+                if (sub.Length > 1 && ParseInt(sub[1]) == 0)
+                    _attrs &= ~TerminalAttributes.Underline;
+                else
+                    _attrs |= TerminalAttributes.Underline;
+                break;
+            default: break;
+        }
+    }
+
+    // ';' spelling: 38;5;n or 38;2;r;g;b. Returns the index of the last parameter consumed. A
+    // truncated sequence leaves the color as it was rather than guessing.
+    private static int ConsumeExtendedColor(string[] parts, int i, ref TerminalColor color)
+    {
+        if (i + 1 >= parts.Length)
             return i;
 
-        var mode = ps[i + 1];
-        if (mode == 5 && i + 2 < ps.Length)
+        switch (ParseInt(parts[i + 1]))
         {
-            var n = ps[i + 2];
-            color = n < 16 ? (byte)n : TerminalPalette.DefaultForeground;
-            return i + 2;
+            case 5 when i + 2 < parts.Length:
+                color = TerminalColor.FromIndex(Math.Clamp(ParseInt(parts[i + 2]), 0, 255));
+                return i + 2;
+            case 2 when i + 4 < parts.Length:
+                color = TerminalColor.FromRgb(
+                    ParseInt(parts[i + 2]), ParseInt(parts[i + 3]), ParseInt(parts[i + 4]));
+                return i + 4;
+            default:
+                return i + 1;
         }
-        if (mode == 2 && i + 4 < ps.Length)
-            return i + 4; // truecolor not represented — leave default
+    }
 
-        return i + 1;
+    // ':' spelling — sub[0] is 38/48, then 5:n, 2:r:g:b, or 2:colorspace:r:g:b.
+    private static TerminalColor? ExtendedColor(string[] sub)
+    {
+        if (sub.Length < 2)
+            return null;
+
+        var mode = ParseInt(sub[1]);
+        var args = sub.Length - 2;
+        if (mode == 5 && args >= 1)
+            return TerminalColor.FromIndex(Math.Clamp(ParseInt(sub[2]), 0, 255));
+        if (mode == 2 && args >= 3)
+        {
+            // With four arguments the first is the color-space id, usually left empty.
+            var r = args >= 4 ? 3 : 2;
+            return TerminalColor.FromRgb(ParseInt(sub[r]), ParseInt(sub[r + 1]), ParseInt(sub[r + 2]));
+        }
+        return null;
     }
 
     private void PutChar(char c)
@@ -384,7 +472,7 @@ public sealed class TerminalEmulator
             _cursorCol = 0;
             LineFeed();
         }
-        _screen[_cursorRow][_cursorCol] = new TerminalCell(c, _fg, _bg, _bold);
+        _screen[_cursorRow][_cursorCol] = new TerminalCell(c, _fg, _bg, _attrs);
         _cursorCol++;
     }
 
@@ -399,8 +487,7 @@ public sealed class TerminalEmulator
     private void ScrollUp()
     {
         _scrollback.Add(_screen[0]);
-        if (_scrollback.Count > MaxScrollback)
-            _scrollback.RemoveAt(0);
+        TrimScrollback();
 
         for (var r = 1; r < Rows; r++)
             _screen[r - 1] = _screen[r];
@@ -443,6 +530,13 @@ public sealed class TerminalEmulator
         }
     }
 
+    private void TrimScrollback()
+    {
+        var excess = _scrollback.Count - _scrollbackLimit;
+        if (excess > 0)
+            _scrollback.RemoveRange(0, excess);
+    }
+
     private void ClearRow(int row)
     {
         var r = _screen[row];
@@ -469,14 +563,14 @@ public sealed class TerminalEmulator
 
     private void ResetAttributes()
     {
-        _fg = TerminalPalette.DefaultForeground;
-        _bg = TerminalPalette.DefaultBackground;
-        _bold = false;
+        _fg = TerminalColor.Default;
+        _bg = TerminalColor.Default;
+        _attrs = TerminalAttributes.None;
     }
 
     // Erased cells keep the active background so colored fills survive a clear.
     private TerminalCell BlankCell() =>
-        new(' ', TerminalPalette.DefaultForeground, _bg, false);
+        new(' ', TerminalColor.Default, _bg, TerminalAttributes.None);
 
     private int[] ParseParams()
     {
@@ -486,9 +580,16 @@ public sealed class TerminalEmulator
         var parts = _params.ToString().Split(';');
         var result = new int[parts.Length];
         for (var i = 0; i < parts.Length; i++)
-            result[i] = int.TryParse(parts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+        {
+            var part = parts[i];
+            var colon = part.IndexOf(':');
+            result[i] = ParseInt(colon >= 0 ? part.Substring(0, colon) : part);
+        }
         return result;
     }
+
+    private static int ParseInt(string s) =>
+        int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
 
     private static int Arg(int[] ps, int index, int fallback) =>
         index < ps.Length && ps[index] > 0 ? ps[index] : fallback;

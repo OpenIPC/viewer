@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using OpenIPC.Viewer.App.Controls;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
@@ -116,6 +117,12 @@ public sealed partial class SshTerminalContent : UserControl
 
         _term.Emulator = vm.Emulator;
         _term.TerminalFontSize = vm.FontSize;
+        _term.ColorTheme = vm.Theme;
+        _term.CursorStyle = vm.CursorStyle;
+        _term.CursorBlink = vm.CursorBlink;
+        // The strip around the grid (whatever is left when the size isn't a whole number of
+        // cells) takes the theme's background rather than the original dark one.
+        Background = new SolidColorBrush(Color.FromUInt32(0xFF00_0000 | vm.Theme.Background));
         _term.Input += (_, text) => SendInput(text);
         _term.PasteRequested += (_, _) => _ = PasteAsync();
         _term.CopyRequested += (_, _) => _ = CopyAsync(_term.GetSelectedText());
