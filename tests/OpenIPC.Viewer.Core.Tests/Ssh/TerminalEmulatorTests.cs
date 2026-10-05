@@ -37,10 +37,10 @@ public sealed class TerminalEmulatorTests
     {
         var t = new TerminalEmulator(20, 5);
         t.Feed("\x1b[31mX");
-        Assert.Equal(1, t.GetRow(0)[0].Foreground); // 31 -> index 1 (red)
+        Assert.Equal(TerminalColor.FromIndex(1), t.GetRow(0)[0].Foreground); // 31 -> index 1 (red)
         // Reset returns to default.
         t.Feed("\x1b[0mY");
-        Assert.Equal(TerminalPalette.DefaultForeground, t.GetRow(0)[1].Foreground);
+        Assert.True(t.GetRow(0)[1].Foreground.IsDefault);
     }
 
     [Fact]

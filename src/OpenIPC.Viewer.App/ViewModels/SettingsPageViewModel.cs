@@ -13,6 +13,7 @@ using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Onvif.Discovery;
 using OpenIPC.Viewer.Core.Platform;
 using OpenIPC.Viewer.Core.Ssh;
+using OpenIPC.Viewer.Core.Ssh.Terminal;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
@@ -69,9 +70,45 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     // SSH section (Phase 13).
     [ObservableProperty] private bool _sshStrictHostKey = true;
     [ObservableProperty] private int _sshDefaultPort = 22;
-    [ObservableProperty] private int _sshTerminalFontSize = 14;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SshTerminalPreviewFontSize))]
+    private int _sshTerminalFontSize = 14;
     [ObservableProperty] private string _majesticConfigPath = "/etc/majestic.yaml";
     [ObservableProperty] private bool _hostKeysJustCleared;
+
+    // Terminal look. The preview is a fixed sample screen drawn by the real TerminalView, so
+    // what the user picks here is exactly what the terminal will show.
+    [ObservableProperty] private TerminalThemeOption? _sshTerminalTheme;
+    [ObservableProperty] private TerminalCursorStyleOption? _sshTerminalCursorStyle;
+    [ObservableProperty] private bool _sshTerminalCursorBlink;
+    [ObservableProperty] private int _sshTerminalScrollback = TerminalEmulator.DefaultScrollbackLimit;
+    public IReadOnlyList<TerminalThemeOption> TerminalThemeOptions { get; }
+    public IReadOnlyList<TerminalCursorStyleOption> TerminalCursorStyleOptions { get; }
+    public TerminalEmulator TerminalPreview { get; } = CreateTerminalPreview();
+    public double SshTerminalPreviewFontSize => SshTerminalFontSize;
+
+    // A prompt, a colored `ls`, both rows of the ANSI palette and the renditions — enough to
+    // judge a theme by. Kept within 44 columns so it fits a phone.
+    private static TerminalEmulator CreateTerminalPreview()
+    {
+        const string prompt = "\x1b[1;32mroot@openipc\x1b[0m:\x1b[1;34m~\x1b[0m# ";
+        var preview = new TerminalEmulator(44, 7);
+        preview.Feed(
+            prompt + "ls\r\n" +
+            "\x1b[1;34mbin\x1b[0m  \x1b[1;36mlib\x1b[0m  \x1b[1;32mmajestic\x1b[0m  majestic.yaml\r\n" +
+            "\x1b[31mred \x1b[32mgreen \x1b[33myellow \x1b[34mblue \x1b[35mmagenta \x1b[36mcyan\x1b[0m\r\n" +
+            "\x1b[91mred \x1b[92mgreen \x1b[93myellow \x1b[94mblue \x1b[95mmagenta \x1b[96mcyan\x1b[0m\r\n" +
+            "\x1b[1mbold\x1b[0m \x1b[2mdim\x1b[0m \x1b[3mitalic\x1b[0m \x1b[4munderline\x1b[0m \x1b[7m inverse \x1b[0m\r\n");
+        for (var i = 0; i < 44; i++)
+        {
+            // A truecolor ramp, to show 24-bit output comes through.
+            var r = 255 - i * 255 / 43;
+            var b = i * 255 / 43;
+            preview.Feed($"\x1b[48;2;{r};64;{b}m ");
+        }
+        preview.Feed("\x1b[0m\r\n" + prompt);
+        return preview;
+    }
 
     // Notifications (Phase 19.3).
     [ObservableProperty] private bool _notificationsEnabled = true;
@@ -226,6 +263,17 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         };
         StartupLayoutOptions.Add(new StartupLayoutOption(Localizer.Instance["Settings.Appearance.StartupLayout.LastUsed"], 0));
 
+        TerminalThemeOptions = TerminalTheme.BuiltIn
+            .Select(t => new TerminalThemeOption(Localizer.Instance[$"Settings.Ssh.Theme.{t.Id}"], t))
+            .ToList();
+        TerminalCursorStyleOptions = new[]
+        {
+            TerminalCursorStyle.Outline, TerminalCursorStyle.Block,
+            TerminalCursorStyle.Bar, TerminalCursorStyle.Underline,
+        }
+            .Select(c => new TerminalCursorStyleOption(Localizer.Instance[$"Settings.Ssh.Cursor.{c}"], c))
+            .ToList();
+
         Load();
     }
 
@@ -261,6 +309,14 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             SshStrictHostKey = s.SshStrictHostKey;
             SshDefaultPort = s.SshDefaultPort;
             SshTerminalFontSize = s.SshTerminalFontSize;
+            var theme = TerminalTheme.ById(s.SshTerminalTheme);
+            SshTerminalTheme = TerminalThemeOptions.FirstOrDefault(o => o.Theme == theme) ?? TerminalThemeOptions[0];
+            SshTerminalCursorStyle =
+                TerminalCursorStyleOptions.FirstOrDefault(o =>
+                    string.Equals(o.Style.ToString(), s.SshTerminalCursorStyle, StringComparison.OrdinalIgnoreCase))
+                ?? TerminalCursorStyleOptions[0];
+            SshTerminalCursorBlink = s.SshTerminalCursorBlink;
+            SshTerminalScrollback = s.SshTerminalScrollback;
             MajesticConfigPath = s.MajesticConfigPath;
             NotificationsEnabled = s.NotificationsEnabled;
             NotifyOnMotion = s.NotifyOnMotion;
@@ -296,6 +352,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
     partial void OnSshDefaultPortChanged(int value) => Persist();
     partial void OnSshTerminalFontSizeChanged(int value) => Persist();
+    partial void OnSshTerminalThemeChanged(TerminalThemeOption? value) => Persist();
+    partial void OnSshTerminalCursorStyleChanged(TerminalCursorStyleOption? value) => Persist();
+    partial void OnSshTerminalCursorBlinkChanged(bool value) => Persist();
+    partial void OnSshTerminalScrollbackChanged(int value) => Persist();
     partial void OnMajesticConfigPathChanged(string value) => Persist();
     partial void OnNotificationsEnabledChanged(bool value) => Persist();
     partial void OnNotifyOnMotionChanged(bool value) => Persist();
@@ -331,6 +391,12 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,
+            SshTerminalTheme = SshTerminalTheme?.Theme.Id ?? TerminalTheme.DefaultId,
+            SshTerminalCursorStyle = (SshTerminalCursorStyle?.Style ?? TerminalCursorStyle.Outline)
+                .ToString().ToLowerInvariant(),
+            SshTerminalCursorBlink = SshTerminalCursorBlink,
+            SshTerminalScrollback = Math.Clamp(SshTerminalScrollback,
+                TerminalEmulator.MinScrollbackLimit, TerminalEmulator.MaxScrollbackLimit),
             MajesticConfigPath = MajesticConfigPath,
             NotificationsEnabled = NotificationsEnabled,
             NotifyOnMotion = NotifyOnMotion,
@@ -579,3 +645,5 @@ public sealed record IdleTimeoutOption(string Display, int Minutes);
 // Value is the persisted UserSettings.StartupPage; Id is the LayoutId (0 = last used).
 public sealed record StartPageOption(string Display, string Value);
 public sealed record StartupLayoutOption(string Display, int Id);
+public sealed record TerminalThemeOption(string Display, TerminalTheme Theme);
+public sealed record TerminalCursorStyleOption(string Display, TerminalCursorStyle Style);

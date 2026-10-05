@@ -3,6 +3,7 @@
              xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
+             xmlns:controls="using:OpenIPC.Viewer.App.Controls"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SettingsPage"
              x:DataType="vm:SettingsPageViewModel">
 
@@ -404,6 +405,53 @@
             <NumericUpDown Grid.Column="1" Value="{Binding SshTerminalFontSize, Mode=TwoWay}"
                            Minimum="8" Maximum="32" Increment="1" FormatString="0" MinWidth="120" />
           </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Ssh.Theme], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding TerminalThemeOptions}"
+                      SelectedItem="{Binding SshTerminalTheme, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}"
+                      MinWidth="160" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Ssh.CursorStyle], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding TerminalCursorStyleOptions}"
+                      SelectedItem="{Binding SshTerminalCursorStyle, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}"
+                      MinWidth="160" />
+          </Grid>
+
+          <CheckBox IsChecked="{Binding SshTerminalCursorBlink}"
+                    Content="{Binding [Settings.Ssh.CursorBlink], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Ssh.Scrollback], Source={x:Static svc:Localizer.Instance}}" />
+            <NumericUpDown Grid.Column="1" Value="{Binding SshTerminalScrollback, Mode=TwoWay}"
+                           Minimum="100" Maximum="50000"
+                           Increment="500" FormatString="0" MinWidth="120" />
+          </Grid>
+
+          <!-- Live preview: the real terminal control over a fixed sample screen. -->
+          <Border HorizontalAlignment="Left"
+                  CornerRadius="{StaticResource RadiusSm}"
+                  BorderBrush="{StaticResource BorderWeakBrush}" BorderThickness="1"
+                  ClipToBounds="True">
+            <controls:TerminalView Emulator="{Binding TerminalPreview}"
+                                   ColorTheme="{Binding SshTerminalTheme.Theme}"
+                                   CursorStyle="{Binding SshTerminalCursorStyle.Style}"
+                                   CursorBlink="{Binding SshTerminalCursorBlink}"
+                                   TerminalFontSize="{Binding SshTerminalPreviewFontSize}"
+                                   FitToEmulator="True"
+                                   Focusable="False"
+                                   IsHitTestVisible="False" />
+          </Border>
 
           <StackPanel Spacing="6">
             <TextBlock Classes="field-label"
