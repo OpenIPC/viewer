@@ -7,21 +7,25 @@ using System.Text;
 namespace OpenIPC.Viewer.Core.Ssh.Terminal;
 
 /// <summary>
-/// A deliberately small VT/ANSI terminal emulator (phase-13 §13.3 "basic VT" —
-/// no alt-screen, mouse, or full ncurses). Feeds UTF-8 bytes through a state
-/// machine that maintains a character grid: printable text, the common control
-/// codes, CSI cursor/erase moves, and SGR renditions (16/256/truecolor, bold, dim,
-/// italic, underline, inverse, hidden, strikethrough). Unknown escapes are
-/// consumed and ignored rather than corrupting the screen.
+/// A small VT/xterm terminal emulator (phase-13 §13.3). Feeds UTF-8 bytes through a state
+/// machine that maintains a character grid: printable text, the common control codes, CSI
+/// cursor/erase/insert/delete, scroll regions, the alternate screen full-screen tools draw on,
+/// the DEC line-drawing charset, and SGR renditions (16/256/truecolor, bold, dim, italic,
+/// underline, inverse, hidden, strikethrough). Mouse reporting is not modelled. Unknown escapes
+/// are consumed and ignored rather than corrupting the screen.
 /// </summary>
 public sealed class TerminalEmulator
 {
     private const char Esc = '\x1b';
     private const char Bel = '\x07';
 
-    private enum State { Ground, Escape, Csi, String }
+    private enum State { Ground, Escape, EscapeIntermediate, Csi, String }
 
+    // The grid being drawn and written: the main screen, or the alternate one while a full-screen
+    // tool is running. The main screen waits in _mainScreen meanwhile, and only it has history —
+    // a redraw of vi's screen scrolling past is not something anyone wants to scroll back through.
     private TerminalCell[][] _screen = Array.Empty<TerminalCell[]>();
+    private TerminalCell[][]? _mainScreen;
     private readonly List<TerminalCell[]> _scrollback = new();
     private int _scrollbackLimit;
 
@@ -39,16 +43,42 @@ public sealed class TerminalEmulator
 
     private int _cursorRow;
     private int _cursorCol;
-    private int _savedRow;
-    private int _savedCol;
 
     private TerminalColor _fg;
     private TerminalColor _bg;
     private TerminalAttributes _attrs;
 
+    // Scroll region (DECSTBM), inclusive. Line feeds at its bottom scroll only the rows inside it,
+    // which is how a full-screen tool keeps a header and a status line still while a list moves.
+    private int _scrollTop;
+    private int _scrollBottom;
+    private bool _originMode;
+    private bool _autoWrap = true;
+
+    // Character sets: G0 and G1 are each either ASCII or DEC special graphics (the line-drawing
+    // set behind every box in mc and htop); SO/SI pick which one is in use.
+    private bool _g0Graphics;
+    private bool _g1Graphics;
+    private bool _shiftOut;
+
+    private char _lastPrinted;
+
+    private struct SavedCursor
+    {
+        public int Row, Col;
+        public TerminalColor Fg, Bg;
+        public TerminalAttributes Attrs;
+        public bool OriginMode, G0Graphics, G1Graphics, ShiftOut;
+    }
+
+    private SavedCursor _saved;
+    // The cursor the main screen had when ?1049 switched away from it.
+    private SavedCursor _mainCursor;
+
     private State _state = State.Ground;
     private readonly StringBuilder _params = new();
     private bool _privateSeq;
+    private char _escIntermediate;
     // How much of an unterminated escape we are willing to swallow before deciding the stream
     // lied to us and going back to printing. Without a ceiling one malformed sequence eats the
     // rest of the session: every byte after it disappears into the parser and the screen stops
@@ -63,8 +93,9 @@ public sealed class TerminalEmulator
 
     public int Columns { get; private set; }
     public int Rows { get; private set; }
+    // While a wrap is pending the column is one past the last cell; nothing outside needs that.
     public int CursorRow => _cursorRow;
-    public int CursorColumn => _cursorCol;
+    public int CursorColumn => Math.Min(_cursorCol, Math.Max(0, Columns - 1));
 
     /// <summary>
     /// The remote turned on bracketed paste (CSI ?2004h): pasted text is to be sent between
@@ -74,6 +105,15 @@ public sealed class TerminalEmulator
 
     /// <summary>False while the remote has hidden the cursor (CSI ?25l) — full-screen tools do.</summary>
     public bool CursorVisible { get; private set; } = true;
+
+    /// <summary>A full-screen tool switched to the alternate screen (CSI ?1049h and friends).</summary>
+    public bool IsAlternateScreen => _mainScreen is not null;
+
+    /// <summary>
+    /// The remote asked for "application" cursor keys (DECCKM, CSI ?1h): arrows are to be sent as
+    /// ESC O A rather than ESC [ A. ncurses tools switch this on and only recognise that spelling.
+    /// </summary>
+    public bool ApplicationCursorKeys { get; private set; }
 
     /// <summary>
     /// How many rows that scrolled off the top are remembered. Lowering it drops the oldest rows
@@ -99,6 +139,12 @@ public sealed class TerminalEmulator
     /// <summary>Raised after a <see cref="Feed(byte[])"/> batch mutates the grid.</summary>
     public event Action? Updated;
 
+    /// <summary>
+    /// Bytes the terminal itself has to send back to the remote — answers to status queries
+    /// (cursor position, device attributes). Raised while feeding.
+    /// </summary>
+    public event Action<string>? Reply;
+
     public TerminalEmulator(int columns, int rows, int scrollbackLimit = DefaultScrollbackLimit)
     {
         ScrollbackLimit = scrollbackLimit;
@@ -107,11 +153,17 @@ public sealed class TerminalEmulator
 
     public TerminalCell[] GetRow(int row) => _screen[row];
 
-    /// <summary>Rows that have scrolled off the top and are still remembered.</summary>
-    public int ScrollbackRows => _scrollback.Count;
+    /// <summary>
+    /// Rows that have scrolled off the top and are still remembered. None while the alternate
+    /// screen is up: what is on it is all there is.
+    /// </summary>
+    public int ScrollbackRows => IsAlternateScreen ? 0 : _scrollback.Count;
 
     /// <summary>One remembered row; index 0 is the oldest.</summary>
     public TerminalCell[] GetScrollbackRow(int index) => _scrollback[index];
+
+    /// <summary>What a cursor key (A/B/C/D, H/F) sends in the current cursor-key mode.</summary>
+    public string CursorKey(char final) => (ApplicationCursorKeys ? "\x1bO" : "\x1b[") + final;
 
     public void Resize(int columns, int rows)
     {
@@ -120,20 +172,44 @@ public sealed class TerminalEmulator
         if (columns == Columns && rows == Rows)
             return;
 
-        var had = _screen.Length > 0;
+        if (_mainScreen is null)
+        {
+            _screen = ResizeMain(_screen, columns, rows, ref _cursorRow);
+        }
+        else
+        {
+            // The tool on the alternate screen redraws itself when told the new size; all that
+            // matters here is that nothing is out of range until it does.
+            _mainScreen = ResizeMain(_mainScreen, columns, rows, ref _mainCursor.Row);
+            _screen = ResizeKeepingTop(_screen, columns, rows);
+            _cursorRow = Math.Clamp(_cursorRow, 0, rows - 1);
+        }
+
+        Columns = columns;
+        Rows = rows;
+        _cursorCol = Math.Min(_cursorCol, columns - 1);
+        _scrollTop = 0;
+        _scrollBottom = rows - 1;
+        Updated?.Invoke();
+    }
+
+    private TerminalCell[][] ResizeMain(TerminalCell[][] screen, int columns, int rows, ref int cursorRow)
+    {
+        var had = screen.Length > 0;
+        var oldRows = screen.Length;
 
         // Losing rows takes them off the TOP, the way a real terminal does it: the interesting end
         // of a shell session is the bottom one. Keeping the top instead would drop the prompt every
         // time the view got shorter — which on a phone is every time the soft keyboard opens.
-        var drop = had ? Math.Max(0, Rows - rows) : 0;
+        var drop = had ? Math.Max(0, oldRows - rows) : 0;
         for (var r = 0; r < drop; r++)
-            _scrollback.Add(_screen[r]);
+            _scrollback.Add(screen[r]);
         TrimScrollback();
 
         // And they come back when the view grows again. Without this the trip is one-way: showing
         // and hiding the keyboard once ate a few rows of output for good, and doing it a few times
         // scrolled a long listing off the top with no way to get it back.
-        var restore = had ? Math.Min(Math.Max(0, rows - Rows), _scrollback.Count) : 0;
+        var restore = had ? Math.Min(Math.Max(0, rows - oldRows), _scrollback.Count) : 0;
 
         var next = new TerminalCell[rows][];
         for (var r = 0; r < rows; r++)
@@ -148,26 +224,37 @@ public sealed class TerminalEmulator
             else
             {
                 var from = r - restore + drop;
-                source = had && from < Rows ? _screen[from] : null;
+                source = had && from < oldRows ? screen[from] : null;
             }
 
             if (source is not null)
-            {
-                Array.Copy(source, next[r], Math.Min(columns, source.Length));
-                if (IsWrapped(source))
-                    MarkWrapped(next[r], true);
-            }
+                CopyRow(source, next[r], columns);
         }
 
         if (restore > 0)
             _scrollback.RemoveRange(_scrollback.Count - restore, restore);
 
-        Columns = columns;
-        Rows = rows;
-        _screen = next;
-        _cursorRow = Math.Clamp(_cursorRow - drop + restore, 0, rows - 1);
-        _cursorCol = Math.Min(_cursorCol, columns - 1);
-        Updated?.Invoke();
+        cursorRow = Math.Clamp(cursorRow - drop + restore, 0, rows - 1);
+        return next;
+    }
+
+    private TerminalCell[][] ResizeKeepingTop(TerminalCell[][] screen, int columns, int rows)
+    {
+        var next = new TerminalCell[rows][];
+        for (var r = 0; r < rows; r++)
+        {
+            next[r] = NewBlankRow(columns);
+            if (r < screen.Length)
+                CopyRow(screen[r], next[r], columns);
+        }
+        return next;
+    }
+
+    private void CopyRow(TerminalCell[] source, TerminalCell[] target, int columns)
+    {
+        Array.Copy(source, target, Math.Min(columns, source.Length));
+        if (IsWrapped(source))
+            MarkWrapped(target, true);
     }
 
     public void Feed(byte[] bytes) => Feed(bytes.AsSpan());
@@ -197,6 +284,7 @@ public sealed class TerminalEmulator
         {
             case State.Ground: ProcessGround(c); break;
             case State.Escape: ProcessEscape(c); break;
+            case State.EscapeIntermediate: ProcessEscapeIntermediate(c); break;
             case State.Csi: ProcessCsi(c); break;
             case State.String: ProcessString(c); break;
         }
@@ -208,9 +296,12 @@ public sealed class TerminalEmulator
         {
             case Esc: _state = State.Escape; break;
             case '\r': _cursorCol = 0; break;
-            case '\n': LineFeed(); break;
-            case '\b': if (_cursorCol > 0) _cursorCol--; break;
+            // VT and FF are line feeds on every terminal that matters.
+            case '\n' or '\v' or '\f': LineFeed(); break;
+            case '\b': if (_cursorCol > 0) _cursorCol = Math.Min(_cursorCol, Columns - 1) - 1; break;
             case '\t': _cursorCol = Math.Min(Columns - 1, (_cursorCol / 8 + 1) * 8); break;
+            case '\x0e': _shiftOut = true; break;  // SO — G1
+            case '\x0f': _shiftOut = false; break; // SI — G0
             case Bel: break;
             default:
                 if (!char.IsControl(c))
@@ -221,6 +312,7 @@ public sealed class TerminalEmulator
 
     private void ProcessEscape(char c)
     {
+        _state = State.Ground;
         switch (c)
         {
             case '[':
@@ -234,17 +326,31 @@ public sealed class TerminalEmulator
                 _stringLength = 0;
                 _state = State.String;
                 break;
-            case 'c': // RIS — full reset
-                ResetScreen();
-                BracketedPaste = false;
-                CursorVisible = true;
-                _state = State.Ground;
+            // Escapes with an intermediate byte — charset designation ESC ( 0, ESC # 8 and the
+            // like — are three characters long. Treating them as two printed the third: every
+            // ncurses "back to normal" (ESC ( B) left a stray B on the screen.
+            case >= ' ' and <= '/':
+                _escIntermediate = c;
+                _state = State.EscapeIntermediate;
                 break;
-            default:
-                // Charset selection ESC( / ESC) and other two-char escapes —
-                // ignore the parameter byte and return to ground.
-                _state = State.Ground;
-                break;
+            case '7': SaveCursor(ref _saved); break;
+            case '8': RestoreCursor(_saved); break;
+            case 'D': LineFeed(); break;                      // IND
+            case 'E': _cursorCol = 0; LineFeed(); break;      // NEL
+            case 'M': ReverseIndex(); break;                  // RI
+            case 'c': FullReset(); break;                     // RIS
+            default: break; // ESC = / ESC > (keypad modes) and the rest: nothing to draw.
+        }
+    }
+
+    private void ProcessEscapeIntermediate(char c)
+    {
+        _state = State.Ground;
+        switch (_escIntermediate)
+        {
+            case '(': _g0Graphics = c == '0'; break;
+            case ')': _g1Graphics = c == '0'; break;
+            default: break;
         }
     }
 
@@ -321,38 +427,101 @@ public sealed class TerminalEmulator
 
     private void DispatchCsi(char final, int[] ps)
     {
-        // Private sequences (ESC[?…) are mode toggles. The ones we model are bracketed paste and
-        // cursor visibility; the rest (alt screen, mouse, …) are consumed and ignored.
         if (_privateSeq)
         {
             if (final is 'h' or 'l')
-            {
-                if (Array.IndexOf(ps, 2004) >= 0)
-                    BracketedPaste = final == 'h';
-                if (Array.IndexOf(ps, 25) >= 0)
-                    CursorVisible = final == 'h';
-            }
+                foreach (var mode in ps)
+                    SetPrivateMode(mode, final == 'h');
+            // Everything else private (DA2 queries, xterm key-modifier options, …) is ignored.
             return;
         }
 
+        var n = Arg(ps, 0, 1);
         switch (final)
         {
             case 'm': ApplySgr(_params.ToString()); break;
-            case 'H' or 'f':
-                _cursorRow = ClampRow(Arg(ps, 0, 1) - 1);
-                _cursorCol = ClampCol(Arg(ps, 1, 1) - 1);
-                break;
-            case 'A': _cursorRow = ClampRow(_cursorRow - Arg(ps, 0, 1)); break;
-            case 'B': _cursorRow = ClampRow(_cursorRow + Arg(ps, 0, 1)); break;
-            case 'C': _cursorCol = ClampCol(_cursorCol + Arg(ps, 0, 1)); break;
-            case 'D': _cursorCol = ClampCol(_cursorCol - Arg(ps, 0, 1)); break;
-            case 'G': _cursorCol = ClampCol(Arg(ps, 0, 1) - 1); break;
-            case 'd': _cursorRow = ClampRow(Arg(ps, 0, 1) - 1); break;
+            case 'H' or 'f': MoveTo(Arg(ps, 0, 1) - 1, Arg(ps, 1, 1) - 1); break;
+            case 'A': CursorUp(n); break;
+            case 'B' or 'e': CursorDown(n); break;
+            case 'C' or 'a': _cursorCol = ClampCol(_cursorCol + n); break;
+            case 'D': _cursorCol = ClampCol(Math.Min(_cursorCol, Columns - 1) - n); break;
+            case 'E': CursorDown(n); _cursorCol = 0; break;
+            case 'F': CursorUp(n); _cursorCol = 0; break;
+            case 'G' or '`': _cursorCol = ClampCol(n - 1); break;
+            case 'd': MoveTo(n - 1, _cursorCol); break;
             case 'J': EraseInDisplay(Arg(ps, 0, 0)); break;
             case 'K': EraseInLine(Arg(ps, 0, 0)); break;
-            case 's': _savedRow = _cursorRow; _savedCol = _cursorCol; break;
-            case 'u': _cursorRow = ClampRow(_savedRow); _cursorCol = ClampCol(_savedCol); break;
+            case 'L': InsertLines(n); break;
+            case 'M': DeleteLines(n); break;
+            case '@': InsertChars(n); break;
+            case 'P': DeleteChars(n); break;
+            case 'X': EraseChars(n); break;
+            case 'S': ScrollUp(n); break;
+            case 'T': ShiftDown(_scrollTop, _scrollBottom, n); break;
+            case 'b': RepeatLast(n); break;
+            case 'r': SetScrollRegion(Arg(ps, 0, 1) - 1, Arg(ps, 1, Rows) - 1); break;
+            case 's': SaveCursor(ref _saved); break;
+            case 'u': RestoreCursor(_saved); break;
+            case 'n': DeviceStatus(Arg(ps, 0, 0)); break;
+            case 'c' when Arg(ps, 0, 0) == 0: Reply?.Invoke("\x1b[?1;2c"); break; // a VT100 with AVO
             default: break; // unsupported — ignore
+        }
+    }
+
+    private void SetPrivateMode(int mode, bool on)
+    {
+        switch (mode)
+        {
+            case 1: ApplicationCursorKeys = on; break;
+            case 6:
+                _originMode = on;
+                MoveTo(0, 0);
+                break;
+            case 7: _autoWrap = on; break;
+            case 25: CursorVisible = on; break;
+            case 47 or 1047: SwitchScreen(on, saveCursor: false); break;
+            case 1049: SwitchScreen(on, saveCursor: true); break;
+            case 2004: BracketedPaste = on; break;
+            default: break; // mouse modes, focus events, … — not modelled
+        }
+    }
+
+    // ?1049 is "save the cursor, switch to a cleared alternate screen" and, on the way back,
+    // "switch back and restore the cursor". ?47 / ?1047 switch without the cursor dance.
+    private void SwitchScreen(bool alternate, bool saveCursor)
+    {
+        if (alternate == IsAlternateScreen)
+            return;
+
+        if (alternate)
+        {
+            if (saveCursor)
+                SaveCursor(ref _mainCursor);
+            _mainScreen = _screen;
+            _screen = new TerminalCell[Rows][];
+            for (var r = 0; r < Rows; r++)
+                _screen[r] = NewBlankRow(Columns);
+        }
+        else
+        {
+            _screen = _mainScreen!;
+            _mainScreen = null;
+            if (saveCursor)
+                RestoreCursor(_mainCursor);
+        }
+        _scrollTop = 0;
+        _scrollBottom = Rows - 1;
+    }
+
+    private void DeviceStatus(int query)
+    {
+        switch (query)
+        {
+            case 5: Reply?.Invoke("\x1b[0n"); break; // "terminal OK"
+            case 6:
+                var row = _originMode ? _cursorRow - _scrollTop : _cursorRow;
+                Reply?.Invoke(string.Format(CultureInfo.InvariantCulture, "\x1b[{0};{1}R", row + 1, CursorColumn + 1));
+                break;
         }
     }
 
@@ -468,40 +637,190 @@ public sealed class TerminalEmulator
     {
         if (_cursorCol >= Columns)
         {
-            MarkWrapped(_screen[_cursorRow], true);
-            _cursorCol = 0;
-            LineFeed();
+            if (_autoWrap)
+            {
+                MarkWrapped(_screen[_cursorRow], true);
+                _cursorCol = 0;
+                LineFeed();
+            }
+            else
+            {
+                // No autowrap: the last column is overwritten until something moves the cursor.
+                _cursorCol = Columns - 1;
+            }
         }
-        _screen[_cursorRow][_cursorCol] = new TerminalCell(c, _fg, _bg, _attrs);
+
+        var graphics = _shiftOut ? _g1Graphics : _g0Graphics;
+        _screen[_cursorRow][_cursorCol] =
+            new TerminalCell(graphics ? DecSpecialGraphics(c) : c, _fg, _bg, _attrs);
         _cursorCol++;
+        _lastPrinted = c;
     }
+
+    // REP — the last printed character again, n times. ncurses uses it to draw long runs of the
+    // same character (a horizontal rule, a blank stretch of a status line).
+    private void RepeatLast(int n)
+    {
+        if (_lastPrinted == '\0')
+            return;
+        for (var i = 0; i < Math.Min(n, Columns * Rows); i++)
+            PutChar(_lastPrinted);
+    }
+
+    // The DEC special graphics set: the lower-case letters and a few symbols turn into the
+    // box-drawing pieces full-screen tools draw their frames with.
+    private static char DecSpecialGraphics(char c) => c switch
+    {
+        '`' => '◆', 'a' => '▒', 'b' => '␉', 'c' => '␌', 'd' => '␍', 'e' => '␊', 'f' => '°',
+        'g' => '±', 'h' => '␤', 'i' => '␋', 'j' => '┘', 'k' => '┐', 'l' => '┌', 'm' => '└',
+        'n' => '┼', 'o' => '⎺', 'p' => '⎻', 'q' => '─', 'r' => '⎼', 's' => '⎽', 't' => '├',
+        'u' => '┤', 'v' => '┴', 'w' => '┬', 'x' => '│', 'y' => '≤', 'z' => '≥', '{' => 'π',
+        '|' => '≠', '}' => '£', '~' => '·',
+        _ => c,
+    };
 
     private void LineFeed()
     {
-        if (_cursorRow >= Rows - 1)
-            ScrollUp();
-        else
+        if (_cursorRow == _scrollBottom)
+            ScrollUp(1);
+        else if (_cursorRow < Rows - 1)
             _cursorRow++;
     }
 
-    private void ScrollUp()
+    private void ReverseIndex()
     {
-        _scrollback.Add(_screen[0]);
-        TrimScrollback();
+        if (_cursorRow == _scrollTop)
+            ShiftDown(_scrollTop, _scrollBottom, 1);
+        else if (_cursorRow > 0)
+            _cursorRow--;
+    }
 
-        for (var r = 1; r < Rows; r++)
-            _screen[r - 1] = _screen[r];
-        _screen[Rows - 1] = NewBlankRow(Columns);
+    // Scroll the region up by n. Rows leaving the very top of the main screen become history;
+    // anything scrolled inside a smaller region, or on the alternate screen, is just gone.
+    private void ScrollUp(int n)
+    {
+        n = Math.Min(n, _scrollBottom - _scrollTop + 1);
+        if (!IsAlternateScreen && _scrollTop == 0)
+        {
+            for (var r = 0; r < n; r++)
+                _scrollback.Add(_screen[r]);
+            TrimScrollback();
+        }
+        ShiftUp(_scrollTop, _scrollBottom, n);
+    }
+
+    // Rows from..to (inclusive) move up by n; blank rows fill in at the bottom of the range.
+    private void ShiftUp(int from, int to, int n)
+    {
+        n = Math.Min(n, to - from + 1);
+        if (n <= 0)
+            return;
+        for (var r = from; r <= to - n; r++)
+            _screen[r] = _screen[r + n];
+        for (var r = to - n + 1; r <= to; r++)
+            _screen[r] = NewErasedRow();
+    }
+
+    // Rows from..to (inclusive) move down by n; blank rows fill in at the top of the range.
+    private void ShiftDown(int from, int to, int n)
+    {
+        n = Math.Min(n, to - from + 1);
+        if (n <= 0)
+            return;
+        for (var r = to; r >= from + n; r--)
+            _screen[r] = _screen[r - n];
+        for (var r = from; r < from + n; r++)
+            _screen[r] = NewErasedRow();
+    }
+
+    // IL / DL work from the cursor row to the bottom of the scroll region, and do nothing when
+    // the cursor is outside it.
+    private void InsertLines(int n)
+    {
+        if (_cursorRow < _scrollTop || _cursorRow > _scrollBottom)
+            return;
+        ShiftDown(_cursorRow, _scrollBottom, n);
+        _cursorCol = 0;
+    }
+
+    private void DeleteLines(int n)
+    {
+        if (_cursorRow < _scrollTop || _cursorRow > _scrollBottom)
+            return;
+        ShiftUp(_cursorRow, _scrollBottom, n);
+        _cursorCol = 0;
+    }
+
+    private void InsertChars(int n)
+    {
+        var row = _screen[_cursorRow];
+        var col = Math.Min(_cursorCol, Columns - 1);
+        n = Math.Min(n, Columns - col);
+        Array.Copy(row, col, row, col + n, Columns - col - n);
+        for (var c = col; c < col + n; c++)
+            row[c] = BlankCell();
+    }
+
+    private void DeleteChars(int n)
+    {
+        var row = _screen[_cursorRow];
+        var col = Math.Min(_cursorCol, Columns - 1);
+        n = Math.Min(n, Columns - col);
+        Array.Copy(row, col + n, row, col, Columns - col - n);
+        for (var c = Columns - n; c < Columns; c++)
+            row[c] = BlankCell();
+    }
+
+    private void EraseChars(int n)
+    {
+        var row = _screen[_cursorRow];
+        var col = Math.Min(_cursorCol, Columns - 1);
+        for (var c = col; c < Math.Min(Columns, col + n); c++)
+            row[c] = BlankCell();
+    }
+
+    private void SetScrollRegion(int top, int bottom)
+    {
+        bottom = Math.Min(bottom, Rows - 1);
+        if (top < 0 || top >= bottom)
+            return;
+        _scrollTop = top;
+        _scrollBottom = bottom;
+        MoveTo(0, 0);
+    }
+
+    // CUP / VPA. In origin mode rows count from the top of the scroll region and stay inside it.
+    private void MoveTo(int row, int col)
+    {
+        if (_originMode)
+            _cursorRow = Math.Clamp(row + _scrollTop, _scrollTop, _scrollBottom);
+        else
+            _cursorRow = ClampRow(row);
+        _cursorCol = ClampCol(col);
+    }
+
+    // Cursor up/down stop at the scroll margins when they start inside the region.
+    private void CursorUp(int n)
+    {
+        var limit = _cursorRow >= _scrollTop ? _scrollTop : 0;
+        _cursorRow = Math.Max(limit, _cursorRow - n);
+    }
+
+    private void CursorDown(int n)
+    {
+        var limit = _cursorRow <= _scrollBottom ? _scrollBottom : Rows - 1;
+        _cursorRow = Math.Min(limit, _cursorRow + n);
     }
 
     private void EraseInLine(int mode)
     {
         var row = _screen[_cursorRow];
+        var col = Math.Min(_cursorCol, Columns - 1);
         var (from, to) = mode switch
         {
-            1 => (0, _cursorCol),
+            1 => (0, col),
             2 => (0, Columns - 1),
-            _ => (_cursorCol, Columns - 1),
+            _ => (col, Columns - 1),
         };
         for (var c = from; c <= to && c < Columns; c++)
             row[c] = BlankCell();
@@ -513,17 +832,23 @@ public sealed class TerminalEmulator
 
     private void EraseInDisplay(int mode)
     {
+        var col = Math.Min(_cursorCol, Columns - 1);
         switch (mode)
         {
             case 1:
                 for (var r = 0; r < _cursorRow; r++) ClearRow(r);
-                for (var c = 0; c <= _cursorCol && c < Columns; c++) _screen[_cursorRow][c] = BlankCell();
+                for (var c = 0; c <= col; c++) _screen[_cursorRow][c] = BlankCell();
                 break;
             case 2:
                 for (var r = 0; r < Rows; r++) ClearRow(r);
                 break;
+            case 3:
+                // `clear` sends this after ED 2: forget the history too.
+                if (!IsAlternateScreen)
+                    _scrollback.Clear();
+                break;
             default:
-                for (var c = _cursorCol; c < Columns; c++) _screen[_cursorRow][c] = BlankCell();
+                for (var c = col; c < Columns; c++) _screen[_cursorRow][c] = BlankCell();
                 MarkWrapped(_screen[_cursorRow], false);
                 for (var r = _cursorRow + 1; r < Rows; r++) ClearRow(r);
                 break;
@@ -553,12 +878,53 @@ public sealed class TerminalEmulator
             _wrapped.Remove(row);
     }
 
-    private void ResetScreen()
+    private void SaveCursor(ref SavedCursor slot)
     {
+        slot.Row = _cursorRow;
+        slot.Col = _cursorCol;
+        slot.Fg = _fg;
+        slot.Bg = _bg;
+        slot.Attrs = _attrs;
+        slot.OriginMode = _originMode;
+        slot.G0Graphics = _g0Graphics;
+        slot.G1Graphics = _g1Graphics;
+        slot.ShiftOut = _shiftOut;
+    }
+
+    private void RestoreCursor(SavedCursor slot)
+    {
+        _cursorRow = ClampRow(slot.Row);
+        _cursorCol = Math.Clamp(slot.Col, 0, Columns);
+        _fg = slot.Fg;
+        _bg = slot.Bg;
+        _attrs = slot.Attrs;
+        _originMode = slot.OriginMode;
+        _g0Graphics = slot.G0Graphics;
+        _g1Graphics = slot.G1Graphics;
+        _shiftOut = slot.ShiftOut;
+    }
+
+    private void FullReset()
+    {
+        if (IsAlternateScreen)
+        {
+            _screen = _mainScreen!;
+            _mainScreen = null;
+        }
+        _scrollTop = 0;
+        _scrollBottom = Rows - 1;
+        _originMode = false;
+        _autoWrap = true;
+        _g0Graphics = _g1Graphics = _shiftOut = false;
+        _saved = default;
+        _mainCursor = default;
+        BracketedPaste = false;
+        CursorVisible = true;
+        ApplicationCursorKeys = false;
+        ResetAttributes();
         for (var r = 0; r < Rows; r++) ClearRow(r);
         _cursorRow = 0;
         _cursorCol = 0;
-        ResetAttributes();
     }
 
     private void ResetAttributes()
@@ -571,6 +937,15 @@ public sealed class TerminalEmulator
     // Erased cells keep the active background so colored fills survive a clear.
     private TerminalCell BlankCell() =>
         new(' ', TerminalColor.Default, _bg, TerminalAttributes.None);
+
+    private TerminalCell[] NewErasedRow()
+    {
+        var row = new TerminalCell[Columns];
+        var blank = BlankCell();
+        for (var c = 0; c < Columns; c++)
+            row[c] = blank;
+        return row;
+    }
 
     private int[] ParseParams()
     {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -288,8 +289,36 @@ public sealed class TerminalView : Control
     // invalidate is safe.
     private void OnEmulatorUpdated()
     {
+        // Switching screens changes what the row indices mean — the alternate screen has no
+        // history — so a selection or a scrolled-back view from before is meaningless after.
+        var alternate = _subscribed?.IsAlternateScreen ?? false;
+        if (alternate != _wasAlternate)
+        {
+            _wasAlternate = alternate;
+            _scrollOffset = 0;
+            ClearSelection();
+        }
+
         WakeCursor();
         InvalidateVisual();
+    }
+
+    private bool _wasAlternate;
+
+    // Wheel and touch scrolling. On the alternate screen there is no history to show, so — like
+    // xterm's alternateScroll — the gesture becomes cursor keys and the tool (less, vi, htop)
+    // scrolls its own content. Positive rows are "back in time", i.e. up.
+    private void ScrollOrSendKeys(int rows)
+    {
+        if (rows == 0)
+            return;
+        if (Emulator is { IsAlternateScreen: true } emu)
+        {
+            var key = emu.CursorKey(rows > 0 ? 'A' : 'B');
+            Input?.Invoke(this, string.Concat(Enumerable.Repeat(key, Math.Abs(rows))));
+            return;
+        }
+        ScrollBy(rows);
     }
 
     private void EnsureMetrics()
@@ -648,7 +677,7 @@ public sealed class TerminalView : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        ScrollBy((int)Math.Round(e.Delta.Y) * 3);
+        ScrollOrSendKeys((int)Math.Round(e.Delta.Y) * 3);
         e.Handled = true;
     }
 
@@ -734,7 +763,7 @@ public sealed class TerminalView : Control
 
         // Pull down to go back in time, the way every list on the platform behaves.
         _dragAnchorY += rows * _cellHeight;
-        ScrollBy(rows);
+        ScrollOrSendKeys(rows);
     }
 
     // Dragging a selection against either edge walks the view, so it can run past the top of the
@@ -912,7 +941,7 @@ public sealed class TerminalView : Control
             // default-constructed cell carries NUL rather than a space. Hidden text (SGR 8) has
             // already been given the background color, so it paints as nothing too.
             if (cell.Char > ' ' && (cell.Attributes & TerminalAttributes.Hidden) == 0)
-                context.DrawText(GlyphFor(cell.Char, fg, cell.Attributes), new Point(x, y));
+                DrawCellChar(context, cell.Char, fg, cell.Attributes, x, y);
 
             DrawLines(context, cell.Attributes, fg, x, y);
         }
@@ -933,6 +962,170 @@ public sealed class TerminalView : Control
             context.FillRectangle(brush, new Rect(x, y + _cellHeight - thickness * 2, _cellWidth, thickness));
         if ((attrs & TerminalAttributes.Strikethrough) != 0)
             context.FillRectangle(brush, new Rect(x, y + _cellHeight / 2, _cellWidth, thickness));
+    }
+
+    private void DrawCellChar(DrawingContext context, char ch, uint rgb, TerminalAttributes attrs, double x, double y)
+    {
+        if (!DrawBoxChar(context, ch, rgb, x, y))
+            context.DrawText(GlyphFor(ch, rgb, attrs), new Point(x, y));
+    }
+
+    // --- Box drawing -----------------------------------------------------
+    //
+    // Line and block characters are drawn as rectangles instead of being taken from the font. A
+    // font's │ is only as tall as its glyph box, which is shorter than the cell once line spacing
+    // is added, so every frame a full-screen tool drew came out as dashes with gaps between rows —
+    // and where the font has no such glyph at all, as whatever the fallback font made of it.
+    // Drawn, the strokes meet the cell edges exactly and join up with their neighbours.
+
+    // Light/heavy lines as four arms from the cell centre: 0 none, 1 light, 2 heavy.
+    // Packed as up | down << 2 | left << 4 | right << 6.
+    private static readonly Dictionary<char, int> BoxArms = BuildBoxArms();
+
+    private static Dictionary<char, int> BuildBoxArms()
+    {
+        static int A(int up, int down, int left, int right) => up | (down << 2) | (left << 4) | (right << 6);
+        var map = new Dictionary<char, int>();
+        void Both(char light, char heavy, int up, int down, int left, int right)
+        {
+            map[light] = A(up, down, left, right);
+            map[heavy] = A(up * 2, down * 2, left * 2, right * 2);
+        }
+        Both('─', '━', 0, 0, 1, 1);
+        Both('│', '┃', 1, 1, 0, 0);
+        Both('┌', '┏', 0, 1, 0, 1);
+        Both('┐', '┓', 0, 1, 1, 0);
+        Both('└', '┗', 1, 0, 0, 1);
+        Both('┘', '┛', 1, 0, 1, 0);
+        Both('├', '┣', 1, 1, 0, 1);
+        Both('┤', '┫', 1, 1, 1, 0);
+        Both('┬', '┳', 0, 1, 1, 1);
+        Both('┴', '┻', 1, 0, 1, 1);
+        Both('┼', '╋', 1, 1, 1, 1);
+        Both('╴', '╸', 0, 0, 1, 0);
+        Both('╵', '╹', 1, 0, 0, 0);
+        Both('╶', '╺', 0, 0, 0, 1);
+        Both('╷', '╻', 0, 1, 0, 0);
+        // Rounded corners, drawn square: at terminal sizes the difference is a pixel or two.
+        map['╭'] = map['┌'];
+        map['╮'] = map['┐'];
+        map['╰'] = map['└'];
+        map['╯'] = map['┘'];
+        return map;
+    }
+
+    // Double lines as explicit segments, four characters each: H or V, the line's level
+    // (a/b = the two parallel strokes either side of the centre), then where it starts and ends
+    // (L/R or T/B = the cell edges, a/b = the near and far stroke of the crossing direction).
+    private static readonly Dictionary<char, string[]> BoxDouble = new()
+    {
+        ['═'] = new[] { "HaLR", "HbLR" },
+        ['║'] = new[] { "VaTB", "VbTB" },
+        ['╔'] = new[] { "HaaR", "HbbR", "VaaB", "VbbB" },
+        ['╗'] = new[] { "HaLb", "HbLa", "VabB", "VbaB" },
+        ['╚'] = new[] { "HabR", "HbaR", "VaTb", "VbTa" },
+        ['╝'] = new[] { "HaLa", "HbLb", "VaTa", "VbTb" },
+        ['╠'] = new[] { "VaTB", "VbTa", "VbbB", "HabR", "HbbR" },
+        ['╣'] = new[] { "VbTB", "VaTa", "VabB", "HaLa", "HbLa" },
+        ['╦'] = new[] { "HaLR", "HbLa", "HbbR", "VabB", "VbbB" },
+        ['╩'] = new[] { "HbLR", "HaLa", "HabR", "VaTa", "VbTa" },
+        ['╬'] = new[] { "HaLa", "HabR", "HbLa", "HbbR", "VaTa", "VabB", "VbTa", "VbbB" },
+    };
+
+    private bool DrawBoxChar(DrawingContext context, char ch, uint rgb, double x, double y)
+    {
+        if (ch < '─' || ch > '▟')
+            return false;
+
+        var left = Snap(x);
+        var right = Snap(x + _cellWidth);
+        var top = Snap(y);
+        var bottom = Snap(y + _cellHeight);
+        var brush = OpaqueBrush(rgb);
+        var light = Math.Max(1, Math.Round(TerminalFontSize / 14));
+        var cx = (left + right) / 2;
+        var cy = (top + bottom) / 2;
+
+        if (BoxArms.TryGetValue(ch, out var arms))
+        {
+            // Each arm runs from its edge to just past the centre, so the joint is filled
+            // whatever mix of weights meets there.
+            void Arm(int weight, bool horizontal, double from, double to)
+            {
+                if (weight == 0)
+                    return;
+                var t = weight == 2 ? light * 2 : light;
+                if (horizontal)
+                    FillSnapped(context, brush, from, cy - t / 2, to, cy + t / 2);
+                else
+                    FillSnapped(context, brush, cx - t / 2, from, cx + t / 2, to);
+            }
+
+            Arm(arms & 3, false, top, cy + light);
+            Arm((arms >> 2) & 3, false, cy - light, bottom);
+            Arm((arms >> 4) & 3, true, left, cx + light);
+            Arm((arms >> 6) & 3, true, cx - light, right);
+            return true;
+        }
+
+        if (BoxDouble.TryGetValue(ch, out var segments))
+        {
+            var gap = light * 1.5;
+            double Level(char s, double centre) => s == 'a' ? centre - gap : centre + gap;
+            // Ends at a stroke reach half a stroke further, so two strokes meeting at a corner
+            // close it instead of leaving a notch.
+            double End(char s, double edgeLow, double edgeHigh, double centre) => s switch
+            {
+                'L' or 'T' => edgeLow,
+                'R' or 'B' => edgeHigh,
+                'a' => centre - gap - light / 2,
+                _ => centre + gap + light / 2,
+            };
+
+            foreach (var s in segments)
+            {
+                if (s[0] == 'H')
+                {
+                    var level = Level(s[1], cy);
+                    FillSnapped(context, brush, End(s[2], left, right, cx), level - light / 2,
+                        End(s[3], left, right, cx), level + light / 2);
+                }
+                else
+                {
+                    var level = Level(s[1], cx);
+                    FillSnapped(context, brush, level - light / 2, End(s[2], top, bottom, cy),
+                        level + light / 2, End(s[3], top, bottom, cy));
+                }
+            }
+            return true;
+        }
+
+        // Block elements: full, halves, and the three shades as translucent fills.
+        switch (ch)
+        {
+            case '█': FillSnapped(context, brush, left, top, right, bottom); return true;
+            case '▀': FillSnapped(context, brush, left, top, right, cy); return true;
+            case '▄': FillSnapped(context, brush, left, cy, right, bottom); return true;
+            case '▌': FillSnapped(context, brush, left, top, cx, bottom); return true;
+            case '▐': FillSnapped(context, brush, cx, top, right, bottom); return true;
+            case '░': FillSnapped(context, BrushFor(0x4000_0000 | rgb), left, top, right, bottom); return true;
+            case '▒': FillSnapped(context, BrushFor(0x8000_0000 | rgb), left, top, right, bottom); return true;
+            case '▓': FillSnapped(context, BrushFor(0xC000_0000 | rgb), left, top, right, bottom); return true;
+            default: return false;
+        }
+    }
+
+    // Both ends go to the pixel grid, and a stroke never collapses below one physical pixel: a
+    // one-pixel line centred on a whole pixel has both ends at .5, which round to the same value
+    // and left thin verticals simply missing at small font sizes.
+    private void FillSnapped(DrawingContext context, IBrush brush, double x0, double y0, double x1, double y1)
+    {
+        var pixel = 1 / _renderScale;
+        x0 = Snap(x0);
+        y0 = Snap(y0);
+        x1 = Math.Max(Snap(x1), x0 + pixel);
+        y1 = Math.Max(Snap(y1), y0 + pixel);
+        context.FillRectangle(brush, new Rect(x0, y0, x1 - x0, y1 - y0));
     }
 
     private FormattedText GlyphFor(char ch, uint rgb, TerminalAttributes attrs)
@@ -984,7 +1177,7 @@ public sealed class TerminalView : Control
                 if (cell.Char > ' ')
                 {
                     var (_, bg) = theme.ColorsOf(cell);
-                    context.DrawText(GlyphFor(cell.Char, bg, cell.Attributes), new Point(x, y));
+                    DrawCellChar(context, cell.Char, bg, cell.Attributes, x, y);
                 }
                 break;
             }
@@ -1052,24 +1245,53 @@ public sealed class TerminalView : Control
             return;
         }
 
-        var seq = e.Key switch
-        {
-            Key.Enter => "\r",
-            Key.Back => "\x7f",
-            Key.Tab => "\t",
-            Key.Escape => "\x1b",
-            Key.Up => "\x1b[A",
-            Key.Down => "\x1b[B",
-            Key.Right => "\x1b[C",
-            Key.Left => "\x1b[D",
-            Key.Home => "\x1b[H",
-            Key.End => "\x1b[F",
-            _ => null,
-        };
+        var seq = SequenceFor(e.Key, e.KeyModifiers);
         if (seq is not null)
         {
             Input?.Invoke(this, seq);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// The bytes a non-text key sends, or null for keys that arrive as text input. Cursor keys
+    /// follow the mode the remote asked for (ESC O A once an ncurses tool has switched to
+    /// application keys); the rest are the fixed xterm spellings mc, htop and vi look for — F10
+    /// is how mc is quit.
+    /// </summary>
+    public string? SequenceFor(Key key, KeyModifiers modifiers)
+    {
+        var emu = Emulator;
+        string Cursor(char final) => emu?.CursorKey(final) ?? "\x1b[" + final;
+        return key switch
+        {
+            Key.Enter => "\r",
+            Key.Back => "\x7f",
+            Key.Tab => modifiers.HasFlag(KeyModifiers.Shift) ? "\x1b[Z" : "\t",
+            Key.Escape => "\x1b",
+            Key.Up => Cursor('A'),
+            Key.Down => Cursor('B'),
+            Key.Right => Cursor('C'),
+            Key.Left => Cursor('D'),
+            Key.Home => Cursor('H'),
+            Key.End => Cursor('F'),
+            Key.Insert => "\x1b[2~",
+            Key.Delete => "\x1b[3~",
+            Key.PageUp => "\x1b[5~",
+            Key.PageDown => "\x1b[6~",
+            Key.F1 => "\x1bOP",
+            Key.F2 => "\x1bOQ",
+            Key.F3 => "\x1bOR",
+            Key.F4 => "\x1bOS",
+            Key.F5 => "\x1b[15~",
+            Key.F6 => "\x1b[17~",
+            Key.F7 => "\x1b[18~",
+            Key.F8 => "\x1b[19~",
+            Key.F9 => "\x1b[20~",
+            Key.F10 => "\x1b[21~",
+            Key.F11 => "\x1b[23~",
+            Key.F12 => "\x1b[24~",
+            _ => null,
+        };
     }
 }

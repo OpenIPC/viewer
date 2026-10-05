@@ -80,19 +80,24 @@ public sealed partial class SshTerminalContent : UserControl
         this.FindControl<Button>("KeyShowKeyboard")!.Click += (_, _) => FocusInput();
 
         _ctrlKey = this.FindControl<ToggleButton>("KeyCtrl");
-        WireKey("KeyEsc", "\x1b");
-        WireKey("KeyTab", "\t");
-        WireKey("KeyArrowUp", "\x1b[A");
-        WireKey("KeyArrowDown", "\x1b[B");
-        WireKey("KeyArrowRight", "\x1b[C");
-        WireKey("KeyArrowLeft", "\x1b[D");
+        WireKey("KeyEsc", () => "\x1b");
+        WireKey("KeyTab", () => "\t");
+        // Arrows follow the cursor-key mode at the moment of the tap: a full-screen tool may have
+        // switched to the ESC O spelling since the bar was wired.
+        WireKey("KeyArrowUp", () => CursorKey('A'));
+        WireKey("KeyArrowDown", () => CursorKey('B'));
+        WireKey("KeyArrowRight", () => CursorKey('C'));
+        WireKey("KeyArrowLeft", () => CursorKey('D'));
     }
 
-    private void WireKey(string buttonName, string sequence)
+    private string CursorKey(char final) =>
+        (DataContext as SshTerminalViewModel)?.Emulator.CursorKey(final) ?? "\x1b[" + final;
+
+    private void WireKey(string buttonName, Func<string> sequence)
     {
         this.FindControl<Button>(buttonName)!.Click += (_, _) =>
         {
-            SendInput(sequence);
+            SendInput(sequence());
             // The key-bar buttons are not focusable, so the proxy still holds focus; this only
             // matters for bringing a dismissed keyboard back, which is opt-in.
             AutoFocusInput();
@@ -393,20 +398,9 @@ public sealed partial class SshTerminalContent : UserControl
             return;
         }
 
-        var seq = e.Key switch
-        {
-            Key.Enter => "\r",
-            Key.Back => "\x7f",
-            Key.Tab => "\t",
-            Key.Escape => "\x1b",
-            Key.Up => "\x1b[A",
-            Key.Down => "\x1b[B",
-            Key.Right => "\x1b[C",
-            Key.Left => "\x1b[D",
-            Key.Home => "\x1b[H",
-            Key.End => "\x1b[F",
-            _ => null,
-        };
+        // Same table as the terminal's own key handler, so a hardware keyboard on a phone gets the
+        // cursor-key mode and the F-keys too.
+        var seq = _term?.SequenceFor(e.Key, e.KeyModifiers);
         if (seq is not null)
         {
             SendInput(seq);

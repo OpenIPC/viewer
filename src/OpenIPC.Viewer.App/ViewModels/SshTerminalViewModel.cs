@@ -70,6 +70,10 @@ public sealed partial class SshTerminalViewModel : ViewModelBase, IAsyncDisposab
             ? style
             : TerminalCursorStyle.Outline;
         CursorBlink = s.SshTerminalCursorBlink;
+
+        // Status queries (cursor position, device attributes) are answered over the same shell;
+        // a tool that asks and gets no answer can sit waiting for one.
+        Emulator.Reply += reply => _ = SendAsync(reply);
     }
 
     public async Task ConnectAsync()
