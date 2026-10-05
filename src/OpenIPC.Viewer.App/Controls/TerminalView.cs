@@ -101,11 +101,13 @@ public sealed class TerminalView : Control
     /// </summary>
     public event EventHandler? MenuRequested;
 
-    // Desktop names first, then the two families Android actually ships, then the generic alias.
-    // If any of them resolves we get real monospace metrics; DrawRow below is correct either way.
-    private const string MonoFamilies = "Cascadia Mono,Consolas,Menlo,Droid Sans Mono,Roboto Mono,monospace";
-
-    private static readonly FontFamily Mono = new(MonoFamilies);
+    // JetBrains Mono ships inside the app (Assets/Fonts, SIL OFL 1.1). Asking the platform for a
+    // monospace family by name failed on Android: none of Cascadia / Consolas / Menlo exists there
+    // and what the names fell back to was proportional, so even with one glyph pinned per cell a
+    // narrow `i` left a hole and a wide `m` ran into its neighbour. Characters the bundled font
+    // lacks (CJK, emoji) still come from the platform's own fallback.
+    private static readonly FontFamily Mono =
+        new("avares://OpenIPC.Viewer.App/Assets/Fonts#JetBrains Mono");
     private readonly Typeface _typeface = new(Mono);
     private readonly Typeface _boldTypeface = new(Mono, weight: FontWeight.Bold);
     private readonly Typeface _italicTypeface = new(Mono, FontStyle.Italic);
