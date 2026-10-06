@@ -14,6 +14,8 @@ Built with .NET 9 / 10 and Avalonia 12.
 >
 > See the [Roadmap](docs/ROADMAP.md) for phase status.
 
+[![OpenIPC Viewer at a glance: what ships today and what is coming next](docs/screenshots/openipc-viewer-poster.png)](docs/screenshots/openipc-viewer-poster.png)
+
 ## Features
 
 - **Live RTSP** — h264 / h265, software + hardware decode (D3D11VA / VAAPI /
