@@ -105,6 +105,13 @@ public sealed class MajesticHttpClient : IMajesticClient, IDisposable
     public async Task<MajesticInfo> GetInfoAsync(MajesticEndpoint endpoint, CancellationToken ct)
     {
         using var resp = await SendAsync(endpoint, HttpMethod.Get, "api/v1/info.json", ct).ConfigureAwait(false);
+        // Newer lite builds (e.g. gk7205v200 2.6.09.24-lite) dropped info.json
+        // entirely and answer 404 — same meaning as the HTML fallback below.
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug("Majestic info.json not served by {Host}; skipping", endpoint.Host);
+            return new MajesticInfo(null, null, null, null);
+        }
         await EnsureSuccessAsync(resp, ct).ConfigureAwait(false);
         var rawJson = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         // Some firmwares don't serve info.json and return the web UI's HTML
