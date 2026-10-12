@@ -1248,8 +1248,21 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
     {
         var cfgTask = _majestic.GetConfigAsync(ep, ct);
         var infoTask = _majestic.GetInfoAsync(ep, ct);
-        await Task.WhenAll(cfgTask, infoTask).ConfigureAwait(false);
-        return (await cfgTask.ConfigureAwait(false), await infoTask.ConfigureAwait(false));
+        var config = await cfgTask.ConfigureAwait(false);
+
+        // info.json is optional metadata (model/firmware) — a firmware that
+        // doesn't serve it must not hide an otherwise editable config.
+        MajesticInfo info;
+        try
+        {
+            info = await infoTask.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogInformation(ex, "Majestic info unavailable for {CameraId}", _camera.Id);
+            info = new MajesticInfo(null, null, null, null);
+        }
+        return (config, info);
     }
 
     [RelayCommand]
