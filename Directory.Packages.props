@@ -45,12 +45,11 @@
     <PackageVersion Include="FFmpeg.AutoGen.Abstractions" Version="7.1.1" />
     <PackageVersion Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="7.1.1" />
 
-    <!-- Phase 11.2: QR-code camera adding. ZXing.Net core + the ImageSharp.V3
-         binding (pure-managed image load, avoids GDI+ / SkiaSharp version
-         clashes with our preview-pinned Skia). -->
+    <!-- Phase 11.2: QR-code camera adding. ZXing.Net core only; the image is
+         decoded by Avalonia's Skia (QrImageDecoder). ImageSharp was dropped:
+         3.x carries GHSA-gwg2-r3hj-4w44 et al. with no backport, and 4.x
+         fails Release builds without a Six Labors license key. -->
     <PackageVersion Include="ZXing.Net" Version="0.16.11" />
-    <PackageVersion Include="ZXing.Net.Bindings.ImageSharp.V3" Version="0.16.18" />
-    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
 
     <!-- Phase 4: ONVIF. Onvif.Core wraps the generated WSDL service clients
          (Device, Media, PTZ) with WS-UsernameToken Digest auth. -->
