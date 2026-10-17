@@ -12,7 +12,15 @@ namespace OpenIPC.Viewer.Infrastructure.Tests;
 public sealed class SshSessionIntegrationTests
 {
     private static readonly ISshSessionFactory Factory =
-        new SshNetSessionFactory(new InMemoryHostKeyStore(), new FakeUserSettings(), NullLoggerFactory.Instance);
+        new SshNetSessionFactory(new InMemoryHostKeyStore(), new FakeUserSettings(), new RefuseChangedKey(), NullLoggerFactory.Instance);
+
+    // A changed host key is never expected against the test container.
+    private sealed class RefuseChangedKey : ISshHostKeyPrompt
+    {
+        public Task<bool> ConfirmChangedKeyAsync(
+            string host, int port, string? knownFingerprint, string presentedFingerprint, CancellationToken ct)
+            => Task.FromResult(false);
+    }
 
     private static async Task<ISshSession> ConnectAsync()
     {

@@ -59,8 +59,21 @@ internal static class Composition
                 cfg["Recording:FfmpegPath"]);
         });
 
-        // Notifications (Phase 19.3) — Telegram-style corner toasts. Registered
-        // before AddSharedServices so it wins over the TryAdd Null fallback.
+        // Notifications (Phase 19.3) — Telegram-style corner toasts with the app's
+        // own sound, or native Windows toasts (Settings → Notification style).
+        // Registered before AddSharedServices so it wins over the TryAdd Null fallback.
+        services.AddSingleton(sp => new OpenIPC.Viewer.Core.Notifications.NotificationSoundPlayer(
+            () => CreateNotificationAudioOutput(sp.GetRequiredService<ILoggerFactory>())));
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 10240))
+        {
+            services.AddSingleton<ISystemNotificationSink>(sp =>
+            {
+                if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 10240)) throw new PlatformNotSupportedException();
+                return new Notifications.WindowsToastNotifier(
+                    sp.GetRequiredService<IFileSystem>().AppDataDir.FullName,
+                    sp.GetRequiredService<ILogger<Notifications.WindowsToastNotifier>>());
+            });
+        }
         services.AddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService, DesktopNotificationService>();
 
         services.AddSharedServices();
@@ -158,6 +171,19 @@ internal static class Composition
         {
             throw new PlatformNotSupportedException();
         }
+    }
+
+    // A fresh output per call (not the shared IAudioOutput singleton): the
+    // notification sound gets its own stream, mixed by the OS with live audio.
+    private static IAudioOutput? CreateNotificationAudioOutput(ILoggerFactory loggers)
+    {
+        if (OperatingSystem.IsWindows())
+            return new Audio.WasapiAudioOutput(loggers.CreateLogger<Audio.WasapiAudioOutput>());
+        if (OperatingSystem.IsLinux())
+            return new Audio.AlsaAudioOutput(loggers.CreateLogger<Audio.AlsaAudioOutput>());
+        if (OperatingSystem.IsMacOS())
+            return new Audio.CoreAudioOutput(loggers.CreateLogger<Audio.CoreAudioOutput>());
+        return null;
     }
 
     private static IConfiguration BuildConfiguration()

@@ -42,4 +42,14 @@ public interface IUserSettingsAccessor
     bool QuietHoursEnabled { get; }
     int QuietHoursStartHour { get; }
     int QuietHoursEndHour { get; }
+
+    // Notification thresholds. An event surfaces (and fires its external
+    // actions) only once it clears all of them: AI confidence in percent and
+    // object count apply to detections, duration to every event. 0 / 1 = off.
+    int NotifyMinConfidencePercent { get; }
+    int NotifyMinDurationSeconds { get; }
+    int NotifyMinObjects { get; }
+
+    // External actions (TCP/UDP signal, webhook, e-mail, program).
+    OpenIPC.Viewer.Core.Notifications.EventActionSettings EventActions { get; }
 }

@@ -19,6 +19,10 @@ public enum EventSeverity
 
 // "Event" alone collides with System.Event-related conventions; CameraEvent is
 // explicit about scope.
+//
+// PeakConfidence / PeakObjects are the best values seen so far in the episode
+// (detection events only). They live on the in-memory stream for the
+// notification thresholds and are not persisted.
 public sealed record CameraEvent(
     EventId Id,
     CameraId CameraId,
@@ -27,4 +31,6 @@ public sealed record CameraEvent(
     DateTime OccurredAt,
     DateTime? EndedAt,
     string? Source,
-    string? Summary);
+    string? Summary,
+    float? PeakConfidence = null,
+    int PeakObjects = 0);

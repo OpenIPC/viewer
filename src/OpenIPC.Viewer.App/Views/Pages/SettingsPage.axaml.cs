@@ -24,9 +24,16 @@ public sealed partial class SettingsPage : UserControl
         AttachedToVisualTree += (_, _) =>
         {
             ApplyLayout();
-            // Layouts may have changed on the Live page since the last visit.
-            if (_vm is not null) _ = _vm.LoadStartupLayoutsAsync();
+            // Layouts may have changed on the Live page since the last visit;
+            // the Windows notification state may have changed in Windows Settings.
+            if (_vm is not null)
+            {
+                _ = _vm.LoadStartupLayoutsAsync();
+                _ = _vm.Notifications.LoadAsync();
+            }
         };
+        // Don't lose a debounced edit when the user navigates away mid-typing.
+        DetachedFromVisualTree += (_, _) => _ = _vm?.Notifications.FlushAsync();
         SizeChanged += OnSizeChanged;
     }
 
