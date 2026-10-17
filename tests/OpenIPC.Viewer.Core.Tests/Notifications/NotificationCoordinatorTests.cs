@@ -143,41 +143,51 @@ public class NotificationCoordinatorTests
     }
 
     [Fact]
-    public void DurationThreshold_NotifiesWhenEpisodeIsOldEnough()
+    public void DurationThreshold_NotifiesOnceActivityHasLastedLongEnough()
     {
-        var now = Noon;
-        var timers = new FakeScheduler();
-        var h = Make(new Settings { NotifyMinDurationSeconds = 5 }, () => now, scheduler: timers);
+        var h = Make(new Settings { NotifyMinDurationSeconds = 3 });
         var open = Event(EventKind.Motion, occurredAt: Noon.ToUniversalTime());
 
         h.Src.Emit(open);
+        h.Src.Emit(open with { LastSeenAt = open.OccurredAt.AddSeconds(2) });
         Assert.Empty(h.Sink.Shown);
-        var timer = Assert.Single(timers.Pending);
-        Assert.InRange(timer.Due, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(6));
 
-        now = Noon.AddSeconds(6);
-        timer.Fire();
-        Assert.Single(h.Sink.Shown);
+        h.Src.Emit(open with { LastSeenAt = open.OccurredAt.AddSeconds(3.1) });
+        Assert.Single(h.Sink.Shown); // while the episode is still open
+    }
+
+    // Regression: the episode stays open for its 5 s quiet window after a single
+    // blip; elapsed wall-clock time must not count as "lasted N seconds".
+    [Fact]
+    public void DurationThreshold_TimePassingAlone_DoesNotCount()
+    {
+        var now = Noon;
+        var h = Make(new Settings { NotifyMinDurationSeconds = 3 }, () => now);
+        var open = Event(EventKind.Motion, occurredAt: Noon.ToUniversalTime()) with { LastSeenAt = Noon.ToUniversalTime() };
+
+        h.Src.Emit(open);
+        now = Noon.AddSeconds(4);
+        h.Src.Emit(open with { EndedAt = open.OccurredAt });
+
+        Assert.Empty(h.Sink.Shown);
     }
 
     [Fact]
     public void DurationThreshold_ShortEpisode_NeverNotifies()
     {
-        var timers = new FakeScheduler();
-        var h = Make(new Settings { NotifyMinDurationSeconds = 5 }, scheduler: timers);
+        var h = Make(new Settings { NotifyMinDurationSeconds = 5 });
         var open = Event(EventKind.Motion, occurredAt: Noon.ToUniversalTime());
 
         h.Src.Emit(open);
         h.Src.Emit(open with { EndedAt = open.OccurredAt.AddSeconds(2) });
 
         Assert.Empty(h.Sink.Shown);
-        Assert.True(Assert.Single(timers.Pending).Disposed);
     }
 
     [Fact]
     public void DurationThreshold_ClosedLongEnough_NotifiesAtClose()
     {
-        var h = Make(new Settings { NotifyMinDurationSeconds = 5 }, scheduler: new FakeScheduler());
+        var h = Make(new Settings { NotifyMinDurationSeconds = 5 });
         var open = Event(EventKind.Motion, occurredAt: Noon.ToUniversalTime());
         h.Src.Emit(open);
         h.Src.Emit(open with { EndedAt = open.OccurredAt.AddSeconds(8) });
@@ -288,13 +298,11 @@ public class NotificationCoordinatorTests
         Settings s,
         Func<DateTime>? clock = null,
         IEventActionDispatcher? actions = null,
-        Func<CameraId, CancellationToken, Task<string?>>? cameraName = null,
-        FakeScheduler? scheduler = null)
+        Func<CameraId, CancellationToken, Task<string?>>? cameraName = null)
     {
         var src = new Subject();
         var sink = new FakeSink();
-        var coord = new NotificationCoordinator(src, sink, s, clock ?? (() => Noon), actions, cameraName,
-            scheduler is null ? null : scheduler.Schedule);
+        var coord = new NotificationCoordinator(src, sink, s, clock ?? (() => Noon), actions, cameraName);
         coord.Start();
         return new Harness(src, sink, coord);
     }
@@ -324,28 +332,6 @@ public class NotificationCoordinatorTests
 
         public Task TestAsync(EventActionChannel channel, EventActionContext context, EventActionSettings settings, CancellationToken ct)
             => Task.CompletedTask;
-    }
-
-    private sealed class FakeScheduler
-    {
-        public List<Timer> Pending { get; } = new();
-
-        public IDisposable Schedule(TimeSpan due, Action callback)
-        {
-            var t = new Timer(due, callback);
-            Pending.Add(t);
-            return t;
-        }
-
-        public sealed class Timer : IDisposable
-        {
-            private readonly Action _callback;
-            public Timer(TimeSpan due, Action callback) { Due = due; _callback = callback; }
-            public TimeSpan Due { get; }
-            public bool Disposed { get; private set; }
-            public void Fire() { if (!Disposed) _callback(); }
-            public void Dispose() => Disposed = true;
-        }
     }
 
     private sealed class Subject : IObservable<CameraEvent>

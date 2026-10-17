@@ -13,9 +13,11 @@ namespace OpenIPC.Viewer.Core.Events;
 //        -> 5s of quiet -> close event (set EndedAt, persist)
 // Plays back to a single Observed event channel that UI subscribes to once.
 // Besides open and close, an open event is re-published (same Id, EndedAt
-// still null) whenever its peak confidence or object count grows, so the
-// notification thresholds see a detection that firms up mid-episode.
-// Subscribers de-dup by Id.
+// still null) whenever its peak confidence or object count grows, and at most
+// once per second while ticks keep coming (LastSeenAt = latest tick). That lets
+// the notification thresholds see a detection that firms up mid-episode and
+// an activity that has really lasted N seconds — not just an episode that is
+// still waiting out its quiet window. Subscribers de-dup by Id.
 public sealed class EventIngestionService : IAsyncDisposable
 {
     private readonly IEnumerable<IMotionEventSource> _sources;
@@ -24,6 +26,7 @@ public sealed class EventIngestionService : IAsyncDisposable
 
     private static readonly TimeSpan DebounceWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan CloseAfterQuiet = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(1);
 
     private readonly object _gate = new();
     private readonly Dictionary<CameraId, OpenEventState> _open = new();
@@ -93,9 +96,13 @@ public sealed class EventIngestionService : IAsyncDisposable
                 grew = true;
             }
             // Until OpenAsync has published, the open event itself carries the
-            // latest peaks — no separate update needed.
-            if (grew && !isNew && state.Published)
+            // latest peaks — no separate update needed. After that: on a peak
+            // rise, or as throttled progress so LastSeenAt keeps moving.
+            if (!isNew && state.Published && (grew || tick.At - state.LastPublishedTickAt >= ProgressInterval))
+            {
                 update = Snapshot(state, endedAt: null);
+                state.LastPublishedTickAt = tick.At;
+            }
 
             state.QuietTimer?.Change(CloseAfterQuiet, Timeout.InfiniteTimeSpan);
             state.QuietTimer ??= new Timer(CloseQuietState, state, CloseAfterQuiet, Timeout.InfiniteTimeSpan);
@@ -120,6 +127,7 @@ public sealed class EventIngestionService : IAsyncDisposable
         {
             ev = Snapshot(state, endedAt: null);
             state.Published = true;
+            state.LastPublishedTickAt = state.LastTickAt;
         }
         NotifyObservers(ev);
     }
@@ -134,7 +142,8 @@ public sealed class EventIngestionService : IAsyncDisposable
         Source: state.Source,
         Summary: state.Summary,
         PeakConfidence: state.PeakConfidence,
-        PeakObjects: state.PeakObjects);
+        PeakObjects: state.PeakObjects,
+        LastSeenAt: state.LastTickAt);
 
     private void CloseQuietState(object? boxed)
     {
@@ -206,6 +215,8 @@ public sealed class EventIngestionService : IAsyncDisposable
         public int PeakObjects { get; set; }
         // Set once the open event has gone out; later peak rises publish updates.
         public bool Published { get; set; }
+        // Tick time of the last publish, for the throttled progress updates.
+        public DateTime LastPublishedTickAt { get; set; }
         public Timer? QuietTimer { get; set; }
 
         public OpenEventState(EventId id, CameraId cam, DateTime started, string? source, EventKind kind)

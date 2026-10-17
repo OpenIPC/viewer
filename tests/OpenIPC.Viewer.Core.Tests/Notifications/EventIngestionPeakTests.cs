@@ -39,6 +39,32 @@ public class EventIngestionPeakTests
         await ingestion.DisposeAsync();
     }
 
+    // Ongoing activity is re-published about once a second with LastSeenAt, so a
+    // duration threshold can fire while the motion is still going on.
+    [Fact]
+    public async Task OngoingActivity_PublishesThrottledProgress()
+    {
+        var (ingestion, source, camera, seen) = await StartAsync();
+        var t0 = DateTime.UtcNow;
+
+        source.Emit(new MotionTick(camera, t0, "test"));
+        await WaitForAsync(() => seen.Count >= 1);
+        source.Emit(new MotionTick(camera, t0.AddSeconds(0.5), "test")); // < 1 s since publish → quiet
+        source.Emit(new MotionTick(camera, t0.AddSeconds(1.2), "test")); // ≥ 1 s → progress
+        source.Emit(new MotionTick(camera, t0.AddSeconds(1.6), "test")); // < 1 s since that → quiet
+        await WaitForAsync(() => seen.Count >= 2);
+        await Task.Delay(100);
+
+        lock (seen)
+        {
+            Assert.Equal(2, seen.Count);
+            Assert.Equal(t0, seen[0].LastSeenAt);
+            Assert.Equal(t0.AddSeconds(1.2), seen[1].LastSeenAt);
+            Assert.Null(seen[1].EndedAt);
+        }
+        await ingestion.DisposeAsync();
+    }
+
     [Fact]
     public async Task PlainMotion_HasNoPeaks()
     {

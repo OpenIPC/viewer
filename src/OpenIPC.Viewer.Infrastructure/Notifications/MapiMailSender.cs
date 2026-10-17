@@ -47,8 +47,32 @@ internal static class MapiMailSender
         return tcs.Task.WaitAsync(ct);
     }
 
+    // Without a registered MAPI client the system stub (mapi32.dll) pops a modal
+    // "no default mail client" box — on every event. Check the registry first
+    // and fail with a readable error instead.
+    private static void EnsureClientRegistered()
+    {
+        string? name = null;
+        using (var user = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Clients\Mail"))
+            name = user?.GetValue(null) as string;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            using var machine = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Clients\Mail");
+            name = machine?.GetValue(null) as string;
+        }
+        if (string.IsNullOrWhiteSpace(name))
+            throw new InvalidOperationException(
+                "No default MAPI mail client is set in Windows. Install a MAPI client (classic Outlook, Thunderbird, The Bat!…) and make it the default, or use SMTP.");
+
+        using var client = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Clients\Mail\{name}")
+                           ?? Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"Software\Clients\Mail\{name}");
+        if (client?.GetValue("DLLPath") is null && client?.GetValue("DLLPathEx") is null)
+            throw new InvalidOperationException($"The default mail client \"{name}\" does not provide Simple MAPI. Use SMTP or another mail client.");
+    }
+
     private static void Send(OutgoingMail mail)
     {
+        EnsureClientRegistered();
         var recipSize = Marshal.SizeOf<MapiRecipDescW>();
         var allocated = new System.Collections.Generic.List<IntPtr>();
         IntPtr Str(string s)

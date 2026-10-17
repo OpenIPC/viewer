@@ -21,8 +21,9 @@ public enum EventSeverity
 // explicit about scope.
 //
 // PeakConfidence / PeakObjects are the best values seen so far in the episode
-// (detection events only). They live on the in-memory stream for the
-// notification thresholds and are not persisted.
+// (detection events only); LastSeenAt is the latest tick of a still-open
+// episode, i.e. how long the activity has actually lasted. They live on the
+// in-memory stream for the notification thresholds and are not persisted.
 public sealed record CameraEvent(
     EventId Id,
     CameraId CameraId,
@@ -33,4 +34,5 @@ public sealed record CameraEvent(
     string? Source,
     string? Summary,
     float? PeakConfidence = null,
-    int PeakObjects = 0);
+    int PeakObjects = 0,
+    DateTime? LastSeenAt = null);

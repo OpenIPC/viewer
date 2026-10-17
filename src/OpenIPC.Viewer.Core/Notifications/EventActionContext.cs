@@ -22,12 +22,13 @@ public sealed record EventActionContext(
         _ => "motion",
     };
 
-    // Whole seconds the episode has lasted (to its end, or to now while open).
+    // Whole seconds the activity has lasted (to the episode's end, or to the
+    // latest observed tick while it is still open).
     public int DurationSeconds
     {
         get
         {
-            var end = Event.EndedAt ?? NowUtc;
+            var end = Event.EndedAt ?? Event.LastSeenAt ?? NowUtc;
             var seconds = (end.ToUniversalTime() - Event.OccurredAt.ToUniversalTime()).TotalSeconds;
             return seconds > 0 ? (int)seconds : 0;
         }
