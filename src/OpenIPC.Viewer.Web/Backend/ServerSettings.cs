@@ -32,4 +32,9 @@ internal sealed class ServerSettings : IUserSettingsAccessor
     public bool QuietHoursEnabled => false;
     public int QuietHoursStartHour => 0;
     public int QuietHoursEndHour => 0;
+    public int NotifyMinConfidencePercent => 0;
+    public int NotifyMinDurationSeconds => 0;
+    public int NotifyMinObjects => 1;
+    public OpenIPC.Viewer.Core.Notifications.EventActionSettings EventActions =>
+        OpenIPC.Viewer.Core.Notifications.EventActionSettings.Default;
 }

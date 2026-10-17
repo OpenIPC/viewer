@@ -178,15 +178,37 @@ public static class SharedComposition
         services.AddSingleton<EventIngestionService>();
 
         // Notifications (Phase 19.3). Native sink per head (TryAdd Null fallback);
-        // the coordinator applies cooldown / quiet-hours / type toggles over the
-        // event stream. Eager-Start()ed by each platform host after build.
+        // the coordinator applies thresholds / cooldown / quiet-hours / type
+        // toggles over the event stream and fans out to the sink and the external
+        // actions. Eager-Start()ed by each platform host after build.
         services.TryAddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService,
             OpenIPC.Viewer.Core.Notifications.NullNotificationService>();
+        // Custom notification sound import (any format FFmpeg reads) + playback.
+        // The player itself is registered by heads that own an audio device.
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.IAudioClipDecoder,
+            OpenIPC.Viewer.Video.Pipeline.FfmpegAudioClipDecoder>();
+        services.AddSingleton<NotificationSoundService>();
+        // External actions: SMTP login lives in Windows Credential Manager on
+        // Windows, in the platform secrets store elsewhere.
+        services.TryAddSingleton<OpenIPC.Viewer.Core.Notifications.IMailCredentialStore>(sp =>
+        {
+            if (OperatingSystem.IsWindows())
+                return new OpenIPC.Viewer.Infrastructure.Notifications.WindowsCredentialMailStore();
+            return new OpenIPC.Viewer.Infrastructure.Notifications.SecretsStoreMailCredentialStore(
+                sp.GetRequiredService<ISecretsStore>());
+        });
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.IEventActionDispatcher,
+            OpenIPC.Viewer.Infrastructure.Notifications.EventActionDispatcher>();
         services.AddSingleton<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>(sp =>
-            new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
+        {
+            var cameras = sp.GetRequiredService<CameraDirectoryService>();
+            return new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
                 sp.GetRequiredService<EventIngestionService>().Events,
                 sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.INotificationService>(),
-                sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>()));
+                sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>(),
+                actions: sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.IEventActionDispatcher>(),
+                cameraName: async (id, ct) => (await cameras.GetAsync(id, ct).ConfigureAwait(false))?.Name);
+        });
 
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
@@ -231,6 +253,7 @@ public static class SharedComposition
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
         services.AddSingleton<AnalyticsPageViewModel>();
+        services.AddSingleton<NotificationSettingsViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
 
         return services;
