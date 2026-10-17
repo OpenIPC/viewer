@@ -304,6 +304,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
 
         IsRecording = _recordings.IsRecording(_camera.Id);
         _recordings.StateChanged += OnRecordingsStateChanged;
+        _recordings.RecordingFailed += OnRecordingFailed;
         if (IsRecording) StartRecTimer();
 
         // Telemetry overlay visibility is a user pref — re-raise PropertyChanged
@@ -559,6 +560,14 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
             if (IsRecording) StartRecTimer();
             else StopRecTimer();
         });
+    }
+
+    private void OnRecordingFailed(object? sender, RecordingService.RecordingFailure failure)
+    {
+        if (failure.CameraId != _camera.Id) return;
+        var key = failure.WroteSegment ? "CameraPage.RecordingInterruptedFormat" : "CameraPage.RecordingNotStartedFormat";
+        Dispatcher.UIThread.Post(() => ErrorMessage = string.Format(CultureInfo.CurrentCulture,
+            Localizer.Instance[key], failure.Message));
     }
 
     private void StartRecTimer()
@@ -1513,6 +1522,7 @@ public sealed partial class SingleCameraPageViewModel : ViewModelBase, IAsyncDis
         _detectionsSub?.Dispose();
         DetachAnalyticsFallback();
         _recordings.StateChanged -= OnRecordingsStateChanged;
+        _recordings.RecordingFailed -= OnRecordingFailed;
         _userSettings.Changed -= OnUserSettingsChanged;
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _audio.Changed -= OnAudioChanged;

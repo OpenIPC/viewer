@@ -30,6 +30,10 @@ public sealed class RecordingService : IAsyncDisposable
     // attaches logging here — Core stays package-dep free.
     public event EventHandler<Exception>? BookkeepingFailed;
 
+    // A session that ended without the user stopping it (camera unreachable,
+    // stream dropped, disk refused the file). The message is the recorder's own.
+    public event EventHandler<RecordingFailure>? RecordingFailed;
+
     public RecordingService(
         IRecorder recorder,
         IRecordingRepository repo,
@@ -91,10 +95,14 @@ public sealed class RecordingService : IAsyncDisposable
             SegmentDuration: TimeSpan.FromMinutes(10));
 
         var session = await _recorder.StartAsync(options, ct).ConfigureAwait(false);
+        // Register before subscribing: a recorder that dies at once (camera
+        // refused) must find its handle, or the ended session would stay active.
+        // Sessions replay what they published before this subscription.
+        var h = new Handle(session);
+        lock (_gate) _active[id] = h;
         // Adapter exists because Core has no System.Reactive (no package deps);
         // BCL only exposes IObservable.Subscribe(IObserver<T>).
-        var sub = session.Events.Subscribe(new CallbackObserver(ev => _ = HandleEventAsync(id, ev)));
-        lock (_gate) _active[id] = new Handle(session, sub);
+        h.Subscription = session.Events.Subscribe(new CallbackObserver(ev => h.Enqueue(() => HandleEventAsync(id, h, ev))));
         StateChanged?.Invoke(this, id);
     }
 
@@ -111,16 +119,19 @@ public sealed class RecordingService : IAsyncDisposable
         try { await h.Session.StopAsync(ct).ConfigureAwait(false); }
         catch (Exception ex) { BookkeepingFailed?.Invoke(this, ex); }
 
-        // Finalize last segment row with EndedAt + final size.
-        if (h.Session.CurrentSegmentPath is { } lastPath)
+        // Let a still-pending Started/Rotated insert land first, then finalize
+        // the last segment row with EndedAt + final size.
+        await h.DrainAsync().ConfigureAwait(false);
+        if (h.LastSegmentPath is { } lastPath)
             await FinalizeSegmentAsync(lastPath, DateTime.UtcNow).ConfigureAwait(false);
 
-        h.Subscription.Dispose();
+        h.Subscription?.Dispose();
         try { await h.Session.DisposeAsync().ConfigureAwait(false); } catch { /* swallow */ }
         StateChanged?.Invoke(this, id);
     }
 
-    private async Task HandleEventAsync(CameraId id, RecordingEvent ev)
+    // Runs on the handle's queue: one event at a time, in publication order.
+    private async Task HandleEventAsync(CameraId id, Handle h, RecordingEvent ev)
     {
         try
         {
@@ -128,15 +139,22 @@ public sealed class RecordingService : IAsyncDisposable
             {
                 case RecordingEvent.Started s:
                     await _repo.AddAsync(NewRow(id, s.FirstSegmentPath, s.Time), CancellationToken.None).ConfigureAwait(false);
+                    h.LastSegmentPath = s.FirstSegmentPath;
                     break;
 
                 case RecordingEvent.SegmentRotated r:
                     await FinalizeSegmentAsync(r.PrevPath, r.Time, r.Size).ConfigureAwait(false);
                     await _repo.AddAsync(NewRow(id, r.NewPath, r.Time), CancellationToken.None).ConfigureAwait(false);
+                    h.LastSegmentPath = r.NewPath;
                     break;
 
                 case RecordingEvent.Error err:
+                    h.LastError = err.Message;
                     BookkeepingFailed?.Invoke(this, new InvalidOperationException($"Recorder error: {err.Message}"));
+                    break;
+
+                case RecordingEvent.Stopped st when st.Reason != RecordingStopReason.User:
+                    await OnSessionEndedAsync(id, h, st).ConfigureAwait(false);
                     break;
             }
         }
@@ -144,6 +162,32 @@ public sealed class RecordingService : IAsyncDisposable
         {
             BookkeepingFailed?.Invoke(this, ex);
         }
+    }
+
+    // The recorder gave up on its own. Without this the camera stayed "recording"
+    // with a ticking REC timer and no file behind it, the last row never got
+    // EndedAt, and a fresh Start was refused as "already recording".
+    private async Task OnSessionEndedAsync(CameraId id, Handle h, RecordingEvent.Stopped st)
+    {
+        lock (_gate)
+        {
+            // StopAsync removes the handle before stopping, so a missing or different
+            // handle means this session is already being torn down elsewhere.
+            if (!_active.TryGetValue(id, out var current) || !ReferenceEquals(current, h)) return;
+            _active.Remove(id);
+        }
+
+        // Events run in order on h's queue, so any row this session inserted is
+        // already in the repository.
+        var lastPath = h.LastSegmentPath;
+        if (lastPath is not null)
+            await FinalizeSegmentAsync(lastPath, st.Time).ConfigureAwait(false);
+
+        h.Subscription?.Dispose();
+        try { await h.Session.DisposeAsync().ConfigureAwait(false); } catch { /* swallow */ }
+        StateChanged?.Invoke(this, id);
+        RecordingFailed?.Invoke(this, new RecordingFailure(
+            id, h.LastError ?? st.Detail ?? st.Reason.ToString(), WroteSegment: lastPath is not null));
     }
 
     private async Task FinalizeSegmentAsync(string path, DateTime endedAt, long? size = null)
@@ -192,12 +236,46 @@ public sealed class RecordingService : IAsyncDisposable
         foreach (var h in handles)
         {
             try { await h.Session.StopAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
-            h.Subscription.Dispose();
+            h.Subscription?.Dispose();
             try { await h.Session.DisposeAsync().ConfigureAwait(false); } catch { }
         }
     }
 
-    private sealed record Handle(IRecordingSession Session, IDisposable Subscription);
+    // WroteSegment is false when the recorder never got as far as opening a
+    // file — the camera refused or never answered, so nothing reached the
+    // Recordings tab.
+    public sealed record RecordingFailure(CameraId CameraId, string Message, bool WroteSegment = true);
+
+    // Per-session state. The error and the last inserted segment live here,
+    // never keyed by camera, so an old session can't explain a newer one's failure.
+    private sealed class Handle
+    {
+        private readonly object _queueGate = new();
+        private Task _queue = Task.CompletedTask;
+
+        public Handle(IRecordingSession session) => Session = session;
+
+        public IRecordingSession Session { get; }
+        public IDisposable? Subscription { get; set; }
+
+        // Set only once a row was inserted for it: a recorder may name its
+        // output file before it has even opened the camera.
+        public string? LastSegmentPath { get; set; }
+        public string? LastError { get; set; }
+
+        // Chains work behind whatever is queued, off the publisher's thread.
+        public void Enqueue(Func<Task> work)
+        {
+            lock (_queueGate)
+                _queue = _queue.ContinueWith(_ => work(), CancellationToken.None,
+                    TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        }
+
+        public Task DrainAsync()
+        {
+            lock (_queueGate) return _queue;
+        }
+    }
 
     private sealed class CallbackObserver : IObserver<RecordingEvent>
     {
