@@ -93,7 +93,11 @@ public sealed class WebRecorder : IAsyncDisposable
         };
         foreach (var arg in new[]
                  {
-                     "-rtsp_transport", "tcp", "-i", rtspUrl,
+                     "-rtsp_transport", "tcp",
+                     // RTSP socket timeout (µs): a camera that accepts the connect
+                     // but never answers must not park ffmpeg in open forever.
+                     "-timeout", "10000000",
+                     "-i", rtspUrl,
                      // Copy, never re-encode: recording must not cost CPU per camera,
                      // and the archive should hold what the camera actually sent.
                      "-c", "copy",

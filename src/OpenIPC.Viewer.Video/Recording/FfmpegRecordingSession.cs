@@ -20,7 +20,13 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
     [GeneratedRegex(@"Opening '([^']+)' for writing")]
     private static partial Regex OpeningRegex();
 
+    // Last stderr line that reads like a failure, kept so an unexpected exit
+    // can say why ("401 Unauthorized", "Connection timed out", ...).
+    [GeneratedRegex(@"error|failed|refused|timed out|invalid|unauthorized", RegexOptions.IgnoreCase)]
+    private static partial Regex FailureRegex();
+
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(5);
+    private const string RtspTimeoutMicros = "10000000";
 
     private readonly RecordingOptions _options;
     private readonly string _ffmpegPath;
@@ -28,9 +34,11 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
     private readonly Subject<RecordingEvent> _events = new();
 
     private Process? _proc;
+    private Task _stderrPump = Task.CompletedTask;
     private string? _currentSegment;
     private string? _lastSegment;
-    private bool _stopRequested;
+    private volatile bool _stopRequested;
+    private volatile string? _lastFailureLine;
 
     public DateTime StartedAt { get; } = DateTime.UtcNow;
     public string? CurrentSegmentPath => _currentSegment;
@@ -77,6 +85,11 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         // no DB row is written and the recording never shows in the list.
         psi.ArgumentList.Add("-loglevel"); psi.ArgumentList.Add("verbose");
         psi.ArgumentList.Add("-rtsp_transport"); psi.ArgumentList.Add("tcp");
+        // RTSP socket I/O timeout (µs; FFmpeg 7 renamed stimeout → timeout).
+        // Without it a camera that accepts the TCP connect but never answers
+        // DESCRIBE parks ffmpeg in open forever: no segment is ever opened, so
+        // no row reaches the Recordings tab while REC keeps "running" (#91).
+        psi.ArgumentList.Add("-timeout"); psi.ArgumentList.Add(RtspTimeoutMicros);
         psi.ArgumentList.Add("-i"); psi.ArgumentList.Add(BuildRtspUri(_options.RtspUri, _options.Credentials).ToString());
         psi.ArgumentList.Add("-c"); psi.ArgumentList.Add("copy");
         psi.ArgumentList.Add("-f"); psi.ArgumentList.Add("segment");
@@ -94,7 +107,7 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         _proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to launch ffmpeg (check PATH)");
 
-        _ = Task.Run(ReadStderrAsync);
+        _stderrPump = Task.Run(ReadStderrAsync);
         _ = Task.Run(WatchExitAsync);
     }
 
@@ -150,9 +163,14 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
             {
                 var m = OpeningRegex().Match(line);
                 if (m.Success)
+                {
                     HandleSegmentOpened(m.Groups[1].Value);
+                }
                 else
+                {
+                    if (FailureRegex().IsMatch(line)) _lastFailureLine = Pipeline.FfmpegError.Humanize(line);
                     _logger.LogDebug("ffmpeg[{Cam}]: {Line}", _options.CameraId, line);
+                }
             }
         }
         catch (Exception ex)
@@ -166,8 +184,21 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         if (_proc is null) return;
         try { await _proc.WaitForExitAsync().ConfigureAwait(false); }
         catch { /* ignore */ }
-        if (!_stopRequested)
-            EmitStopped(RecordingStopReason.ProcessExited);
+        if (_stopRequested) return;
+        // stderr hits EOF with the process; let the reader take ffmpeg's last
+        // words so the reason below is the actual one.
+        try { await _stderrPump.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
+        catch { /* reason stays whatever we have */ }
+        var code = TryExitCode();
+        _logger.LogWarning("ffmpeg recorder for {Cam} exited unexpectedly (code {Code}): {Reason}",
+            _options.CameraId, code, _lastFailureLine ?? "no error output");
+        EmitStopped(RecordingStopReason.ProcessExited, _lastFailureLine);
+    }
+
+    private int? TryExitCode()
+    {
+        try { return _proc?.ExitCode; }
+        catch { return null; }
     }
 
     private void HandleSegmentOpened(string path)
@@ -187,9 +218,9 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         }
     }
 
-    private void EmitStopped(RecordingStopReason reason)
+    private void EmitStopped(RecordingStopReason reason, string? detail = null)
     {
-        try { _events.OnNext(new RecordingEvent.Stopped(DateTime.UtcNow, reason)); }
+        try { _events.OnNext(new RecordingEvent.Stopped(DateTime.UtcNow, reason, detail)); }
         catch { /* observers may already be unsubscribed */ }
     }
 

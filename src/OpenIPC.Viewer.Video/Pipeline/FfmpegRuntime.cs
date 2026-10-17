@@ -20,14 +20,28 @@ internal static class FfmpegRuntime
     // FfmpegException ctor on that same thread consumes it.
     [ThreadStatic] private static string? _lastNativeError;
 
+    // Fallback when nothing logged at error level: the RTSP demuxer reports a
+    // stalled handshake only as a warning ("Failed reading RTSP data: ...")
+    // and then returns a bare "Invalid data found" (#90).
+    [ThreadStatic] private static string? _lastNativeWarning;
+
     // Held so the GC can't collect the delegate while native code holds it.
     private static av_log_set_callback_callback? _logCallback;
 
     internal static string? TakeLastNativeError()
     {
-        var v = _lastNativeError;
+        var v = _lastNativeError ?? _lastNativeWarning;
         _lastNativeError = null;
+        _lastNativeWarning = null;
         return v;
+    }
+
+    // Drops whatever an earlier call on this thread left behind, so the next
+    // failure isn't explained by a stale line.
+    internal static void ClearLastNativeError()
+    {
+        _lastNativeError = null;
+        _lastNativeWarning = null;
     }
     // Serializes the one-time native init. The old design used an Interlocked
     // CompareExchange flag, but that let the *second* caller return "ready"
@@ -135,8 +149,10 @@ internal static class FfmpegRuntime
         ffmpeg.av_log_format_line2(avcl, level, fmt, vl, buf, bufSize, &printPrefix);
         var msg = Marshal.PtrToStringAnsi((IntPtr)buf)?.Trim();
         if (string.IsNullOrEmpty(msg)) return;
+        msg = FfmpegError.Humanize(msg);
 
         if (level <= ffmpeg.AV_LOG_ERROR) _lastNativeError = msg;
+        else _lastNativeWarning = msg;
 
         // A logging sink must never throw back into native FFmpeg.
         try { NativeLog?.Invoke(level, msg); }

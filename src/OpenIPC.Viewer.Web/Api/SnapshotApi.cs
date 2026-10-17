@@ -120,7 +120,7 @@ public static class SnapshotApi
         };
         foreach (var arg in new[]
                  {
-                     "-rtsp_transport", "tcp", "-i", url,
+                     "-rtsp_transport", "tcp", "-timeout", "10000000", "-i", url,
                      "-frames:v", "1", "-q:v", "3",
                      "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
                  })

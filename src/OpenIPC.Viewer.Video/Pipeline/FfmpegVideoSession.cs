@@ -216,6 +216,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
             var url = BuildUrlWithCredentials(_options.RtspUri, _options.Credentials);
 
             ArmIoDeadline(ConnectBudgetMs);
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&fmtCtx, url, null, &opts);
             ThrowIfIoError(ret, "avformat_open_input", ConnectBudgetMs);
 

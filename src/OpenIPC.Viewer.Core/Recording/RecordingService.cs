@@ -23,12 +23,17 @@ public sealed class RecordingService : IAsyncDisposable
 
     private readonly object _gate = new();
     private readonly Dictionary<CameraId, Handle> _active = new();
+    private readonly Dictionary<CameraId, string> _lastError = new();
 
     public event EventHandler<CameraId>? StateChanged;
 
     // Surfaces repo-side errors during segment bookkeeping. UI/App layer
     // attaches logging here — Core stays package-dep free.
     public event EventHandler<Exception>? BookkeepingFailed;
+
+    // A session that ended without the user stopping it (camera unreachable,
+    // stream dropped, disk refused the file). The message is the recorder's own.
+    public event EventHandler<RecordingFailure>? RecordingFailed;
 
     public RecordingService(
         IRecorder recorder,
@@ -93,7 +98,7 @@ public sealed class RecordingService : IAsyncDisposable
         var session = await _recorder.StartAsync(options, ct).ConfigureAwait(false);
         // Adapter exists because Core has no System.Reactive (no package deps);
         // BCL only exposes IObservable.Subscribe(IObserver<T>).
-        var sub = session.Events.Subscribe(new CallbackObserver(ev => _ = HandleEventAsync(id, ev)));
+        var sub = session.Events.Subscribe(new CallbackObserver(ev => _ = HandleEventAsync(id, session, ev)));
         lock (_gate) _active[id] = new Handle(session, sub);
         StateChanged?.Invoke(this, id);
     }
@@ -120,7 +125,7 @@ public sealed class RecordingService : IAsyncDisposable
         StateChanged?.Invoke(this, id);
     }
 
-    private async Task HandleEventAsync(CameraId id, RecordingEvent ev)
+    private async Task HandleEventAsync(CameraId id, IRecordingSession session, RecordingEvent ev)
     {
         try
         {
@@ -136,7 +141,12 @@ public sealed class RecordingService : IAsyncDisposable
                     break;
 
                 case RecordingEvent.Error err:
+                    lock (_gate) _lastError[id] = err.Message;
                     BookkeepingFailed?.Invoke(this, new InvalidOperationException($"Recorder error: {err.Message}"));
+                    break;
+
+                case RecordingEvent.Stopped st when st.Reason != RecordingStopReason.User:
+                    await OnSessionEndedAsync(id, session, st).ConfigureAwait(false);
                     break;
             }
         }
@@ -144,6 +154,38 @@ public sealed class RecordingService : IAsyncDisposable
         {
             BookkeepingFailed?.Invoke(this, ex);
         }
+    }
+
+    // The recorder gave up on its own. Without this the camera stayed "recording"
+    // with a ticking REC timer and no file behind it, the last row never got
+    // EndedAt, and a fresh Start was refused as "already recording".
+    private async Task OnSessionEndedAsync(CameraId id, IRecordingSession session, RecordingEvent.Stopped st)
+    {
+        // Leave the recorder's OnNext before disposing the session completes
+        // its event stream.
+        await Task.Yield();
+
+        Handle? h;
+        string? message;
+        lock (_gate)
+        {
+            // StopAsync removes the handle before stopping, so a missing or different
+            // handle means this session is already being torn down elsewhere.
+            if (!_active.TryGetValue(id, out h) || !ReferenceEquals(h.Session, session)) return;
+            _active.Remove(id);
+            _lastError.TryGetValue(id, out message);
+            _lastError.Remove(id);
+        }
+
+        var lastPath = session.CurrentSegmentPath;
+        if (lastPath is not null)
+            await FinalizeSegmentAsync(lastPath, st.Time).ConfigureAwait(false);
+
+        h.Subscription.Dispose();
+        try { await session.DisposeAsync().ConfigureAwait(false); } catch { /* swallow */ }
+        StateChanged?.Invoke(this, id);
+        RecordingFailed?.Invoke(this, new RecordingFailure(
+            id, message ?? st.Detail ?? st.Reason.ToString(), WroteSegment: lastPath is not null));
     }
 
     private async Task FinalizeSegmentAsync(string path, DateTime endedAt, long? size = null)
@@ -196,6 +238,11 @@ public sealed class RecordingService : IAsyncDisposable
             try { await h.Session.DisposeAsync().ConfigureAwait(false); } catch { }
         }
     }
+
+    // WroteSegment is false when the recorder never got as far as opening a
+    // file — the camera refused or never answered, so nothing reached the
+    // Recordings tab.
+    public sealed record RecordingFailure(CameraId CameraId, string Message, bool WroteSegment = true);
 
     private sealed record Handle(IRecordingSession Session, IDisposable Subscription);
 

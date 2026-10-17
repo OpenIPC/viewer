@@ -126,6 +126,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
         int[] streamMap = System.Array.Empty<int>();
         var ct = _cts.Token;
         var stopReason = RecordingStopReason.User;
+        string? stopDetail = null;
 
         try
         {
@@ -216,7 +217,8 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                         stopReason = RecordingStopReason.ProcessExited;
                         break;
                     }
-                    _logger.LogWarning("av_read_frame failed: {Err}", FfmpegError.Describe(ret));
+                    stopDetail = FfmpegError.Describe(ret);
+                    _logger.LogWarning("av_read_frame failed: {Err}", stopDetail);
                     stopReason = RecordingStopReason.Error;
                     break;
                 }
@@ -256,6 +258,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
             _logger.LogError(ex, "Recording loop failed");
             try { _events.OnNext(new RecordingEvent.Error(ex.Message)); } catch { }
             stopReason = RecordingStopReason.Error;
+            stopDetail = ex.Message;
         }
         finally
         {
@@ -273,7 +276,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
             if (inputOpts != null) ffmpeg.av_dict_free(&inputOpts);
             if (outputOpts != null) ffmpeg.av_dict_free(&outputOpts);
 
-            try { _events.OnNext(new RecordingEvent.Stopped(DateTime.UtcNow, stopReason)); } catch { }
+            try { _events.OnNext(new RecordingEvent.Stopped(DateTime.UtcNow, stopReason, stopDetail)); } catch { }
             _stoppedTcs.TrySetResult();
         }
     }
