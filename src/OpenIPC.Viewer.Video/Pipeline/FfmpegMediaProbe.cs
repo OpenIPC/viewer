@@ -30,6 +30,7 @@ public sealed class FfmpegMediaProbe : IMediaProbe
         AVFormatContext* fmtCtx = null;
         try
         {
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&fmtCtx, filePath, null, null);
             FfmpegError.ThrowIfError(ret, "avformat_open_input");
 

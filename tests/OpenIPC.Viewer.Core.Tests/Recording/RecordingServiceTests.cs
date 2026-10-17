@@ -70,6 +70,73 @@ public sealed class RecordingServiceTests : IDisposable
         Assert.True(recorder.Last!.Disposed);
     }
 
+    [Fact]
+    public async Task StopWhileStartedInsertIsPending_StillFinalizesTheRow()
+    {
+        var (service, recorder, repo, id) = await CreateAsync();
+        await service.StartAsync(id, CancellationToken.None);
+        repo.HoldAdds();
+
+        var session = recorder.Last!;
+        var path = Path.Combine(_root.FullName, "seg.mp4");
+        session.Emit(new RecordingEvent.Started(path, DateTime.UtcNow));
+        var failed = WaitForFailure(service);
+        session.Emit(new RecordingEvent.Stopped(DateTime.UtcNow, RecordingStopReason.ProcessExited));
+
+        await Task.Delay(50);
+        repo.ReleaseAdds();
+        var e = await failed;
+
+        Assert.True(e.WroteSegment);
+        Assert.NotNull(Assert.Single(repo.Rows).EndedAt);
+    }
+
+    [Fact]
+    public async Task OutputPathNamedButNothingStarted_ReportsNothingWritten()
+    {
+        // The libavformat session names its output file before it opens the camera.
+        var (service, recorder, repo, id) = await CreateAsync();
+        await service.StartAsync(id, CancellationToken.None);
+        recorder.Last!.CurrentSegmentPath = Path.Combine(_root.FullName, "never-written.mp4");
+
+        var failed = WaitForFailure(service);
+        recorder.Last.Emit(new RecordingEvent.Stopped(DateTime.UtcNow, RecordingStopReason.Error, "Connection refused"));
+        var e = await failed;
+
+        Assert.False(e.WroteSegment);
+        Assert.Empty(repo.Rows);
+    }
+
+    [Fact]
+    public async Task RecorderStoppingBeforeSubscription_IsStillCleanedUp()
+    {
+        var (service, recorder, _, id) = await CreateAsync();
+        recorder.StopImmediately = new RecordingEvent.Stopped(DateTime.UtcNow, RecordingStopReason.Error, "Connection refused");
+
+        var failed = WaitForFailure(service);
+        await service.StartAsync(id, CancellationToken.None);
+        var e = await failed;
+
+        Assert.Equal("Connection refused", e.Message);
+        Assert.False(service.IsRecording(id));
+    }
+
+    [Fact]
+    public async Task ErrorFromAnEarlierSession_DoesNotExplainALaterFailure()
+    {
+        var (service, recorder, _, id) = await CreateAsync();
+        await service.StartAsync(id, CancellationToken.None);
+        recorder.Last!.Emit(new RecordingEvent.Error("disk full"));
+        await service.StopAsync(id, CancellationToken.None);
+
+        await service.StartAsync(id, CancellationToken.None);
+        var failed = WaitForFailure(service);
+        recorder.Last!.Emit(new RecordingEvent.Stopped(DateTime.UtcNow, RecordingStopReason.ProcessExited, "Connection timed out"));
+        var e = await failed;
+
+        Assert.Equal("Connection timed out", e.Message);
+    }
+
     private async Task<(RecordingService, FakeRecorder, FakeRecordingRepository, CameraId)> CreateAsync()
     {
         var cameras = new CameraDirectoryService(new InMemoryCameraRepository(), new InMemoryGroupRepository(), new InMemorySecretsStore());
@@ -116,16 +183,22 @@ public sealed class RecordingServiceTests : IDisposable
     {
         public FakeSession? Last { get; private set; }
 
+        // Published before the service can subscribe, like a camera refusing at once.
+        public RecordingEvent? StopImmediately { get; set; }
+
         public Task<IRecordingSession> StartAsync(RecordingOptions options, CancellationToken ct)
         {
             Last = new FakeSession();
+            if (StopImmediately is { } ev) Last.Emit(ev);
             return Task.FromResult<IRecordingSession>(Last);
         }
     }
 
+    // Replays what it published before a subscription, as the real sessions do.
     private sealed class FakeSession : IRecordingSession, IObservable<RecordingEvent>
     {
         private readonly List<IObserver<RecordingEvent>> _observers = new();
+        private readonly List<RecordingEvent> _published = new();
 
         public DateTime StartedAt { get; } = DateTime.UtcNow;
         public string? CurrentSegmentPath { get; set; }
@@ -134,6 +207,7 @@ public sealed class RecordingServiceTests : IDisposable
 
         public void Emit(RecordingEvent ev)
         {
+            _published.Add(ev);
             foreach (var o in _observers.ToArray()) o.OnNext(ev);
         }
 
@@ -152,6 +226,7 @@ public sealed class RecordingServiceTests : IDisposable
         public IDisposable Subscribe(IObserver<RecordingEvent> observer)
         {
             _observers.Add(observer);
+            foreach (var ev in _published.ToArray()) observer.OnNext(ev);
             return new Unsubscriber(() => _observers.Remove(observer));
         }
 
@@ -165,6 +240,11 @@ public sealed class RecordingServiceTests : IDisposable
     {
         private readonly object _gate = new();
         private readonly List<Core.Recording.Recording> _rows = new();
+        private TaskCompletionSource? _addGate;
+
+        // Makes AddAsync wait (a slow or locked database) until ReleaseAdds.
+        public void HoldAdds() => _addGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void ReleaseAdds() => _addGate?.TrySetResult();
 
         public IReadOnlyList<Core.Recording.Recording> Rows
         {
@@ -174,10 +254,10 @@ public sealed class RecordingServiceTests : IDisposable
         public Task<IReadOnlyList<Core.Recording.Recording>> ListAsync(CameraId? cameraId, CancellationToken ct) =>
             Task.FromResult(Rows);
 
-        public Task AddAsync(Core.Recording.Recording recording, CancellationToken ct)
+        public async Task AddAsync(Core.Recording.Recording recording, CancellationToken ct)
         {
+            if (_addGate is { } gate) await gate.Task;
             lock (_gate) _rows.Add(recording);
-            return Task.CompletedTask;
         }
 
         public Task UpdateAsync(Core.Recording.Recording recording, CancellationToken ct)

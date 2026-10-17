@@ -27,7 +27,9 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
 
     private readonly RecordingOptions _options;
     private readonly ILogger _logger;
-    private readonly Subject<RecordingEvent> _events = new();
+    // Replaying: the worker starts before RecordingService can subscribe, and
+    // a camera that refuses at once would otherwise Stop into the void.
+    private readonly ReplaySubject<RecordingEvent> _events = new(bufferSize: 8);
     private readonly CancellationTokenSource _cts = new();
     private readonly TaskCompletionSource _stoppedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -147,6 +149,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                 opaque = null,
             };
             var url = BuildRtspUri(_options.RtspUri, _options.Credentials);
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&inputCtx, url, null, &inputOpts);
             FfmpegError.ThrowIfError(ret, "avformat_open_input");
 

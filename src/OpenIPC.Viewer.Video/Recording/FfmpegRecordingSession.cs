@@ -31,7 +31,9 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
     private readonly RecordingOptions _options;
     private readonly string _ffmpegPath;
     private readonly ILogger _logger;
-    private readonly Subject<RecordingEvent> _events = new();
+    // Replaying: the worker starts before RecordingService can subscribe, and
+    // a camera that refuses at once would otherwise Stop into the void.
+    private readonly ReplaySubject<RecordingEvent> _events = new(bufferSize: 8);
 
     private Process? _proc;
     private Task _stderrPump = Task.CompletedTask;
@@ -85,11 +87,12 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         // no DB row is written and the recording never shows in the list.
         psi.ArgumentList.Add("-loglevel"); psi.ArgumentList.Add("verbose");
         psi.ArgumentList.Add("-rtsp_transport"); psi.ArgumentList.Add("tcp");
-        // RTSP socket I/O timeout (µs; FFmpeg 7 renamed stimeout → timeout).
+        // RTSP socket I/O timeout (µs; FFmpeg 5 renamed stimeout → timeout,
+        // and the PATH fallback may still be a 4.x distro build).
         // Without it a camera that accepts the TCP connect but never answers
         // DESCRIBE parks ffmpeg in open forever: no segment is ever opened, so
         // no row reaches the Recordings tab while REC keeps "running" (#91).
-        psi.ArgumentList.Add("-timeout"); psi.ArgumentList.Add(RtspTimeoutMicros);
+        psi.ArgumentList.Add(FfmpegCliOptions.RtspTimeoutFlag(_ffmpegPath)); psi.ArgumentList.Add(RtspTimeoutMicros);
         psi.ArgumentList.Add("-i"); psi.ArgumentList.Add(BuildRtspUri(_options.RtspUri, _options.Credentials).ToString());
         psi.ArgumentList.Add("-c"); psi.ArgumentList.Add("copy");
         psi.ArgumentList.Add("-f"); psi.ArgumentList.Add("segment");

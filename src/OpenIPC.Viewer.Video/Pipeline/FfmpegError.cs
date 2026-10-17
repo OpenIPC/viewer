@@ -64,6 +64,10 @@ internal sealed class FfmpegException : Exception
 {
     public int Code { get; }
 
+    // The one call whose warnings explain its failure (#90); every caller
+    // clears native diagnostics right before it.
+    internal const string OpenInput = "avformat_open_input";
+
     public FfmpegException(string operation, int code)
         : base(Compose(operation, code))
     {
@@ -76,7 +80,7 @@ internal sealed class FfmpegException : Exception
     private static string Compose(string operation, int code)
     {
         var msg = $"{operation} failed: {FfmpegError.Describe(code)} ({code})";
-        var native = FfmpegRuntime.TakeLastNativeError();
+        var native = FfmpegRuntime.TakeLastNativeError(includeWarning: operation == OpenInput);
         return string.IsNullOrEmpty(native) ? msg : $"{msg} — {native}";
     }
 }

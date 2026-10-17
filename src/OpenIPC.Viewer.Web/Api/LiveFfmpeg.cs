@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -21,9 +23,9 @@ internal static class LiveFfmpeg
             CreateNoWindow = true,
         };
 
-        // -timeout: RTSP socket I/O timeout (µs) so a silent camera ends the
-        // process instead of holding a connection open forever.
-        var args = new List<string> { "-rtsp_transport", "tcp", "-timeout", "10000000", "-fflags", "nobuffer", "-i", rtspUrl };
+        // RTSP socket I/O timeout (µs) so a silent camera ends the process
+        // instead of holding a connection open forever.
+        var args = new List<string> { "-rtsp_transport", "tcp", RtspTimeoutFlag(), RtspTimeoutMicros, "-fflags", "nobuffer", "-i", rtspUrl };
 
         // Audio rides along in the same stream instead of getting its own ffmpeg
         // session: AAC at 64 kbps is around a percent of the video bitrate, so
@@ -78,6 +80,48 @@ internal static class LiveFfmpeg
     // Same bundled-then-PATH resolution as FfmpegSubprocessRecorder.
     // Also used by the snapshot endpoint, which spawns its own one-shot ffmpeg.
     public static string ResolveExecutable() => Resolve();
+
+    public const string RtspTimeoutMicros = "10000000";
+
+    private static string? _rtspTimeoutFlag;
+
+    // "-timeout" is the RTSP socket timeout from FFmpeg 5 on; in 4.x (the apt
+    // package on Ubuntu 22.04 / Debian 11) it means "listen for a connection"
+    // and the socket timeout is still "-stimeout". Probed once per process.
+    public static string RtspTimeoutFlag() => _rtspTimeoutFlag ??= ProbeMajorVersion(Resolve()) is int major and < 5 ? "-stimeout" : "-timeout";
+
+    private static int? ProbeMajorVersion(string ffmpeg)
+    {
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo(ffmpeg)
+            {
+                ArgumentList = { "-hide_banner", "-version" },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (proc is null) return null;
+            var stdout = proc.StandardOutput.ReadToEndAsync();
+            _ = proc.StandardError.ReadToEndAsync();
+            if (!proc.WaitForExit(3000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { /* already gone */ }
+                return null;
+            }
+            // "ffmpeg version 4.4.2-0ubuntu0.22.04.1", "ffmpeg version n7.1-…";
+            // git snapshots ("N-112233-g…") don't match and count as current.
+            var m = Regex.Match(stdout.Result, @"^ffmpeg version n?(\d+)\.\d+",
+                RegexOptions.Multiline);
+            return m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.None,
+                CultureInfo.InvariantCulture, out var v) ? v : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static string Resolve()
     {

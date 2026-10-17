@@ -96,7 +96,7 @@ public sealed class WebRecorder : IAsyncDisposable
                      "-rtsp_transport", "tcp",
                      // RTSP socket timeout (µs): a camera that accepts the connect
                      // but never answers must not park ffmpeg in open forever.
-                     "-timeout", "10000000",
+                     LiveFfmpeg.RtspTimeoutFlag(), LiveFfmpeg.RtspTimeoutMicros,
                      "-i", rtspUrl,
                      // Copy, never re-encode: recording must not cost CPU per camera,
                      // and the archive should hold what the camera actually sent.
@@ -131,9 +131,36 @@ public sealed class WebRecorder : IAsyncDisposable
         // Indexed while running, so a server that dies mid-recording still leaves
         // a row pointing at the partial file instead of an orphan on disk.
         await _repo.AddAsync(recording, ct);
-        _active[cameraId] = new ActiveRecording(process, recording, baseName, dir);
+        var active = new ActiveRecording(process, recording, baseName, dir);
+        _active[cameraId] = active;
+        _ = WatchForExitAsync(cameraId, active);
         _logger.LogInformation("Recording {Camera} to {Path}", camera.Name, path);
         return recording;
+    }
+
+    // ffmpeg can end on its own: the camera went silent past the RTSP timeout,
+    // dropped the stream, or refused it outright. Without this the camera stayed
+    // "recording" (a new Start was refused) and its row kept a null EndedAt
+    // until someone pressed Stop.
+    private async Task WatchForExitAsync(string cameraId, ActiveRecording active)
+    {
+        try { await active.Process.WaitForExitAsync(); }
+        catch (Exception) { return; } // disposed by StopAsync — it owns the teardown
+
+        // Only if it is still ours: StopAsync removes the entry before stopping.
+        if (!_active.TryRemove(new KeyValuePair<string, ActiveRecording>(cameraId, active)))
+            return;
+
+        _logger.LogWarning("ffmpeg recording {Camera} exited on its own (code {Code})", cameraId, TryExitCode(active.Process));
+        try { await ReconcileSegmentsAsync(active, DateTime.UtcNow, CancellationToken.None); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to reconcile recording {Camera} after ffmpeg exited", cameraId); }
+        finally { active.Process.Dispose(); }
+    }
+
+    private static int? TryExitCode(Process process)
+    {
+        try { return process.ExitCode; }
+        catch (InvalidOperationException) { return null; }
     }
 
     /// Returns the finished recording, or null when there was nothing to stop

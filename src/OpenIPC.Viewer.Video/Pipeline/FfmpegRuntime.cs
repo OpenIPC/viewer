@@ -28,9 +28,12 @@ internal static class FfmpegRuntime
     // Held so the GC can't collect the delegate while native code holds it.
     private static av_log_set_callback_callback? _logCallback;
 
-    internal static string? TakeLastNativeError()
+    // includeWarning: only for avformat_open_input, which clears the state
+    // right before the call — anywhere else a warning from an earlier call
+    // that succeeded would be pinned on an unrelated failure.
+    internal static string? TakeLastNativeError(bool includeWarning = false)
     {
-        var v = _lastNativeError ?? _lastNativeWarning;
+        var v = includeWarning ? _lastNativeError ?? _lastNativeWarning : _lastNativeError;
         _lastNativeError = null;
         _lastNativeWarning = null;
         return v;
