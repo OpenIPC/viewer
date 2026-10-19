@@ -26,8 +26,9 @@ internal static class LiveFfmpeg
         };
 
         // RTSP socket I/O timeout (µs) so a silent camera ends the process
-        // instead of holding a connection open forever.
-        var args = new List<string> { "-rtsp_transport", "tcp", RtspTimeoutFlag(), RtspTimeoutMicros, "-fflags", "nobuffer", "-i", rtspUrl };
+        // instead of holding a connection open forever. No "-fflags nobuffer":
+        // it drops the session's opening keyframe on some NVRs (#94).
+        var args = new List<string> { "-rtsp_transport", "tcp", RtspTimeoutFlag(), RtspTimeoutMicros, "-i", rtspUrl };
 
         // Audio rides along in the same stream instead of getting its own ffmpeg
         // session: AAC at 64 kbps is around a percent of the video bitrate, so
