@@ -73,10 +73,10 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private AVPixelFormat _selectedHwPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
 
     // How long HW decode may keep failing (send/receive/transfer errors, no
-    // frame out) before the session drops to software. Time-based, not a
-    // count: a 1 fps camera and a 30 fps one get the same grace for the next
-    // keyframe, and both switch well inside the reconnect watchdog's 5s
-    // no-frame window, which would otherwise restart HW from scratch.
+    // frame out) before the session gives up on HW and reconnects in software.
+    // Time-based, not a count: a 1 fps camera and a 30 fps one get the same
+    // grace for the next keyframe, and both trip well inside the reconnect
+    // watchdog's 5s no-frame window, which would otherwise retry HW.
     private const long HwFallbackAfterMs = 2_500;
     // Streams whose HW decode broke during this run. Static because every
     // reconnect builds a new session; keyed without credentials. 2.5s of
@@ -195,7 +195,26 @@ internal sealed class FfmpegVideoSession : IVideoSession
         _decodeGate.Dispose();
     }
 
-    private unsafe void Run()
+    private void Run()
+    {
+        // A pass that gives up on HW decode (#94) is retried once on a fresh
+        // RTSP session inside this same session, so one-shot callers without
+        // the reconnect wrapper (connect check, snapshot) get the software
+        // fallback too. The stream is in HwFailedStreams by then, so the
+        // second pass decodes in software and can't ask for another retry.
+        if (!RunOnce()) return;
+        if (_cts!.IsCancellationRequested)
+        {
+            SetState(SessionState.Idle);
+            return;
+        }
+        SetState(SessionState.Connecting);
+        if (RunOnce()) SetState(SessionState.Idle);
+    }
+
+    // One RTSP session from open to close. Returns true when it stopped to be
+    // retried in software; otherwise it has already reported Idle or Failed.
+    private unsafe bool RunOnce()
     {
         AVFormatContext* fmtCtx = null;
         AVCodecContext* codecCtx = null;
@@ -212,6 +231,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         var hwActive = false;
         var hwErrors = 0;
         var lastFrameMs = 0L;
+        var retryInSoftware = false;
 
         try
         {
@@ -338,21 +358,22 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 Interlocked.Add(ref _bytesSinceFpsTick, packet->size);
 
                 // The HW decoder can open fine and then reject every frame —
-                // VideoToolbox does this on HEVC when the stream is joined
-                // mid-GOP and a reference picture is missing (#94), where the
-                // software decoder would conceal and carry on. Swap to software
-                // once it has failed for HwFallbackAfterMs without a frame,
-                // instead of stalling into a reconnect loop.
+                // VideoToolbox does this on HEVC when a reference picture is
+                // missing (#94). Once it has failed for HwFallbackAfterMs
+                // without a frame, mark the stream and close this RTSP session
+                // so Run reopens it in software. Swapping decoders in place
+                // doesn't work — the new decoder starts mid-stream, and on
+                // cameras whose frames keep referencing the keyframe sent at
+                // session start it never sees that keyframe and draws grey.
                 var sinceFrameMs = Environment.TickCount64 - lastFrameMs;
                 if (hwActive && hwErrors > 0 && sinceFrameMs >= HwFallbackAfterMs)
                 {
-                    _logger.LogWarning("HW decode failed {Count} times over {Ms} ms on {Host}; switching to software",
+                    _logger.LogWarning("HW decode failed {Count} times over {Ms} ms on {Host}; reopening with software decode",
                         hwErrors, sinceFrameMs, _options.RtspUri.Host);
                     HwFailedStreams.TryAdd(HwStreamKey, 0);
-                    ffmpeg.avcodec_free_context(&codecCtx);
-                    if (hwDeviceCtx != null) ffmpeg.av_buffer_unref(&hwDeviceCtx);
-                    hwActive = OpenDecoder(&codecCtx, &hwDeviceCtx, codecpar, codec, HwAccelHint.None);
-                    hwErrors = 0;
+                    ffmpeg.av_packet_unref(packet);
+                    retryInSoftware = true;
+                    break;
                 }
 
                 ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
@@ -418,7 +439,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         {
             _logger.LogError(ex, "Video session loop failed");
             SetState(SessionState.Failed, ex.Message);
-            return;
+            return false;
         }
         finally
         {
@@ -436,7 +457,9 @@ internal sealed class FfmpegVideoSession : IVideoSession
             if (opts != null) ffmpeg.av_dict_free(&opts);
         }
 
+        if (retryInSoftware) return true;
         SetState(SessionState.Idle);
+        return false;
     }
 
     // The RTSP demuxer reports an interrupted read as "Invalid data found", so
