@@ -54,10 +54,10 @@ no `DYLD_LIBRARY_PATH` is needed.
 
 **Camera connects but the tile stays black, log full of `vt decoder cb`
 / `hardware accelerator failed to decode picture`.** VideoToolbox rejects
-HEVC frames whose reference picture is missing (typical when joining a
-smart-GOP stream mid-GOP). After ~2.5s of such errors with no frame the app
-switches that camera to software decode until restart; if it still stays
-black, attach the log to an issue.
+HEVC frames whose reference picture is missing. After ~2.5s of such errors
+with no frame the app reconnects that camera with software decode and keeps
+it there until restart; if it still stays black or grey, attach the log to
+an issue.
 
 **Keychain prompt on every credential read.** Means the app's
 codesign identity changed between builds. Trust the keychain access
