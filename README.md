@@ -65,8 +65,14 @@ Built with .NET 9 / 10 and Avalonia 12.
   snapshots over SSH.
 - **Health & status** — unified per-camera verdict (online / attention /
   offline) across grid, library and a Health Center overview.
-- **Notifications** — system notifications for motion and detections, with
-  quiet hours.
+- **Notifications** — alerts for motion and detections with thresholds (AI
+  confidence, event duration, objects in frame), cooldown and quiet hours.
+  Desktop: the app's own toast with a built-in or custom sound and volume, or
+  native Windows notifications managed in Windows Settings.
+- **External actions** — react to an event outside the app: a TCP/UDP signal
+  (text or raw hex) to an alarm panel or relay, an HTTP webhook, an e-mail
+  (SMTP with the login kept in Windows Credential Manager, the default mail
+  client via MAPI, or Outlook), or a local program/script.
 - **Desktop niceties** — tray icon with quick actions, optional
   close-to-tray, choice of start page (Library or Live) and startup layout,
   light/dark themes with accent colors.

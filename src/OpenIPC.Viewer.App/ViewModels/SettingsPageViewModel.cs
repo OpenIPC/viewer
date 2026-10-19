@@ -25,7 +25,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private readonly ISshHostKeyStore _hostKeys;
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private readonly ConfigSyncService _configSync;
-    private readonly OpenIPC.Viewer.Core.Notifications.INotificationService _notifications;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
     private readonly ILogger<SettingsPageViewModel> _logger;
     private bool _suppressSave;
@@ -110,16 +109,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         return preview;
     }
 
-    // Notifications (Phase 19.3).
-    [ObservableProperty] private bool _notificationsEnabled = true;
-    [ObservableProperty] private bool _notifyOnMotion = true;
-    [ObservableProperty] private bool _notifyOnDetection = true;
-    [ObservableProperty] private int _notificationCooldownSeconds = 30;
-    [ObservableProperty] private bool _quietHoursEnabled;
-    [ObservableProperty] private int _quietHoursStartHour = 22;
-    [ObservableProperty] private int _quietHoursEndHour = 7;
-    public int[] HourOptions { get; } = System.Linq.Enumerable.Range(0, 24).ToArray();
-    public int[] CooldownOptions { get; } = new[] { 0, 10, 30, 60, 120, 300 };
+    // Notifications (Phase 19.3) — its own section with its own view model
+    // (types, thresholds, style, sound, external actions).
+    public NotificationSettingsViewModel Notifications { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EffectiveRecordingsDirectory))]
@@ -127,10 +119,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private string _recordingsDirOverride = "";
 
     // Master-detail state. -1 = no section selected (list view on narrow);
-    // 0..5 maps to Appearance/Video/Recording/Discovery/Advanced/About. On
-    // wide viewports a section is always selected (defaults to 0). Code-behind
-    // toggles IsWide based on viewport width and resizes the Grid columns to
-    // hide one pane on narrow.
+    // 0..7 maps to Appearance/Video/Recording/Discovery/SSH/Advanced/
+    // Notifications/About. On wide viewports a section is always selected
+    // (defaults to 0). Code-behind toggles IsWide based on viewport width and
+    // resizes the Grid columns to hide one pane on narrow.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAppearance))]
     [NotifyPropertyChangedFor(nameof(IsVideo))]
@@ -138,6 +130,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     [NotifyPropertyChangedFor(nameof(IsDiscovery))]
     [NotifyPropertyChangedFor(nameof(IsSsh))]
     [NotifyPropertyChangedFor(nameof(IsAdvanced))]
+    [NotifyPropertyChangedFor(nameof(IsNotifications))]
     [NotifyPropertyChangedFor(nameof(IsAbout))]
     [NotifyPropertyChangedFor(nameof(ShowList))]
     [NotifyPropertyChangedFor(nameof(ShowDetail))]
@@ -156,7 +149,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     public bool IsDiscovery  => SelectedSectionIndex == 3;
     public bool IsSsh        => SelectedSectionIndex == 4;
     public bool IsAdvanced   => SelectedSectionIndex == 5;
-    public bool IsAbout      => SelectedSectionIndex == 6;
+    public bool IsNotifications => SelectedSectionIndex == 6;
+    public bool IsAbout      => SelectedSectionIndex == 7;
 
     public bool ShowList       => IsWide || SelectedSectionIndex < 0;
     public bool ShowDetail     => IsWide || SelectedSectionIndex >= 0;
@@ -185,7 +179,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 
     // Deep-link target for the tray "About" item — keeps the section index in
     // one place (it shifts between editions with different section sets).
-    public void SelectAboutSection() => SelectedSectionIndex = 6;
+    public void SelectAboutSection() => SelectedSectionIndex = 7;
 
     public bool IsRecordingsDirOverridden => !string.IsNullOrWhiteSpace(RecordingsDirOverride);
 
@@ -227,7 +221,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         ISshHostKeyStore hostKeys,
         OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
         ConfigSyncService configSync,
-        OpenIPC.Viewer.Core.Notifications.INotificationService notifications,
+        NotificationSettingsViewModel notifications,
         OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
         ILogger<SettingsPageViewModel> logger)
     {
@@ -237,7 +231,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         _hostKeys = hostKeys;
         _backup = backup;
         _configSync = configSync;
-        _notifications = notifications;
+        Notifications = notifications;
         _layouts = layouts;
         _logger = logger;
 
@@ -318,13 +312,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             SshTerminalCursorBlink = s.SshTerminalCursorBlink;
             SshTerminalScrollback = s.SshTerminalScrollback;
             MajesticConfigPath = s.MajesticConfigPath;
-            NotificationsEnabled = s.NotificationsEnabled;
-            NotifyOnMotion = s.NotifyOnMotion;
-            NotifyOnDetection = s.NotifyOnDetection;
-            NotificationCooldownSeconds = s.NotificationCooldownSeconds;
-            QuietHoursEnabled = s.QuietHoursEnabled;
-            QuietHoursStartHour = s.QuietHoursStartHour;
-            QuietHoursEndHour = s.QuietHoursEndHour;
             ConfigSyncEnabled = s.ConfigSyncEnabled;
             ConfigSyncPath = s.ConfigSyncPath;
             ConfigSyncIncludeCredentials = s.ConfigSyncIncludeCredentials;
@@ -357,13 +344,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     partial void OnSshTerminalCursorBlinkChanged(bool value) => Persist();
     partial void OnSshTerminalScrollbackChanged(int value) => Persist();
     partial void OnMajesticConfigPathChanged(string value) => Persist();
-    partial void OnNotificationsEnabledChanged(bool value) => Persist();
-    partial void OnNotifyOnMotionChanged(bool value) => Persist();
-    partial void OnNotifyOnDetectionChanged(bool value) => Persist();
-    partial void OnNotificationCooldownSecondsChanged(int value) => Persist();
-    partial void OnQuietHoursEnabledChanged(bool value) => Persist();
-    partial void OnQuietHoursStartHourChanged(int value) => Persist();
-    partial void OnQuietHoursEndHourChanged(int value) => Persist();
 
     private void Persist()
     {
@@ -398,13 +378,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             SshTerminalScrollback = Math.Clamp(SshTerminalScrollback,
                 TerminalEmulator.MinScrollbackLimit, TerminalEmulator.MaxScrollbackLimit),
             MajesticConfigPath = MajesticConfigPath,
-            NotificationsEnabled = NotificationsEnabled,
-            NotifyOnMotion = NotifyOnMotion,
-            NotifyOnDetection = NotifyOnDetection,
-            NotificationCooldownSeconds = NotificationCooldownSeconds,
-            QuietHoursEnabled = QuietHoursEnabled,
-            QuietHoursStartHour = QuietHoursStartHour,
-            QuietHoursEndHour = QuietHoursEndHour,
             ConfigSyncEnabled = ConfigSyncEnabled,
             ConfigSyncPath = ConfigSyncPath,
             ConfigSyncIncludeCredentials = ConfigSyncIncludeCredentials,
@@ -495,16 +468,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     [RelayCommand]
     private void OpenLogsDirectory() =>
         OpenInShell(System.IO.Path.Combine(_fs.AppDataDir.FullName, "logs"));
-
-    // Fire a sample toast straight at the sink (Phase 19.3) so the user can see
-    // the corner notification without waiting for a real camera event. Bypasses
-    // the coordinator's cooldown/quiet-hours on purpose — it's a UI preview.
-    [RelayCommand]
-    private void TestNotification() =>
-        _notifications.Show(new OpenIPC.Viewer.Core.Notifications.NotificationRequest(
-            Localizer.Instance["Settings.Notifications.TestTitle"],
-            Localizer.Instance["Settings.Notifications.TestBody"],
-            OpenIPC.Viewer.Core.Events.EventKind.Motion));
 
     // --- Network config auto-sync (Phase 20) ------------------------------
     [ObservableProperty] private bool _configSyncEnabled;
