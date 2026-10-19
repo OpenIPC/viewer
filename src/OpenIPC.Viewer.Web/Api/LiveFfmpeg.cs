@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Web.Api;
 
@@ -129,7 +131,8 @@ internal static class LiveFfmpeg
         var exe = "ffmpeg";
         if (OperatingSystem.IsWindows()) { rid = "win-x64"; exe = "ffmpeg.exe"; }
         else if (OperatingSystem.IsLinux()) { rid = "linux-x64"; }
-        else if (OperatingSystem.IsMacOS()) { rid = "osx-x64"; }
+        else if (OperatingSystem.IsMacOS())
+            rid = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64";
 
         if (rid is not null)
         {
@@ -137,6 +140,10 @@ internal static class LiveFfmpeg
             if (File.Exists(bundled))
                 return bundled;
         }
+
+        if (OperatingSystem.IsMacOS())
+            foreach (var path in FfmpegExecutablePaths.MacOs)
+                if (File.Exists(path)) return path;
         return "ffmpeg";
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using OpenIPC.Viewer.Core.Video;
 
 namespace OpenIPC.Viewer.Video.Pipeline;
 
@@ -28,8 +29,7 @@ internal static class RuntimeIds
     }
 
     // The ffmpeg CLI for the subprocess recorder / clip exporter: the bundled
-    // binary, else (macOS) Homebrew's — keg-only ffmpeg@7 isn't on PATH, and a
-    // Finder-launched app doesn't see /opt/homebrew/bin either — else PATH.
+    // binary, else (macOS) Homebrew's, else PATH.
     public static string ResolveFfmpegExe()
     {
         var (rid, exe) = Current();
@@ -40,17 +40,8 @@ internal static class RuntimeIds
         }
 
         if (OperatingSystem.IsMacOS())
-        {
-            string[] brew =
-            {
-                "/opt/homebrew/opt/ffmpeg@7/bin/ffmpeg",
-                "/usr/local/opt/ffmpeg@7/bin/ffmpeg",
-                "/opt/homebrew/bin/ffmpeg",
-                "/usr/local/bin/ffmpeg",
-            };
-            foreach (var path in brew)
+            foreach (var path in FfmpegExecutablePaths.MacOs)
                 if (File.Exists(path)) return path;
-        }
         return "ffmpeg";
     }
 }

@@ -72,12 +72,15 @@ internal sealed class FfmpegVideoSession : IVideoSession
     private AVCodecContext_get_format? _getFormatDelegate;
     private AVPixelFormat _selectedHwPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
 
-    // Consecutive HW decode errors (send/receive/transfer) with no frame in
-    // between before the session drops to software. At ~10 errors/s it trips
-    // well inside the 5s stall window that would otherwise force a reconnect.
-    private const int HwDecodeFailureLimit = 12;
+    // How long HW decode may keep failing (send/receive/transfer errors, no
+    // frame out) before the session drops to software. Time-based, not a
+    // count: a 1 fps camera and a 30 fps one get the same grace for the next
+    // keyframe, and both switch well inside the reconnect watchdog's 5s
+    // no-frame window, which would otherwise restart HW from scratch.
+    private const long HwFallbackAfterMs = 2_500;
     // Streams whose HW decode broke during this run. Static because every
-    // reconnect builds a new session; keyed without credentials.
+    // reconnect builds a new session; keyed without credentials. 2.5s of
+    // nothing but errors means HW can't handle this stream, not a blip.
     private static readonly ConcurrentDictionary<string, byte> HwFailedStreams = new();
     private string HwStreamKey => _options.RtspUri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.UriEscaped);
 
@@ -208,6 +211,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         var hwActive = false;
         var hwErrors = 0;
+        var lastFrameMs = 0L;
 
         try
         {
@@ -269,6 +273,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
+            lastFrameMs = Environment.TickCount64;
 
             var ct = _cts!.Token;
             while (!ct.IsCancellationRequested)
@@ -280,6 +285,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 {
                     try { _decodeGate.Wait(ct); }
                     catch (OperationCanceledException) { break; }
+                    // Time parked isn't time HW spent failing.
+                    lastFrameMs = Environment.TickCount64;
                 }
 
                 // Lazily spin the audio decoder up/down to track SetAudioEnabled.
@@ -334,11 +341,13 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 // VideoToolbox does this on HEVC when the stream is joined
                 // mid-GOP and a reference picture is missing (#94), where the
                 // software decoder would conceal and carry on. Swap to software
-                // once errors pile up instead of stalling into a reconnect loop.
-                if (hwActive && hwErrors >= HwDecodeFailureLimit)
+                // once it has failed for HwFallbackAfterMs without a frame,
+                // instead of stalling into a reconnect loop.
+                var sinceFrameMs = Environment.TickCount64 - lastFrameMs;
+                if (hwActive && hwErrors > 0 && sinceFrameMs >= HwFallbackAfterMs)
                 {
-                    _logger.LogWarning("HW decode failed {Count} times in a row on {Host}; switching to software",
-                        hwErrors, _options.RtspUri.Host);
+                    _logger.LogWarning("HW decode failed {Count} times over {Ms} ms on {Host}; switching to software",
+                        hwErrors, sinceFrameMs, _options.RtspUri.Host);
                     HwFailedStreams.TryAdd(HwStreamKey, 0);
                     ffmpeg.avcodec_free_context(&codecCtx);
                     if (hwDeviceCtx != null) ffmpeg.av_buffer_unref(&hwDeviceCtx);
@@ -381,6 +390,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
                         presentable = swFrame;
                     }
                     hwErrors = 0;
+                    lastFrameMs = Environment.TickCount64;
 
                     // Lazy sws init — the actual sw pixfmt is only known once
                     // the first frame arrives (matters for HW path where the

@@ -138,14 +138,13 @@ lost, so keep its password safe.
 ## ffmpeg
 
 Live video needs ffmpeg. Resolution order: a bundled binary next to the app
-(`runtimes/<rid>/native/ffmpeg`) first, then `ffmpeg` on `PATH`.
+(`runtimes/<rid>/native/ffmpeg`) first, then (macOS) the Homebrew prefixes,
+then `ffmpeg` on `PATH`.
 
 * **Windows** — bundled in the release archive. Nothing to install.
 * **Linux** — bundled in the release archive; or `sudo apt install ffmpeg`.
-* **macOS** — not bundled. Install `brew install ffmpeg@7` (the live
-  decoder needs the 7.x libraries) and either add
-  `/opt/homebrew/opt/ffmpeg@7/bin` to `PATH` or also `brew install ffmpeg`
-  for the `ffmpeg` binary.
+* **macOS** — not bundled. Install `brew install ffmpeg@7`; the app finds
+  it under the Homebrew prefix itself (keg-only, no `PATH` change needed).
 
 ---
 

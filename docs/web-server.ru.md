@@ -135,14 +135,14 @@ OpenIPC-камерам по локальной сети. Без облака и 
 ## ffmpeg
 
 Живому видео нужен ffmpeg. Порядок поиска: сначала бандл рядом с приложением
-(`runtimes/<rid>/native/ffmpeg`), затем `ffmpeg` в `PATH`.
+(`runtimes/<rid>/native/ffmpeg`), затем (macOS) префиксы Homebrew, затем
+`ffmpeg` в `PATH`.
 
 * **Windows** — в комплекте с релиз-архивом. Ничего ставить не нужно.
 * **Linux** — в комплекте с релиз-архивом; либо `sudo apt install ffmpeg`.
-* **macOS** — в комплект не входит. Поставьте `brew install ffmpeg@7`
-  (живому декодеру нужны библиотеки 7.x) и либо добавьте
-  `/opt/homebrew/opt/ffmpeg@7/bin` в `PATH`, либо дополнительно
-  `brew install ffmpeg` ради бинарника `ffmpeg`.
+* **macOS** — в комплект не входит. Поставьте `brew install ffmpeg@7`;
+  приложение само найдёт его в префиксе Homebrew (keg-only, `PATH` править
+  не нужно).
 
 ---
 
