@@ -15,8 +15,9 @@ namespace OpenIPC.Viewer.Video.Recording;
 // FFmpeg path resolution (first hit wins):
 //   1. Explicit override (constructor / appsettings "Recording:FfmpegPath")
 //   2. Per-RID bundled binary in runtimes/{rid}/native/ (win-x64 via
-//      fetch-ffmpeg.ps1, linux-x64 via fetch-ffmpeg-linux.sh; osx still TODO)
-//   3. "ffmpeg" — falls through to OS PATH lookup (apt/brew/PATH on *nix)
+//      fetch-ffmpeg.ps1, linux-x64 via fetch-ffmpeg-linux.sh)
+//   3. macOS: Homebrew ffmpeg@7 / ffmpeg at their fixed prefixes
+//   4. "ffmpeg" — falls through to OS PATH lookup (apt/PATH on *nix)
 public sealed class FfmpegSubprocessRecorder : IRecorder
 {
     private readonly ILoggerFactory _loggerFactory;
@@ -37,14 +38,5 @@ public sealed class FfmpegSubprocessRecorder : IRecorder
         return Task.FromResult<IRecordingSession>(session);
     }
 
-    private static string ResolveDefault()
-    {
-        var (rid, exe) = RuntimeIds.Current();
-        if (rid is not null)
-        {
-            var bundled = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", exe);
-            if (File.Exists(bundled)) return bundled;
-        }
-        return "ffmpeg";
-    }
+    private static string ResolveDefault() => RuntimeIds.ResolveFfmpegExe();
 }

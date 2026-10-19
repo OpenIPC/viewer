@@ -142,7 +142,10 @@ Live video needs ffmpeg. Resolution order: a bundled binary next to the app
 
 * **Windows** — bundled in the release archive. Nothing to install.
 * **Linux** — bundled in the release archive; or `sudo apt install ffmpeg`.
-* **macOS** — install via `brew install ffmpeg` (not bundled).
+* **macOS** — not bundled. Install `brew install ffmpeg@7` (the live
+  decoder needs the 7.x libraries) and either add
+  `/opt/homebrew/opt/ffmpeg@7/bin` to `PATH` or also `brew install ffmpeg`
+  for the `ffmpeg` binary.
 
 ---
 

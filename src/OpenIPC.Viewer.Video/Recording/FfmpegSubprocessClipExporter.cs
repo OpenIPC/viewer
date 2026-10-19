@@ -114,14 +114,5 @@ public sealed partial class FfmpegSubprocessClipExporter : IClipExporter
         progress?.Report(1.0);
     }
 
-    private static string ResolveDefault()
-    {
-        var (rid, exe) = RuntimeIds.Current();
-        if (rid is not null)
-        {
-            var bundled = Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", exe);
-            if (File.Exists(bundled)) return bundled;
-        }
-        return "ffmpeg";
-    }
+    private static string ResolveDefault() => RuntimeIds.ResolveFfmpegExe();
 }
