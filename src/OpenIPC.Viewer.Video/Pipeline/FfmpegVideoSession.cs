@@ -674,7 +674,10 @@ internal sealed class FfmpegVideoSession : IVideoSession
         ffmpeg.av_dict_set(opts, "max_delay", "200000", 0);          // 200ms reorder window
         ffmpeg.av_dict_set(opts, "buffer_size", "1048576", 0);
         ffmpeg.av_dict_set(opts, "reorder_queue_size", "0", 0);
-        ffmpeg.av_dict_set(opts, "fflags", "nobuffer", 0);
+        // No "fflags nobuffer": it throws away the packets read while
+        // avformat_find_stream_info probes, and some NVRs open every session
+        // with a keyframe that later frames keep referencing (POC 0). Without
+        // it neither software nor VideoToolbox can decode a frame (#94).
     }
 
     private static string BuildUrlWithCredentials(Uri uri, CameraCredentials? creds)
