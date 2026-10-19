@@ -45,6 +45,20 @@ strictly weaker than a real keyring.
 .app → *Open*. macOS remembers the choice after one confirm. Signing +
 notarization land in a later release-polish phase.
 
+**`FFmpeg native libraries failed to load for runtime osx-…`.** The app
+needs the FFmpeg **7.x** ABI (`libavcodec.61`). Homebrew's plain `ffmpeg`
+formula is newer (8.x+) and won't load — install `brew install ffmpeg@7`.
+It's keg-only, but the app looks under `/opt/homebrew/opt/ffmpeg@7/lib`
+(Apple Silicon) and `/usr/local/opt/ffmpeg@7/lib` (Intel) on its own, so
+no `DYLD_LIBRARY_PATH` is needed.
+
+**Camera connects but the tile stays black, log full of `vt decoder cb`
+/ `hardware accelerator failed to decode picture`.** VideoToolbox rejects
+HEVC frames whose reference picture is missing (typical when joining a
+smart-GOP stream mid-GOP). After ~2.5s of such errors with no frame the app
+switches that camera to software decode until restart; if it still stays
+black, attach the log to an issue.
+
 **Keychain prompt on every credential read.** Means the app's
 codesign identity changed between builds. Trust the keychain access
 permanently once and it goes away (or re-add the camera).

@@ -132,8 +132,12 @@ a later release.
   `/dev/dri/renderD128` and your user in the `render` (or `video`) group.
   Credentials use `secret-tool` against the GNOME/KDE keyring, with an AES-GCM
   file fallback if D-Bus is unavailable.
-- **macOS** — Homebrew FFmpeg (`brew install ffmpeg`). VideoToolbox HW decode
-  works on any Mac 12+. Credentials live in the Keychain via `security`.
+- **macOS** — Homebrew FFmpeg 7 (`brew install ffmpeg@7`). The app binds the
+  FFmpeg 7.x ABI (`libavcodec.61`), and Homebrew's plain `ffmpeg` formula is
+  newer than that, so it won't load. `ffmpeg@7` is keg-only; the app finds it
+  under the Homebrew prefix by itself, no `DYLD_LIBRARY_PATH` needed.
+  VideoToolbox HW decode works on any Mac 12+; a stream it can't decode falls
+  back to software. Credentials live in the Keychain via `security`.
 
 > **Validation caveat.** Linux / macOS / Android / iOS code paths build + link
 > in CI but aren't yet end-to-end tested on real devices for every commit.
@@ -178,7 +182,7 @@ Node the build still succeeds and the server runs API-only; pass
 Run the FFmpeg fetch script for your OS once — it downloads the bundled
 shared-build (`n7.1` ABI) from `BtbN/FFmpeg-Builds` into `runtimes/<rid>/native/`:
 `tools/fetch-ffmpeg.ps1` (Windows → `win-x64`) or `tools/fetch-ffmpeg-linux.sh`
-(Linux → `linux-x64`). macOS uses the system Homebrew FFmpeg (see
+(Linux → `linux-x64`). macOS uses Homebrew's `ffmpeg@7` (see
 [Runtime requirements](#runtime-requirements)).
 
 ### Android

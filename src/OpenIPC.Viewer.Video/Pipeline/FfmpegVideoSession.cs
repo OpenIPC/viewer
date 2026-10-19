@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -70,6 +71,18 @@ internal sealed class FfmpegVideoSession : IVideoSession
     // function pointer alive — FFmpeg invokes it via the AVCodecContext.
     private AVCodecContext_get_format? _getFormatDelegate;
     private AVPixelFormat _selectedHwPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
+
+    // How long HW decode may keep failing (send/receive/transfer errors, no
+    // frame out) before the session drops to software. Time-based, not a
+    // count: a 1 fps camera and a 30 fps one get the same grace for the next
+    // keyframe, and both switch well inside the reconnect watchdog's 5s
+    // no-frame window, which would otherwise restart HW from scratch.
+    private const long HwFallbackAfterMs = 2_500;
+    // Streams whose HW decode broke during this run. Static because every
+    // reconnect builds a new session; keyed without credentials. 2.5s of
+    // nothing but errors means HW can't handle this stream, not a blip.
+    private static readonly ConcurrentDictionary<string, byte> HwFailedStreams = new();
+    private string HwStreamKey => _options.RtspUri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.UriEscaped);
 
     // Snapshot of the most recently decoded frame, kept around for SnapshotAsync.
     private byte[]? _snapshotBgra;
@@ -197,6 +210,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
         var audioProbedNoTrack = false;
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         var hwActive = false;
+        var hwErrors = 0;
+        var lastFrameMs = 0L;
 
         try
         {
@@ -240,33 +255,17 @@ internal sealed class FfmpegVideoSession : IVideoSession
             if (codec == null)
                 throw new InvalidOperationException($"No decoder available for codec id {codecpar->codec_id}");
 
-            codecCtx = ffmpeg.avcodec_alloc_context3(codec);
-            ret = ffmpeg.avcodec_parameters_to_context(codecCtx, codecpar);
-            FfmpegError.ThrowIfError(ret, "avcodec_parameters_to_context");
-
-            // HW accel decision: pure policy in Resolve, native wiring inline.
-            // Any failure here logs and continues with software decode.
+            // HW accel decision: pure policy in Resolve, native wiring in
+            // OpenDecoder. Any failure there logs and continues with software
+            // decode. A stream that already broke the HW decoder in this run
+            // goes straight to software, so a reconnect doesn't repeat it.
             var resolved = HwAccelSelector.Resolve(_options.HwAccel, _hwFactory, _logger);
-            if (resolved != HwAccelHint.None)
-                hwActive = TryEnableHw(codecCtx, resolved, &hwDeviceCtx);
-
-            ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
-            if (ret < 0 && hwActive)
+            if (resolved != HwAccelHint.None && HwFailedStreams.ContainsKey(HwStreamKey))
             {
-                // HW open failed: tear down HW state and retry as software.
-                _logger.LogWarning("HW-accelerated avcodec_open2 failed: {Err}; retrying software", FfmpegError.Describe(ret));
-                TearDownHw(codecCtx, &hwDeviceCtx);
-                hwActive = false;
-                ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
+                _logger.LogInformation("HW decode skipped for {Host}: it failed on this stream earlier", _options.RtspUri.Host);
+                resolved = HwAccelHint.None;
             }
-            FfmpegError.ThrowIfError(ret, "avcodec_open2");
-
-            _width = codecCtx->width;
-            _height = codecCtx->height;
-            var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
-            _codecName = hwActive ? $"{baseName} ({resolved})" : baseName;
-            if (hwActive)
-                _logger.LogInformation("HW decode active: {Codec} via {Hint}", baseName, resolved);
+            hwActive = OpenDecoder(&codecCtx, &hwDeviceCtx, codecpar, codec, resolved);
 
             packet = ffmpeg.av_packet_alloc();
             frame = ffmpeg.av_frame_alloc();
@@ -274,6 +273,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
+            lastFrameMs = Environment.TickCount64;
 
             var ct = _cts!.Token;
             while (!ct.IsCancellationRequested)
@@ -285,6 +285,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 {
                     try { _decodeGate.Wait(ct); }
                     catch (OperationCanceledException) { break; }
+                    // Time parked isn't time HW spent failing.
+                    lastFrameMs = Environment.TickCount64;
                 }
 
                 // Lazily spin the audio decoder up/down to track SetAudioEnabled.
@@ -335,11 +337,30 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 // Demux-level byte count → video bitrate in MaybePublishTelemetry.
                 Interlocked.Add(ref _bytesSinceFpsTick, packet->size);
 
+                // The HW decoder can open fine and then reject every frame —
+                // VideoToolbox does this on HEVC when the stream is joined
+                // mid-GOP and a reference picture is missing (#94), where the
+                // software decoder would conceal and carry on. Swap to software
+                // once it has failed for HwFallbackAfterMs without a frame,
+                // instead of stalling into a reconnect loop.
+                var sinceFrameMs = Environment.TickCount64 - lastFrameMs;
+                if (hwActive && hwErrors > 0 && sinceFrameMs >= HwFallbackAfterMs)
+                {
+                    _logger.LogWarning("HW decode failed {Count} times over {Ms} ms on {Host}; switching to software",
+                        hwErrors, sinceFrameMs, _options.RtspUri.Host);
+                    HwFailedStreams.TryAdd(HwStreamKey, 0);
+                    ffmpeg.avcodec_free_context(&codecCtx);
+                    if (hwDeviceCtx != null) ffmpeg.av_buffer_unref(&hwDeviceCtx);
+                    hwActive = OpenDecoder(&codecCtx, &hwDeviceCtx, codecpar, codec, HwAccelHint.None);
+                    hwErrors = 0;
+                }
+
                 ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
                 ffmpeg.av_packet_unref(packet);
                 if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
                 {
                     _logger.LogWarning("avcodec_send_packet failed: {Err}", FfmpegError.Describe(ret));
+                    if (hwActive) hwErrors++;
                     continue;
                 }
 
@@ -351,6 +372,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
                     if (ret < 0)
                     {
                         _logger.LogWarning("avcodec_receive_frame failed: {Err}", FfmpegError.Describe(ret));
+                        if (hwActive) hwErrors++;
                         break;
                     }
 
@@ -361,11 +383,14 @@ internal sealed class FfmpegVideoSession : IVideoSession
                         if (transferRet < 0)
                         {
                             _logger.LogWarning("av_hwframe_transfer_data failed: {Err}", FfmpegError.Describe(transferRet));
+                            hwErrors++;
                             ffmpeg.av_frame_unref(frame);
                             continue;
                         }
                         presentable = swFrame;
                     }
+                    hwErrors = 0;
+                    lastFrameMs = Environment.TickCount64;
 
                     // Lazy sws init — the actual sw pixfmt is only known once
                     // the first frame arrives (matters for HW path where the
@@ -431,6 +456,38 @@ internal sealed class FfmpegVideoSession : IVideoSession
     // Dispose, or once the current call has overrun its budget.
     private unsafe int OnInterrupt(void* opaque) =>
         _abortIo || Environment.TickCount64 > Volatile.Read(ref _ioDeadlineMs) ? 1 : 0;
+
+    // Allocates and opens the video decoder into *codecCtx (assigned before
+    // anything can throw, so the caller's cleanup frees it). Returns whether
+    // HW decode ended up active; a failed HW open retries as software.
+    private unsafe bool OpenDecoder(AVCodecContext** codecCtx, AVBufferRef** hwDeviceCtx,
+        AVCodecParameters* codecpar, AVCodec* codec, HwAccelHint hint)
+    {
+        var ctx = *codecCtx = ffmpeg.avcodec_alloc_context3(codec);
+        var ret = ffmpeg.avcodec_parameters_to_context(ctx, codecpar);
+        FfmpegError.ThrowIfError(ret, "avcodec_parameters_to_context");
+
+        var hwActive = hint != HwAccelHint.None && TryEnableHw(ctx, hint, hwDeviceCtx);
+
+        ret = ffmpeg.avcodec_open2(ctx, codec, null);
+        if (ret < 0 && hwActive)
+        {
+            // HW open failed: tear down HW state and retry as software.
+            _logger.LogWarning("HW-accelerated avcodec_open2 failed: {Err}; retrying software", FfmpegError.Describe(ret));
+            TearDownHw(ctx, hwDeviceCtx);
+            hwActive = false;
+            ret = ffmpeg.avcodec_open2(ctx, codec, null);
+        }
+        FfmpegError.ThrowIfError(ret, "avcodec_open2");
+
+        _width = ctx->width;
+        _height = ctx->height;
+        var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
+        _codecName = hwActive ? $"{baseName} ({hint})" : baseName;
+        if (hwActive)
+            _logger.LogInformation("HW decode active: {Codec} via {Hint}", baseName, hint);
+        return hwActive;
+    }
 
     private unsafe bool TryEnableHw(AVCodecContext* ctx, HwAccelHint hint, AVBufferRef** outDeviceCtx)
     {
