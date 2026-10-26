@@ -20,8 +20,16 @@ internal static class OutlookMailSender
 {
     private const int OlMailItem = 0;
 
+    // One send at a time. The STA call can't be cancelled (the timeout only
+    // stops waiting), so a compose window or security prompt would otherwise
+    // pile up threads and dialogs with every new event.
+    private static readonly SemaphoreSlim InFlight = new(1, 1);
+
     public static Task SendAsync(OutgoingMail mail, CancellationToken ct)
     {
+        if (!InFlight.Wait(0))
+            throw new InvalidOperationException("A previous e-mail is still being handed to Outlook; this one was skipped");
+
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
@@ -38,13 +46,25 @@ internal static class OutlookMailSender
             {
                 tcs.TrySetException(ex);
             }
+            finally
+            {
+                InFlight.Release();
+            }
         })
         {
             IsBackground = true,
             Name = "outlook-send",
         };
         thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+        try
+        {
+            thread.Start();
+        }
+        catch
+        {
+            InFlight.Release();
+            throw;
+        }
         return tcs.Task.WaitAsync(ct);
     }
 

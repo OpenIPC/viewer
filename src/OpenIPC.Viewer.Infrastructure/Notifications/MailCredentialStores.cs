@@ -138,7 +138,7 @@ public sealed class SecretsStoreMailCredentialStore : IMailCredentialStore
 
     public SecretsStoreMailCredentialStore(ISecretsStore secrets) => _secrets = secrets;
 
-    public string StorageName => "system secure storage";
+    public string StorageName => "app secrets store";
 
     public async Task<MailCredential?> GetAsync(CancellationToken ct)
     {

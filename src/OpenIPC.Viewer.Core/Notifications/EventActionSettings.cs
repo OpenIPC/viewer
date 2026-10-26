@@ -15,6 +15,10 @@ public sealed record EventActionSettings(
     bool IgnoreQuietHours = true,
     // Per camera, separate from the on-screen notification cooldown.
     int CooldownSeconds = 60,
+    // Which events fire the actions — independent of the toast toggles and the
+    // notifications master switch.
+    bool OnMotion = true,
+    bool OnDetection = true,
 
     // Raw network signal: "tcp" (connect, send, close) or "udp" (one datagram).
     bool SignalEnabled = false,

@@ -109,9 +109,14 @@ public sealed class EventIngestionService : IAsyncDisposable
         }
 
         if (isNew)
-            _ = OpenAsync(state);
+        {
+            var opening = OpenAsync(state);
+            lock (_gate) state.OpenTask = opening;
+        }
         else if (update is not null)
+        {
             NotifyObservers(update);
+        }
     }
 
     private async Task OpenAsync(OpenEventState state)
@@ -166,6 +171,17 @@ public sealed class EventIngestionService : IAsyncDisposable
 
     private async Task FinalizeAsync(OpenEventState state)
     {
+        // The open must go out (and its row exist) before the close: a slow
+        // insert must not let subscribers see the close first and then a
+        // stale "open" for an episode that is already over.
+        Task? opening;
+        lock (_gate) opening = state.OpenTask;
+        if (opening is not null)
+        {
+            try { await opening.ConfigureAwait(false); }
+            catch { /* OpenAsync swallows its own errors */ }
+        }
+
         CameraEvent finalized;
         lock (_gate) finalized = Snapshot(state, endedAt: state.LastTickAt);
         try { await _repo.UpdateAsync(finalized, CancellationToken.None).ConfigureAwait(false); }
@@ -217,6 +233,8 @@ public sealed class EventIngestionService : IAsyncDisposable
         public bool Published { get; set; }
         // Tick time of the last publish, for the throttled progress updates.
         public DateTime LastPublishedTickAt { get; set; }
+        // The open publication in flight; the close waits for it.
+        public Task? OpenTask { get; set; }
         public Timer? QuietTimer { get; set; }
 
         public OpenEventState(EventId id, CameraId cam, DateTime started, string? source, EventKind kind)

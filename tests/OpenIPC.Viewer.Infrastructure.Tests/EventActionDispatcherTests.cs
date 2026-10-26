@@ -16,10 +16,10 @@ public sealed class EventActionDispatcherTests : IDisposable
     private readonly EventActionDispatcher _dispatcher =
         new(new NoCredentials(), NullLogger<EventActionDispatcher>.Instance);
 
-    private static EventActionContext Ctx() => new(
+    private static EventActionContext Ctx(string camera = "Gate") => new(
         new CameraEvent(EventId.New(), new CameraId(Guid.NewGuid()), EventKind.Detection, EventSeverity.Info,
             DateTime.UtcNow.AddSeconds(-2), null, "analytics", "person ×1", 0.91f, 1),
-        "Gate", "Object detected", DateTime.UtcNow);
+        camera, "Object detected", DateTime.UtcNow);
 
     [Fact]
     public async Task Tcp_SendsRenderedPayload()
@@ -149,6 +149,128 @@ public sealed class EventActionDispatcherTests : IDisposable
         }
     }
 
+    // A camera can name itself (auto-detect fills the name from the device), so
+    // its name must not be able to break out of the argument into cmd.exe.
+    [SkippableFact]
+    public async Task Program_HostileCameraName_CannotRunCommands()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "batch files are Windows-only");
+        var dir = Directory.CreateTempSubdirectory("openipc-action-");
+        try
+        {
+            var output = Path.Combine(dir.FullName, "out.txt");
+            var marker = Path.Combine(dir.FullName, "pwned.txt");
+            var script = Path.Combine(dir.FullName, "hook.bat");
+            await File.WriteAllTextAsync(script, $"@echo %~1> \"{output}\"\r\n");
+
+            var hostile = $"x\" & echo pwned> \"{marker}\" & \"";
+            var s = new EventActionSettings(ProgramEnabled: true, ProgramPath: script, ProgramArguments: "\"{camera}\" {kind}");
+            await _dispatcher.TestAsync(EventActionChannel.Program, Ctx(camera: hostile), s, CancellationToken.None);
+
+            for (var i = 0; i < 50 && !File.Exists(output); i++) await Task.Delay(100);
+            await Task.Delay(300);
+            Assert.False(File.Exists(marker), "the camera name ran a command");
+            var echoed = (await File.ReadAllTextAsync(output)).Trim();
+            Assert.Contains("echo pwned", echoed);   // arrived as data, metacharacters stripped
+            Assert.DoesNotContain("&", echoed);
+        }
+        finally
+        {
+            try { dir.Delete(recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [SkippableFact]
+    public async Task Program_UnsupportedExtension_IsRefused()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "the extension allow-list is Windows-only");
+        var dir = Directory.CreateTempSubdirectory("openipc-action-");
+        try
+        {
+            var script = Path.Combine(dir.FullName, "hook.vbs");
+            await File.WriteAllTextAsync(script, "' nothing");
+            var s = new EventActionSettings(ProgramEnabled: true, ProgramPath: script);
+            await Assert.ThrowsAsync<NotSupportedException>(() =>
+                _dispatcher.TestAsync(EventActionChannel.Program, Ctx(), s, CancellationToken.None));
+        }
+        finally
+        {
+            try { dir.Delete(recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public async Task Tcp_EventDataCannotInjectBytes()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var received = ReadAllAsync(listener);
+
+        var s = new EventActionSettings(SignalEnabled: true, SignalHost: "127.0.0.1", SignalPort: port,
+            SignalPayload: "ALARM {camera}\\r\\n");
+        await _dispatcher.TestAsync(EventActionChannel.Signal, Ctx(camera: "Gate\r\nDISARM\\x00"), s, CancellationToken.None);
+
+        Assert.Equal("ALARM GateDISARM\\x00\r\n", Encoding.UTF8.GetString(await received.WaitAsync(TimeSpan.FromSeconds(5))));
+    }
+
+    [Fact]
+    public async Task Hex_WithPlaceholder_Throws()
+    {
+        var s = new EventActionSettings(SignalEnabled: true, SignalHost: "127.0.0.1", SignalPort: 9,
+            SignalPayload: "hex: A0 {objects}");
+        await Assert.ThrowsAsync<FormatException>(() =>
+            _dispatcher.TestAsync(EventActionChannel.Signal, Ctx(), s, CancellationToken.None));
+    }
+
+    // "auto" + a stored login on a server that offers no STARTTLS (or had the
+    // offer stripped on the way) must fail instead of sending AUTH in clear text.
+    [Fact]
+    public async Task Smtp_AutoWithLogin_NeverAuthenticatesInPlainText()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var authSeen = false;
+        var server = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var reader = new StreamReader(stream, Encoding.ASCII);
+            var writer = new StreamWriter(stream, Encoding.ASCII) { NewLine = "\r\n", AutoFlush = true };
+            await writer.WriteLineAsync("220 plain.local ESMTP");
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (line.StartsWith("AUTH", StringComparison.OrdinalIgnoreCase)) authSeen = true;
+                if (line.StartsWith("EHLO", StringComparison.OrdinalIgnoreCase))
+                {
+                    await writer.WriteLineAsync("250-plain.local");
+                    await writer.WriteLineAsync("250 AUTH PLAIN LOGIN"); // no STARTTLS
+                }
+                else if (line.StartsWith("QUIT", StringComparison.OrdinalIgnoreCase))
+                {
+                    await writer.WriteLineAsync("221 bye");
+                    break;
+                }
+                else
+                {
+                    await writer.WriteLineAsync("250 OK");
+                }
+            }
+        });
+
+        using var dispatcher = new EventActionDispatcher(
+            new FixedCredentials(new MailCredential("alerts@example.com", "secret")),
+            NullLogger<EventActionDispatcher>.Instance);
+        var s = new EventActionSettings(EmailEnabled: true, EmailTo: "guard@example.com",
+            SmtpHost: "127.0.0.1", SmtpPort: port, SmtpSecurity: "auto");
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            dispatcher.TestAsync(EventActionChannel.Email, Ctx(), s, CancellationToken.None));
+        await Task.WhenAny(server, Task.Delay(2000));
+        Assert.False(authSeen, "the password was offered over a plain connection");
+    }
+
     public void Dispose() => _dispatcher.Dispose();
 
     private static async Task<byte[]> ReadAllAsync(TcpListener listener)
@@ -189,6 +311,14 @@ public sealed class EventActionDispatcherTests : IDisposable
         var response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(response);
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    private sealed class FixedCredentials(MailCredential credential) : IMailCredentialStore
+    {
+        public string StorageName => "test";
+        public Task<MailCredential?> GetAsync(CancellationToken ct) => Task.FromResult<MailCredential?>(credential);
+        public Task SetAsync(MailCredential c, CancellationToken ct) => Task.CompletedTask;
+        public Task ClearAsync(CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class NoCredentials : IMailCredentialStore

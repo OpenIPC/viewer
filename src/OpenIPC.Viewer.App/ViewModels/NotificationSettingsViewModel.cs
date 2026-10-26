@@ -35,6 +35,7 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
         nameof(QuietHoursEndHour), nameof(MinConfidencePercent), nameof(MinDuration), nameof(MinObjects),
         nameof(UseSystemStyle), nameof(SoundMode), nameof(Volume),
         nameof(ActionsEnabled), nameof(ActionsIgnoreQuietHours), nameof(ActionsCooldown),
+        nameof(ActionsOnMotion), nameof(ActionsOnDetection),
         nameof(SignalEnabled), nameof(SignalProtocol), nameof(SignalHost), nameof(SignalPort), nameof(SignalPayload),
         nameof(HttpEnabled), nameof(HttpMethod), nameof(HttpUrl), nameof(HttpBody),
         nameof(EmailEnabled), nameof(EmailTransport), nameof(EmailTo), nameof(EmailSubject), nameof(EmailBody),
@@ -171,6 +172,7 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
     public bool ShowSoundSettings => IsSoundAvailable && !UseSystemStyle;
 
     [ObservableProperty] private string? _systemStatus;
+    [ObservableProperty] private string? _testStatus;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsCustomSound))]
@@ -190,6 +192,8 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _actionsEnabled;
     [ObservableProperty] private bool _actionsIgnoreQuietHours = true;
+    [ObservableProperty] private bool _actionsOnMotion = true;
+    [ObservableProperty] private bool _actionsOnDetection = true;
     [ObservableProperty] private IntOption? _actionsCooldown;
     public IReadOnlyList<IntOption> ActionCooldownOptions { get; }
 
@@ -277,30 +281,32 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
             ActionsEnabled = a.Enabled;
             ActionsIgnoreQuietHours = a.IgnoreQuietHours;
             ActionsCooldown = Pick(ActionCooldownOptions, a.CooldownSeconds);
+            ActionsOnMotion = a.OnMotion;
+            ActionsOnDetection = a.OnDetection;
             SignalEnabled = a.SignalEnabled;
             SignalProtocol = SignalProtocolOptions.FirstOrDefault(o => string.Equals(o.Value, a.SignalProtocol, StringComparison.OrdinalIgnoreCase))
                              ?? SignalProtocolOptions[0];
-            SignalHost = a.SignalHost;
+            SignalHost = a.SignalHost ?? "";
             SignalPort = a.SignalPort > 0 ? a.SignalPort : 9000;
-            SignalPayload = a.SignalPayload;
+            SignalPayload = a.SignalPayload ?? "";
             HttpEnabled = a.HttpEnabled;
             HttpMethod = HttpMethodOptions.FirstOrDefault(m => string.Equals(m, a.HttpMethod, StringComparison.OrdinalIgnoreCase)) ?? "POST";
-            HttpUrl = a.HttpUrl;
-            HttpBody = a.HttpBody;
+            HttpUrl = a.HttpUrl ?? "";
+            HttpBody = a.HttpBody ?? "";
             EmailEnabled = a.EmailEnabled;
             EmailTransport = EmailTransportOptions.FirstOrDefault(o => string.Equals(o.Value, a.EmailTransport, StringComparison.OrdinalIgnoreCase))
                              ?? EmailTransportOptions[0];
-            EmailTo = a.EmailTo;
-            EmailSubject = a.EmailSubject;
-            EmailBody = a.EmailBody;
-            SmtpHost = a.SmtpHost;
+            EmailTo = a.EmailTo ?? "";
+            EmailSubject = a.EmailSubject ?? "";
+            EmailBody = a.EmailBody ?? "";
+            SmtpHost = a.SmtpHost ?? "";
             SmtpPort = a.SmtpPort > 0 ? a.SmtpPort : 587;
             SmtpSecurity = SmtpSecurityOptions.FirstOrDefault(o => string.Equals(o.Value, a.SmtpSecurity, StringComparison.OrdinalIgnoreCase))
                            ?? SmtpSecurityOptions[0];
-            SmtpFrom = a.SmtpFrom;
+            SmtpFrom = a.SmtpFrom ?? "";
             ProgramEnabled = a.ProgramEnabled;
-            ProgramPath = a.ProgramPath;
-            ProgramArguments = a.ProgramArguments;
+            ProgramPath = a.ProgramPath ?? "";
+            ProgramArguments = a.ProgramArguments ?? "";
         }
         finally { _suppressSave = false; }
     }
@@ -309,21 +315,26 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
     // the Windows notification state (a WinRT call).
     public async Task LoadAsync()
     {
-        try
+        // A login/password typed but not saved yet (user left the page and came
+        // back) is kept, not overwritten from the store.
+        if (!_credentialsDirty)
         {
-            var cred = await _credentials.GetAsync(CancellationToken.None).ConfigureAwait(true);
-            _suppressSave = true;
             try
             {
-                SmtpUser = cred?.UserName ?? "";
-                SmtpPassword = cred?.Password ?? "";
+                var cred = await _credentials.GetAsync(CancellationToken.None).ConfigureAwait(true);
+                _suppressSave = true;
+                try
+                {
+                    SmtpUser = cred?.UserName ?? "";
+                    SmtpPassword = cred?.Password ?? "";
+                }
+                finally { _suppressSave = false; }
+                _credentialsDirty = false;
             }
-            finally { _suppressSave = false; }
-            _credentialsDirty = false;
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Could not read the SMTP login from {Store}", _credentials.StorageName);
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not read the SMTP login from {Store}", _credentials.StorageName);
+            }
         }
         await RefreshSystemStatusAsync().ConfigureAwait(true);
     }
@@ -343,26 +354,57 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
 
     private void ScheduleSave()
     {
-        _pendingSave?.Cancel();
+        CancelPendingSave();
         var cts = _pendingSave = new CancellationTokenSource();
         _ = SaveLaterAsync(cts.Token);
     }
 
-    private async Task SaveLaterAsync(CancellationToken ct)
+    private void CancelPendingSave()
     {
-        try { await Task.Delay(SaveDelay, ct).ConfigureAwait(true); }
-        catch (OperationCanceledException) { return; }
-        await SaveNowAsync().ConfigureAwait(true);
+        _pendingSave?.Cancel();
+        _pendingSave?.Dispose();
+        _pendingSave = null;
     }
 
-    // Writes a still-pending debounced edit now (page left mid-typing).
-    public Task FlushAsync() => _pendingSave is null ? Task.CompletedTask : SaveNowAsync();
+    private async Task SaveLaterAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(SaveDelay, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        await SaveQuietlyAsync().ConfigureAwait(true);
+    }
+
+    // Fire-and-forget saves (debounce, page detach) log instead of throwing:
+    // a locked or full disk must not take the app down.
+    private async Task SaveQuietlyAsync()
+    {
+        try
+        {
+            await SaveNowAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Saving notification settings failed");
+        }
+    }
+
+    // Page left: write a still-pending debounced edit, and a login/password that
+    // was typed but never saved with the button.
+    public async Task FlushAsync()
+    {
+        if (_pendingSave is not null) await SaveQuietlyAsync().ConfigureAwait(true);
+        if (_credentialsDirty) await SaveCredentialsAsync().ConfigureAwait(true);
+    }
 
     // Writes immediately (Test buttons need the current values on disk).
     public Task SaveNowAsync()
     {
-        _pendingSave?.Cancel();
-        _pendingSave = null;
+        CancelPendingSave();
 
         // Snapshot on the UI thread; the mutation may run on the save thread.
         var enabled = NotificationsEnabled;
@@ -407,40 +449,52 @@ public sealed partial class NotificationSettingsViewModel : ViewModelBase
         Enabled: ActionsEnabled,
         IgnoreQuietHours: ActionsIgnoreQuietHours,
         CooldownSeconds: ActionsCooldown?.Value ?? 60,
+        OnMotion: ActionsOnMotion,
+        OnDetection: ActionsOnDetection,
         SignalEnabled: SignalEnabled,
         SignalProtocol: SignalProtocol?.Value ?? EventActionSettings.ProtocolTcp,
-        SignalHost: SignalHost.Trim(),
+        SignalHost: (SignalHost ?? "").Trim(),
         SignalPort: SignalPort,
-        SignalPayload: SignalPayload,
+        SignalPayload: SignalPayload ?? "",
         HttpEnabled: HttpEnabled,
         HttpMethod: HttpMethod,
-        HttpUrl: HttpUrl.Trim(),
-        HttpBody: HttpBody,
+        HttpUrl: (HttpUrl ?? "").Trim(),
+        HttpBody: HttpBody ?? "",
         EmailEnabled: EmailEnabled,
         EmailTransport: EmailTransport?.Value ?? EventActionSettings.TransportSmtp,
-        EmailTo: EmailTo.Trim(),
-        EmailSubject: EmailSubject,
-        EmailBody: EmailBody,
-        SmtpHost: SmtpHost.Trim(),
+        EmailTo: (EmailTo ?? "").Trim(),
+        EmailSubject: EmailSubject ?? "",
+        EmailBody: EmailBody ?? "",
+        SmtpHost: (SmtpHost ?? "").Trim(),
         SmtpPort: SmtpPort,
         SmtpSecurity: SmtpSecurity?.Value ?? "auto",
-        SmtpFrom: SmtpFrom.Trim(),
+        SmtpFrom: (SmtpFrom ?? "").Trim(),
         ProgramEnabled: ProgramEnabled,
-        ProgramPath: ProgramPath.Trim(),
-        ProgramArguments: ProgramArguments);
+        ProgramPath: (ProgramPath ?? "").Trim(),
+        ProgramArguments: ProgramArguments ?? "");
 
     // --- commands: look & sound ----------------------------------------------
 
     [RelayCommand]
     private async Task TestNotificationAsync()
     {
-        await SaveNowAsync().ConfigureAwait(true);
-        // Straight at the sink — bypasses thresholds/cooldown on purpose, it's a preview.
-        _notifications.Show(new NotificationRequest(
-            Localizer.Instance["Settings.Notifications.TestTitle"],
-            Localizer.Instance["Settings.Notifications.TestBody"],
-            EventKind.Motion));
-        if (UseSystemStyle) await RefreshSystemStatusAsync().ConfigureAwait(true);
+        TestStatus = null;
+        try
+        {
+            await SaveNowAsync().ConfigureAwait(true);
+            // Straight at the sink — bypasses thresholds/cooldown on purpose, it's a preview.
+            _notifications.Show(new NotificationRequest(
+                Localizer.Instance["Settings.Notifications.TestTitle"],
+                Localizer.Instance["Settings.Notifications.TestBody"],
+                EventKind.Motion));
+            if (UseSystemStyle) await RefreshSystemStatusAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // An AsyncRelayCommand would rethrow on the UI thread and end the process.
+            _log.LogWarning(ex, "Test notification failed");
+            TestStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Actions.TestFailed"], ex.Message);
+        }
     }
 
     [RelayCommand]

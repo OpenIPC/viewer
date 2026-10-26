@@ -13,18 +13,25 @@ namespace OpenIPC.Viewer.Core.Notifications;
 // decides what actually surfaces — master switch, per-kind toggles, thresholds,
 // per-camera cooldown (anti-spam, their dashboard's lesson) and optional quiet
 // hours. Delivery goes to the native INotificationService and, separately, to
-// the external actions (IEventActionDispatcher). Lives in Core (no package
-// deps), takes IObservable so tests can feed a Subject instead of the real
-// ingestion service.
+// the external actions (IEventActionDispatcher), each with its own switches,
+// event types and cooldown. Lives in Core (no package deps), takes IObservable
+// so tests can feed a Subject instead of the real ingestion service.
 //
 // Each event episode is delivered at most once per channel. The ingestion
 // stream publishes an episode several times (open, peak rises, once-a-second
 // progress, close), so the coordinator tracks open episodes by EventId and
-// fires the first time one clears every threshold. Duration is measured to the
-// latest observed activity (LastSeenAt / EndedAt), never to "now": an episode
-// waiting out its quiet window after a single blip has not lasted N seconds.
+// fires a channel the first time the episode clears every threshold AND that
+// channel's gate (cooldown, quiet hours) lets it through — a channel held back
+// by its gate gets another chance on the episode's next publication. Duration
+// is measured to the latest observed activity (LastSeenAt / EndedAt), never to
+// "now": an episode waiting out its quiet window after a single blip has not
+// lasted N seconds.
 public sealed class NotificationCoordinator : IDisposable
 {
+    // Closed episodes remembered so a publication arriving late (after the
+    // close) can't open a fresh, never-closed episode and fire again.
+    private const int ClosedMemory = 256;
+
     private readonly IObservable<CameraEvent> _events;
     private readonly INotificationService _sink;
     private readonly IUserSettingsAccessor _settings;
@@ -32,12 +39,18 @@ public sealed class NotificationCoordinator : IDisposable
     private readonly Func<CameraId, CancellationToken, Task<string?>>? _cameraName;
     private readonly Func<DateTime> _now;
     private readonly object _gate = new();
+    // Last delivery per camera, in UTC (local wall-clock time jumps at DST).
     private readonly Dictionary<CameraId, DateTime> _lastShown = new();
     private readonly Dictionary<CameraId, DateTime> _lastAction = new();
     private readonly Dictionary<EventId, Episode> _episodes = new();
+    private readonly HashSet<EventId> _closed = new();
+    private readonly Queue<EventId> _closedOrder = new();
     private readonly CancellationTokenSource _cts = new();
 
     private IDisposable? _sub;
+
+    // A sink or dispatcher failure (logged by the host — Core has no logger).
+    public event EventHandler<Exception>? DeliveryFailed;
 
     public NotificationCoordinator(
         IObservable<CameraEvent> events,
@@ -62,7 +75,7 @@ public sealed class NotificationCoordinator : IDisposable
         _sub ??= _events.Subscribe(new Observer(this));
     }
 
-    // Pure decision for the on-screen channel at the moment of delivery: master
+    // Decision for the on-screen channel at the moment of delivery: master
     // switch, kind toggle, quiet hours and the per-camera cooldown. Thresholds are
     // checked separately (PassesThresholds). Does NOT mutate state.
     public bool ShouldNotify(CameraEvent e, DateTime nowLocal)
@@ -70,8 +83,8 @@ public sealed class NotificationCoordinator : IDisposable
         lock (_gate) return ShouldNotifyLocked(e, nowLocal);
     }
 
-    // Same idea for the external actions: their own switch and cooldown, and
-    // quiet hours only when the user asked actions to honour them.
+    // Same idea for the external actions: their own switch, event types and
+    // cooldown, and quiet hours only when the user asked actions to honour them.
     public bool ShouldRunActions(CameraEvent e, DateTime nowLocal)
     {
         lock (_gate) return ShouldRunActionsLocked(e, nowLocal);
@@ -123,18 +136,15 @@ public sealed class NotificationCoordinator : IDisposable
         return start < end ? hour >= start && hour < end : hour >= start || hour < end;
     }
 
-    private bool KindEnabled(EventKind kind) => kind switch
-    {
-        EventKind.Motion => _settings.NotifyOnMotion,
-        EventKind.Detection => _settings.NotifyOnDetection,
-        _ => false, // Connection / Snapshot not surfaced in v1
-    };
+    private bool InQuietHoursNow(DateTime nowLocal) =>
+        _settings.QuietHoursEnabled &&
+        InQuietHours(nowLocal.Hour, _settings.QuietHoursStartHour, _settings.QuietHoursEndHour);
 
-    private static bool CooldownElapsed(Dictionary<CameraId, DateTime> last, CameraId camera, DateTime now, int seconds)
+    private static bool CooldownElapsed(Dictionary<CameraId, DateTime> last, CameraId camera, DateTime nowUtc, int seconds)
     {
         if (!last.TryGetValue(camera, out var at)) return true;
         var cooldown = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return now - at >= cooldown;
+        return nowUtc - at >= cooldown;
     }
 
     private void OnEvent(CameraEvent e)
@@ -142,6 +152,7 @@ public sealed class NotificationCoordinator : IDisposable
         bool notify = false, act = false;
         lock (_gate)
         {
+            if (_closed.Contains(e.Id)) return;
             if (!_episodes.TryGetValue(e.Id, out var ep))
             {
                 ep = new Episode();
@@ -149,14 +160,27 @@ public sealed class NotificationCoordinator : IDisposable
             }
             Evaluate(ep, e, out notify, out act);
             if (e.EndedAt is not null)
+            {
                 _episodes.Remove(e.Id);
+                RememberClosed(e.Id);
+            }
         }
 
         if (notify || act)
             _ = DeliverAsync(e, notify, act);
     }
 
-    // Caller holds _gate. Decides which channels fire for this publication.
+    private void RememberClosed(EventId id)
+    {
+        if (!_closed.Add(id)) return;
+        _closedOrder.Enqueue(id);
+        if (_closedOrder.Count > ClosedMemory)
+            _closed.Remove(_closedOrder.Dequeue());
+    }
+
+    // Caller holds _gate. A channel is marked done only when it fires now; one
+    // held back by its cooldown or quiet hours stays eligible for the episode's
+    // next publication (ongoing activity is re-published about once a second).
     private void Evaluate(Episode ep, CameraEvent e, out bool notify, out bool act)
     {
         notify = act = false;
@@ -164,77 +188,94 @@ public sealed class NotificationCoordinator : IDisposable
         if (PassesThresholds(e) != ThresholdResult.Pass) return;
 
         var nowLocal = _now();
-        if (!ep.NotifyDone)
+        var nowUtc = nowLocal.ToUniversalTime();
+        if (!ep.NotifyDone && ShouldNotifyLocked(e, nowLocal))
         {
             ep.NotifyDone = true;
-            if (ShouldNotifyLocked(e, nowLocal))
-            {
-                _lastShown[e.CameraId] = nowLocal;
-                notify = true;
-            }
+            _lastShown[e.CameraId] = nowUtc;
+            notify = true;
         }
-        if (!ep.ActionsDone)
+        if (!ep.ActionsDone && ShouldRunActionsLocked(e, nowLocal))
         {
             ep.ActionsDone = true;
-            if (ShouldRunActionsLocked(e, nowLocal))
-            {
-                _lastAction[e.CameraId] = nowLocal;
-                act = true;
-            }
+            _lastAction[e.CameraId] = nowUtc;
+            act = true;
         }
     }
 
     // Caller holds _gate (the cooldown maps are guarded by it).
     private bool ShouldNotifyLocked(CameraEvent e, DateTime nowLocal)
     {
-        if (!_settings.NotificationsEnabled || !_sink.IsAvailable || !KindEnabled(e.Kind)) return false;
-        if (_settings.QuietHoursEnabled &&
-            InQuietHours(nowLocal.Hour, _settings.QuietHoursStartHour, _settings.QuietHoursEndHour))
-            return false;
-        return CooldownElapsed(_lastShown, e.CameraId, nowLocal, _settings.NotificationCooldownSeconds);
+        if (!_settings.NotificationsEnabled || !_sink.IsAvailable) return false;
+        var kindOn = e.Kind switch
+        {
+            EventKind.Motion => _settings.NotifyOnMotion,
+            EventKind.Detection => _settings.NotifyOnDetection,
+            _ => false, // Connection / Snapshot not surfaced in v1
+        };
+        if (!kindOn || InQuietHoursNow(nowLocal)) return false;
+        return CooldownElapsed(_lastShown, e.CameraId, nowLocal.ToUniversalTime(), _settings.NotificationCooldownSeconds);
     }
 
     private bool ShouldRunActionsLocked(CameraEvent e, DateTime nowLocal)
     {
         if (_actions is null) return false;
         var a = _settings.EventActions ?? EventActionSettings.Default;
-        if (!a.Enabled || !a.AnyChannelEnabled || !KindEnabled(e.Kind)) return false;
-        if (!a.IgnoreQuietHours && _settings.QuietHoursEnabled &&
-            InQuietHours(nowLocal.Hour, _settings.QuietHoursStartHour, _settings.QuietHoursEndHour))
-            return false;
-        return CooldownElapsed(_lastAction, e.CameraId, nowLocal, a.CooldownSeconds);
+        if (!a.Enabled || !a.AnyChannelEnabled) return false;
+        var kindOn = e.Kind switch
+        {
+            EventKind.Motion => a.OnMotion,
+            EventKind.Detection => a.OnDetection,
+            _ => false,
+        };
+        if (!kindOn || (!a.IgnoreQuietHours && InQuietHoursNow(nowLocal))) return false;
+        return CooldownElapsed(_lastAction, e.CameraId, nowLocal.ToUniversalTime(), a.CooldownSeconds);
     }
 
+    // The toast and the actions are delivered independently: a throwing sink
+    // must not cost the alarm its webhook / e-mail, and vice versa.
     private async Task DeliverAsync(CameraEvent e, bool notify, bool act)
     {
-        try
+        string? name = null;
+        if (_cameraName is not null)
         {
-            string? name = null;
-            if (_cameraName is not null)
-            {
-                try { name = await _cameraName(e.CameraId, _cts.Token).ConfigureAwait(false); }
-                catch (Exception) { /* fall back to the id */ }
-            }
-            var cameraName = string.IsNullOrWhiteSpace(name) ? e.CameraId.ToString() : name!;
-            var title = TitleFor(e.Kind);
+            try { name = await _cameraName(e.CameraId, _cts.Token).ConfigureAwait(false); }
+            catch (Exception) { /* fall back to the id */ }
+        }
+        var hasName = !string.IsNullOrWhiteSpace(name);
+        var title = TitleFor(e.Kind);
 
-            if (notify)
+        if (notify)
+        {
+            try
             {
-                var hasName = !string.IsNullOrWhiteSpace(name);
                 _sink.Show(new NotificationRequest(title, Describe(e, hasName ? name : null), e.Kind, e.CameraId));
             }
-
-            if (act && _actions is not null)
+            catch (Exception ex)
             {
-                var ctx = new EventActionContext(e, cameraName, title, _now().ToUniversalTime());
+                RaiseFailed(ex);
+            }
+        }
+
+        if (act && _actions is not null)
+        {
+            try
+            {
+                var ctx = new EventActionContext(e, hasName ? name! : e.CameraId.ToString(), title, _now().ToUniversalTime());
                 await _actions.DispatchAsync(ctx, _settings.EventActions ?? EventActionSettings.Default, _cts.Token)
                     .ConfigureAwait(false);
             }
+            catch (Exception ex)
+            {
+                RaiseFailed(ex);
+            }
         }
-        catch (Exception)
-        {
-            // A sink or dispatcher must never take the event stream down.
-        }
+    }
+
+    private void RaiseFailed(Exception ex)
+    {
+        try { DeliveryFailed?.Invoke(this, ex); }
+        catch (Exception) { /* a logging handler must not throw back here */ }
     }
 
     public static string TitleFor(EventKind kind) =>

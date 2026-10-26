@@ -14,6 +14,33 @@ public static class SignalPayload
 {
     public const string HexPrefix = "hex:";
 
+    // Builds the payload from the user's TEMPLATE: escapes are decoded in the
+    // template's own text only, and substituted event data goes in as plain
+    // UTF-8 with control characters removed — a camera named "Gate\r\nDISARM"
+    // or one containing \x00 can't inject bytes into a panel or PLC stream.
+    // Placeholders are refused in hex mode (their values aren't hex).
+    public static byte[] Build(string? template, EventActionContext ctx)
+    {
+        if (string.IsNullOrEmpty(template)) return Array.Empty<byte>();
+        if (template!.StartsWith(HexPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            if (EventActionTemplate.HasPlaceholders(template))
+                throw new FormatException("Placeholders can't be used in a hex: payload");
+            return ParseHex(template.Substring(HexPrefix.Length));
+        }
+
+        var output = new MemoryStream(template.Length + 32);
+        foreach (var seg in EventActionTemplate.Parse(template))
+        {
+            var bytes = seg.IsPlaceholder
+                ? Encoding.UTF8.GetBytes(EventActionTemplate.StripControlChars(EventActionTemplate.Resolve(seg.Text, ctx)))
+                : Unescape(seg.Text);
+            output.Write(bytes, 0, bytes.Length);
+        }
+        return output.ToArray();
+    }
+
+    // A literal payload (no placeholders) to bytes.
     public static byte[] Encode(string payload)
     {
         if (string.IsNullOrEmpty(payload)) return Array.Empty<byte>();

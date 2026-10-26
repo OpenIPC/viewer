@@ -11,9 +11,14 @@ namespace OpenIPC.Viewer.Core.Notifications;
 // sound file.
 public sealed class PcmClip
 {
+    // Real audio stays within these; a corrupt header outside them would
+    // overflow BytesPerSecond and stall the player's pacing loop.
+    public const int MinSampleRate = 1000;
+    public const int MaxSampleRate = 384000;
+
     public PcmClip(byte[] pcm16, int sampleRate, int channels)
     {
-        if (sampleRate <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRate));
+        if (sampleRate is < MinSampleRate or > MaxSampleRate) throw new ArgumentOutOfRangeException(nameof(sampleRate));
         if (channels is < 1 or > 2) throw new ArgumentOutOfRangeException(nameof(channels));
         Pcm16 = pcm16 ?? throw new ArgumentNullException(nameof(pcm16));
         SampleRate = sampleRate;
@@ -77,23 +82,28 @@ public static class WavCodec
     private const ushort FormatFloat = 3;
     private const ushort FormatExtensible = 0xFFFE;
 
-    public static PcmClip Read(Stream stream)
+    // maxLength bounds what is read and converted: only that much of the data
+    // chunk is ever loaded, so picking an hour-long (or > 2 GB) WAV can't
+    // exhaust memory. Anything malformed or unsupported → InvalidDataException.
+    public static PcmClip Read(Stream stream, TimeSpan? maxLength = null)
     {
         using var r = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
-        if (ReadTag(r) != "RIFF") throw new InvalidDataException("Not a RIFF file");
+        if (stream.Length < 12 || ReadTag(r) != "RIFF") throw new InvalidDataException("Not a RIFF file");
         r.ReadUInt32();
         if (ReadTag(r) != "WAVE") throw new InvalidDataException("Not a WAVE file");
 
         ushort format = 0, channels = 0, bits = 0;
         uint rate = 0;
-        byte[]? data = null;
+        long dataOffset = -1, dataSize = 0;
 
+        // Scan the chunk list first; the data chunk is only located here and read
+        // after the format is known (it may in theory precede "fmt ").
         while (stream.Position + 8 <= stream.Length)
         {
             var tag = ReadTag(r);
             var size = r.ReadUInt32();
             var next = stream.Position + size + (size & 1);
-            if (tag == "fmt ")
+            if (tag == "fmt " && size >= 16)
             {
                 format = r.ReadUInt16();
                 channels = r.ReadUInt16();
@@ -109,20 +119,33 @@ public static class WavCodec
                     format = r.ReadUInt16(); // first two bytes of the sub-format GUID
                 }
             }
-            else if (tag == "data")
+            else if (tag == "data" && dataOffset < 0)
             {
-                var available = (int)Math.Min(size, stream.Length - stream.Position);
-                data = r.ReadBytes(available);
+                dataOffset = stream.Position;
+                dataSize = Math.Min(size, stream.Length - stream.Position);
             }
             if (next > stream.Length) break;
             stream.Position = next;
         }
 
-        if (data is null || channels == 0 || rate == 0)
+        if (dataOffset < 0 || channels == 0 || rate == 0)
             throw new InvalidDataException("WAV file has no audio data");
         if (format != FormatPcm && format != FormatFloat)
             throw new InvalidDataException($"Unsupported WAV encoding ({format}); use PCM or float");
+        if (rate is < PcmClip.MinSampleRate or > PcmClip.MaxSampleRate)
+            throw new InvalidDataException($"Unsupported WAV sample rate ({rate} Hz)");
+        if (channels > 32 || bits is not (8 or 16 or 24 or 32) || (format == FormatFloat && bits != 32))
+            throw new InvalidDataException($"Unsupported WAV layout ({channels} ch, {bits} bit)");
 
+        var frameBytes = channels * (bits / 8);
+        var take = dataSize - dataSize % frameBytes;
+        if (maxLength is { } max)
+            take = Math.Min(take, (long)(max.TotalSeconds * rate) * frameBytes);
+        if (take > int.MaxValue - 64)
+            throw new InvalidDataException("WAV file is too large; pass a length limit");
+
+        stream.Position = dataOffset;
+        var data = r.ReadBytes((int)take);
         return ToClip(data, format, channels, bits, (int)rate);
     }
 

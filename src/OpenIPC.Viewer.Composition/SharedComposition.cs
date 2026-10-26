@@ -1,6 +1,7 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
 using OpenIPC.Viewer.Core.Events;
@@ -202,12 +203,17 @@ public static class SharedComposition
         services.AddSingleton<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>(sp =>
         {
             var cameras = sp.GetRequiredService<CameraDirectoryService>();
-            return new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
+            var coordinator = new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
                 sp.GetRequiredService<EventIngestionService>().Events,
                 sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.INotificationService>(),
                 sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>(),
                 actions: sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.IEventActionDispatcher>(),
                 cameraName: async (id, ct) => (await cameras.GetAsync(id, ct).ConfigureAwait(false))?.Name);
+            // Core has no logger; the coordinator reports sink/dispatcher failures.
+            var log = sp.GetRequiredService<ILoggerFactory>()
+                .CreateLogger<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>();
+            coordinator.DeliveryFailed += (_, ex) => log.LogWarning(ex, "Notification delivery failed");
+            return coordinator;
         });
 
         // UI services

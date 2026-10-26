@@ -6,6 +6,10 @@ using OpenIPC.Viewer.Core.Events;
 
 namespace OpenIPC.Viewer.Core.Notifications;
 
+// One piece of a parsed template: literal text, or (IsPlaceholder) the name
+// of a known placeholder such as "camera".
+public readonly record struct TemplateSegment(string Text, bool IsPlaceholder);
+
 // Everything an external action may want to say about one event. CameraName
 // falls back to the id when the camera is unknown (deleted mid-episode).
 public sealed record EventActionContext(
@@ -54,45 +58,139 @@ public static class EventActionTemplate
         "objects", "duration", "time", "timeUtc", "eventId",
     };
 
-    public static string Render(string template, EventActionContext ctx, Func<string, string>? encode = null)
+    private static readonly HashSet<string> Known = new(Placeholders, StringComparer.Ordinal);
+
+    public static string Render(string? template, EventActionContext ctx, Func<string, string>? encode = null)
     {
-        if (string.IsNullOrEmpty(template)) return template ?? "";
+        if (string.IsNullOrEmpty(template)) return "";
 
-        var sb = new StringBuilder(template.Length + 64);
-        var i = 0;
-        while (i < template.Length)
+        var sb = new StringBuilder(template!.Length + 64);
+        foreach (var seg in Parse(template))
         {
-            var open = template.IndexOf('{', i);
-            if (open < 0)
+            if (!seg.IsPlaceholder)
             {
-                sb.Append(template, i, template.Length - i);
-                break;
-            }
-            sb.Append(template, i, open - i);
-            var close = template.IndexOf('}', open + 1);
-            if (close < 0)
-            {
-                sb.Append(template, open, template.Length - open);
-                break;
-            }
-
-            var name = template.Substring(open + 1, close - open - 1);
-            var value = Resolve(name, ctx);
-            if (value is null)
-            {
-                // Not one of ours — emit the brace and keep scanning after it,
-                // so "{\"a\":\"{kind}\"}" still expands the inner {kind}.
-                sb.Append('{');
-                i = open + 1;
+                sb.Append(seg.Text);
                 continue;
             }
+            var value = Resolve(seg.Text, ctx);
             sb.Append(encode is null ? value : encode(value));
-            i = close + 1;
         }
         return sb.ToString();
     }
 
-    private static string? Resolve(string name, EventActionContext ctx)
+    // Splits a template into literal text and known {placeholders} (the
+    // segment's Text is then the placeholder name), so callers can treat the
+    // template's own text and the substituted event data differently — e.g.
+    // decode escapes only in the former. Unknown braces stay literal, so
+    // "{\"a\":\"{kind}\"}" still yields the inner {kind}.
+    public static IReadOnlyList<TemplateSegment> Parse(string? template)
+    {
+        var segments = new List<TemplateSegment>();
+        if (string.IsNullOrEmpty(template)) return segments;
+
+        var literal = new StringBuilder();
+        var i = 0;
+        while (i < template!.Length)
+        {
+            var open = template.IndexOf('{', i);
+            var close = open < 0 ? -1 : template.IndexOf('}', open + 1);
+            if (open < 0 || close < 0)
+            {
+                literal.Append(template, i, template.Length - i);
+                break;
+            }
+
+            literal.Append(template, i, open - i);
+            var name = template.Substring(open + 1, close - open - 1);
+            if (!Known.Contains(name))
+            {
+                literal.Append('{');
+                i = open + 1;
+                continue;
+            }
+
+            if (literal.Length > 0)
+            {
+                segments.Add(new TemplateSegment(literal.ToString(), false));
+                literal.Clear();
+            }
+            segments.Add(new TemplateSegment(name, true));
+            i = close + 1;
+        }
+        if (literal.Length > 0)
+            segments.Add(new TemplateSegment(literal.ToString(), false));
+        return segments;
+    }
+
+    public static bool HasPlaceholders(string? template)
+    {
+        foreach (var seg in Parse(template))
+            if (seg.IsPlaceholder) return true;
+        return false;
+    }
+
+    // Splits a program-argument template into arguments BEFORE placeholders are
+    // expanded: whitespace separates, "double quotes" group (and are dropped).
+    // Each argument is then rendered on its own and passed through
+    // ProcessStartInfo.ArgumentList, so a value with quotes or spaces in it can
+    // never turn into extra arguments.
+    public static IReadOnlyList<string> SplitArguments(string? template)
+    {
+        var args = new List<string>();
+        if (string.IsNullOrWhiteSpace(template)) return args;
+
+        var current = new StringBuilder();
+        var inQuotes = false;
+        var hasToken = false;
+        foreach (var ch in template!)
+        {
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+                hasToken = true; // "" is a real (empty) argument
+                continue;
+            }
+            if (!inQuotes && char.IsWhiteSpace(ch))
+            {
+                if (hasToken) args.Add(current.ToString());
+                current.Clear();
+                hasToken = false;
+                continue;
+            }
+            current.Append(ch);
+            hasToken = true;
+        }
+        if (hasToken) args.Add(current.ToString());
+        return args;
+    }
+
+    // Event data is plain text: control characters (line breaks, NUL…) are
+    // dropped before it goes into a signal payload or a program argument.
+    public static string StripControlChars(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value)
+            if (!char.IsControl(ch)) sb.Append(ch);
+        return sb.ToString();
+    }
+
+    // For .bat/.cmd targets: cmd.exe re-parses the whole command line — it
+    // expands %VAR% even inside quotes and ends quoting at the next ", after
+    // which & | < > ^ run commands. Those characters are dropped from event data.
+    public static string StripCmdMetacharacters(string value)
+    {
+        var clean = StripControlChars(value);
+        var sb = new StringBuilder(clean.Length);
+        foreach (var ch in clean)
+            if (ch is not ('"' or '%' or '&' or '|' or '<' or '>' or '^' or '!')) sb.Append(ch);
+        return sb.ToString();
+    }
+
+    public static string Resolve(string name, EventActionContext ctx) =>
+        ResolveKnown(name, ctx) ?? "";
+
+    private static string? ResolveKnown(string name, EventActionContext ctx)
     {
         var e = ctx.Event;
         switch (name)

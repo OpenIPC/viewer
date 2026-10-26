@@ -4,6 +4,7 @@
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SettingsPage"
              x:DataType="vm:SettingsPageViewModel">
 
@@ -65,6 +66,20 @@
       <Setter Property="Height" Value="14" />
       <Setter Property="Stroke" Value="{StaticResource TextTertiaryBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Notifications section: value pickers give way on phone widths
+         (b:Adaptive.CompactBelow on the section toggles .compact). -->
+    <Style Selector="ComboBox.field">
+      <Setter Property="MinWidth" Value="150" />
+    </Style>
+    <Style Selector="ComboBox.field-wide">
+      <Setter Property="MinWidth" Value="240" />
+    </Style>
+    <Style Selector="StackPanel.compact ComboBox.field">
+      <Setter Property="MinWidth" Value="110" />
+    </Style>
+    <Style Selector="StackPanel.compact ComboBox.field-wide">
+      <Setter Property="MinWidth" Value="150" />
     </Style>
     <Style Selector="Button.back-link">
       <Setter Property="Background" Value="Transparent" />
@@ -597,7 +612,8 @@
              still resolves against the page VM). -->
         <Panel IsVisible="{Binding IsNotifications}">
         <Panel DataContext="{Binding Notifications}">
-        <StackPanel Spacing="16" x:DataType="vm:NotificationSettingsViewModel">
+        <StackPanel Spacing="16" x:DataType="vm:NotificationSettingsViewModel"
+                    b:Adaptive.CompactBelow="560">
           <StackPanel Orientation="Horizontal" Spacing="12">
             <Path Classes="lucide section-icon" Data="{StaticResource IconBell}" />
             <TextBlock Classes="section-title"
@@ -624,20 +640,22 @@
                      Text="{Binding [Settings.Notify.Thresholds], Source={x:Static svc:Localizer.Instance}}" />
           <TextBlock Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
                      Text="{Binding [Settings.Notify.Thresholds.Note], Source={x:Static svc:Localizer.Instance}}" />
-          <Grid ColumnDefinitions="*,Auto,Auto">
-            <TextBlock Grid.Column="0" Classes="field-label"
+          <StackPanel Spacing="4">
+            <TextBlock Classes="field-label"
                        Text="{Binding [Settings.Notify.Confidence], Source={x:Static svc:Localizer.Instance}}" />
-            <Slider Grid.Column="1" Width="180" Minimum="0" Maximum="95"
-                    TickFrequency="5" IsSnapToTickEnabled="True"
-                    Value="{Binding MinConfidencePercent, Mode=TwoWay}" />
-            <TextBlock Grid.Column="2" MinWidth="70" Margin="12,0,0,0" VerticalAlignment="Center"
-                       Foreground="{StaticResource TextPrimaryBrush}"
-                       Text="{Binding MinConfidenceText}" />
-          </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+              <Slider Grid.Column="0" MaxWidth="360" Minimum="0" Maximum="95"
+                      TickFrequency="5" IsSnapToTickEnabled="True"
+                      Value="{Binding MinConfidencePercent, Mode=TwoWay}" />
+              <TextBlock Grid.Column="1" MinWidth="64" Margin="12,0,0,0" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Text="{Binding MinConfidenceText}" />
+            </Grid>
+          </StackPanel>
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Grid.Column="0" Classes="field-label"
                        Text="{Binding [Settings.Notify.Duration], Source={x:Static svc:Localizer.Instance}}" />
-            <ComboBox Grid.Column="1" MinWidth="140"
+            <ComboBox Grid.Column="1" Classes="field"
                       ItemsSource="{Binding DurationOptions}"
                       SelectedItem="{Binding MinDuration, Mode=TwoWay}"
                       DisplayMemberBinding="{Binding Display}" />
@@ -645,7 +663,7 @@
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Grid.Column="0" Classes="field-label"
                        Text="{Binding [Settings.Notify.Objects], Source={x:Static svc:Localizer.Instance}}" />
-            <ComboBox Grid.Column="1" MinWidth="140"
+            <ComboBox Grid.Column="1" Classes="field"
                       ItemsSource="{Binding ObjectOptions}"
                       SelectedItem="{Binding MinObjects, Mode=TwoWay}"
                       DisplayMemberBinding="{Binding Display}" />
@@ -653,7 +671,7 @@
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Grid.Column="0" Classes="field-label"
                        Text="{Binding [Settings.Notifications.Cooldown], Source={x:Static svc:Localizer.Instance}}" />
-            <ComboBox Grid.Column="1" MinWidth="140"
+            <ComboBox Grid.Column="1" Classes="field"
                       ItemsSource="{Binding CooldownOptions}"
                       SelectedItem="{Binding NotificationCooldownSeconds}" />
           </Grid>
@@ -704,21 +722,23 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Classes="field-label"
                            Text="{Binding [Settings.Notify.Sound], Source={x:Static svc:Localizer.Instance}}" />
-                <ComboBox Grid.Column="1" MinWidth="180"
+                <ComboBox Grid.Column="1" Classes="field"
                           ItemsSource="{Binding SoundModeOptions}"
                           SelectedItem="{Binding SoundMode, Mode=TwoWay}"
                           DisplayMemberBinding="{Binding Display}" />
               </Grid>
-              <Grid ColumnDefinitions="*,Auto,Auto">
-                <TextBlock Grid.Column="0" Classes="field-label"
+              <StackPanel Spacing="4">
+                <TextBlock Classes="field-label"
                            Text="{Binding [Settings.Notify.Volume], Source={x:Static svc:Localizer.Instance}}" />
-                <Slider Grid.Column="1" Width="180" Minimum="0" Maximum="100"
-                        TickFrequency="5" IsSnapToTickEnabled="True"
-                        Value="{Binding Volume, Mode=TwoWay}" />
-                <TextBlock Grid.Column="2" MinWidth="50" Margin="12,0,0,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           Text="{Binding VolumeText}" />
-              </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <Slider Grid.Column="0" MaxWidth="360" Minimum="0" Maximum="100"
+                          TickFrequency="5" IsSnapToTickEnabled="True"
+                          Value="{Binding Volume, Mode=TwoWay}" />
+                  <TextBlock Grid.Column="1" MinWidth="56" Margin="12,0,0,0" VerticalAlignment="Center"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             Text="{Binding VolumeText}" />
+                </Grid>
+              </StackPanel>
               <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                 <Button Classes="outlined"
                         Content="{Binding [Settings.Notify.Sound.Pick], Source={x:Static svc:Localizer.Instance}}"
@@ -743,6 +763,9 @@
                   Content="{Binding [Settings.Notifications.Test], Source={x:Static svc:Localizer.Instance}}"
                   Command="{Binding TestNotificationCommand}"
                   HorizontalAlignment="Left" />
+          <TextBlock Foreground="{StaticResource WarningBrush}" FontSize="{StaticResource FontSizeSm}"
+                     TextWrapping="Wrap" Text="{Binding TestStatus}"
+                     IsVisible="{Binding TestStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
           <!-- External actions -->
           <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
@@ -755,13 +778,23 @@
                     Foreground="{StaticResource TextPrimaryBrush}" />
 
           <StackPanel Spacing="14" IsEnabled="{Binding ActionsEnabled}">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.Actions.Types], Source={x:Static svc:Localizer.Instance}}" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
+              <CheckBox IsChecked="{Binding ActionsOnMotion}"
+                        Content="{Binding [Settings.Notifications.Motion], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+              <CheckBox IsChecked="{Binding ActionsOnDetection}"
+                        Content="{Binding [Settings.Notifications.Detection], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+            </WrapPanel>
             <CheckBox IsChecked="{Binding ActionsIgnoreQuietHours}"
                       Content="{Binding [Settings.Actions.IgnoreQuiet], Source={x:Static svc:Localizer.Instance}}"
                       Foreground="{StaticResource TextPrimaryBrush}" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Grid.Column="0" Classes="field-label"
                          Text="{Binding [Settings.Actions.Cooldown], Source={x:Static svc:Localizer.Instance}}" />
-              <ComboBox Grid.Column="1" MinWidth="140"
+              <ComboBox Grid.Column="1" Classes="field"
                         ItemsSource="{Binding ActionCooldownOptions}"
                         SelectedItem="{Binding ActionsCooldown, Mode=TwoWay}"
                         DisplayMemberBinding="{Binding Display}" />
@@ -799,13 +832,14 @@
                          TextWrapping="Wrap"
                          Text="{Binding [Settings.Actions.Signal.Hint], Source={x:Static svc:Localizer.Instance}}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <Button Classes="outlined"
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
                       Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
                       Command="{Binding TestSignalCommand}" />
-              <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+              <TextBlock TextWrapping="Wrap"
                          Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
-                         Text="{Binding SignalStatus}" />
+                         Text="{Binding SignalStatus}"
+                         IsVisible="{Binding SignalStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
 
             <!-- HTTP webhook -->
@@ -827,13 +861,14 @@
                        AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
                        FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <Button Classes="outlined"
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
                       Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
                       Command="{Binding TestHttpCommand}" />
-              <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+              <TextBlock TextWrapping="Wrap"
                          Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
-                         Text="{Binding HttpStatus}" />
+                         Text="{Binding HttpStatus}"
+                         IsVisible="{Binding HttpStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
 
             <!-- E-mail -->
@@ -845,7 +880,7 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Classes="field-label"
                            Text="{Binding [Settings.Actions.Email.Transport], Source={x:Static svc:Localizer.Instance}}" />
-                <ComboBox Grid.Column="1" MinWidth="240"
+                <ComboBox Grid.Column="1" Classes="field-wide"
                           ItemsSource="{Binding EmailTransportOptions}"
                           SelectedItem="{Binding EmailTransport, Mode=TwoWay}"
                           DisplayMemberBinding="{Binding Display}" />
@@ -868,7 +903,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Grid.Column="0" Classes="field-label"
                              Text="{Binding [Settings.Actions.Smtp.Security], Source={x:Static svc:Localizer.Instance}}" />
-                  <ComboBox Grid.Column="1" MinWidth="140"
+                  <ComboBox Grid.Column="1" Classes="field"
                             ItemsSource="{Binding SmtpSecurityOptions}"
                             SelectedItem="{Binding SmtpSecurity, Mode=TwoWay}"
                             DisplayMemberBinding="{Binding Display}" />
@@ -897,13 +932,14 @@
                          TextWrapping="Wrap" IsVisible="{Binding IsOutlook}"
                          Text="{Binding [Settings.Actions.Email.Outlook.Hint], Source={x:Static svc:Localizer.Instance}}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <Button Classes="outlined"
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
                       Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
                       Command="{Binding TestEmailCommand}" />
-              <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+              <TextBlock TextWrapping="Wrap"
                          Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
-                         Text="{Binding EmailStatus}" />
+                         Text="{Binding EmailStatus}"
+                         IsVisible="{Binding EmailStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
 
             <!-- Program / script -->
@@ -928,13 +964,14 @@
                            TextWrapping="Wrap"
                            Text="{Binding [Settings.Actions.Program.Hint], Source={x:Static svc:Localizer.Instance}}" />
               </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Classes="outlined"
+              <StackPanel Spacing="6">
+                <Button Classes="outlined" HorizontalAlignment="Left"
                         Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
                         Command="{Binding TestProgramCommand}" />
-                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                <TextBlock TextWrapping="Wrap"
                            Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
-                           Text="{Binding ProgramStatus}" />
+                           Text="{Binding ProgramStatus}"
+                           IsVisible="{Binding ProgramStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
             </StackPanel>
           </StackPanel>

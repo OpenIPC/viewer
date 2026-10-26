@@ -348,7 +348,16 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private void Persist()
     {
         if (_suppressSave) return;
-        var next = _settings.Current with
+        // Functional update: applied to the LATEST settings inside the save gate,
+        // so it can't overwrite a notification-section save that is still in
+        // flight with a stale snapshot. Fire-and-forget (binding setters are
+        // synchronous), as before.
+        _ = _settings.UpdateAsync(ApplyPageFields, CancellationToken.None);
+    }
+
+    // This page's fields over s; every other field (notifications, window
+    // geometry, …) is left as it is in s.
+    private UserSettings ApplyPageFields(UserSettings s) => s with
         {
             ShowTelemetryOverlay = ShowTelemetryOverlay,
             VerboseLogging = VerboseLogging,
@@ -367,7 +376,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             SingleInstance = SingleInstance,
             StartupPage = StartPage?.Value ?? "library",
             // Null until the layout list has loaded — keep the saved choice.
-            StartupLayoutId = StartupLayout?.Id ?? _settings.Current.StartupLayoutId,
+            StartupLayoutId = StartupLayout?.Id ?? s.StartupLayoutId,
             SshStrictHostKey = SshStrictHostKey,
             SshDefaultPort = SshDefaultPort,
             SshTerminalFontSize = SshTerminalFontSize,
@@ -382,10 +391,6 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             ConfigSyncPath = ConfigSyncPath,
             ConfigSyncIncludeCredentials = ConfigSyncIncludeCredentials,
         };
-        // Fire-and-forget; binding setters are synchronous and any save
-        // error is logged inside UpdateAsync.
-        _ = _settings.UpdateAsync(next, CancellationToken.None);
-    }
 
     // Layouts can be added/renamed on the Live page at any time, so the picker
     // is rebuilt each time the settings page is shown.

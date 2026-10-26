@@ -22,8 +22,16 @@ internal static class MapiMailSender
     private const uint MapiTo = 1;
     private const uint SuccessSuccess = 0;
 
+    // One send at a time. The STA call can't be cancelled (the timeout only
+    // stops waiting), so a compose window or security prompt would otherwise
+    // pile up threads and dialogs with every new event.
+    private static readonly SemaphoreSlim InFlight = new(1, 1);
+
     public static Task SendAsync(OutgoingMail mail, CancellationToken ct)
     {
+        if (!InFlight.Wait(0))
+            throw new InvalidOperationException("A previous e-mail is still being handed to the default mail client; this one was skipped");
+
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
@@ -36,13 +44,25 @@ internal static class MapiMailSender
             {
                 tcs.TrySetException(ex);
             }
+            finally
+            {
+                InFlight.Release();
+            }
         })
         {
             IsBackground = true,
             Name = "mapi-send",
         };
         thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+        try
+        {
+            thread.Start();
+        }
+        catch
+        {
+            InFlight.Release();
+            throw;
+        }
         // The MAPI call itself can't be cancelled; ct only stops the wait.
         return tcs.Task.WaitAsync(ct);
     }

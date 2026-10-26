@@ -70,9 +70,11 @@ Built with .NET 9 / 10 and Avalonia 12.
   Desktop: the app's own toast with a built-in or custom sound and volume, or
   native Windows notifications managed in Windows Settings.
 - **External actions** — react to an event outside the app: a TCP/UDP signal
-  (text or raw hex) to an alarm panel or relay, an HTTP webhook, an e-mail
-  (SMTP with the login kept in Windows Credential Manager, the default mail
-  client via MAPI, or Outlook), or a local program/script.
+  (text or raw hex) to an alarm panel or relay, an HTTP webhook, an e-mail or
+  a local program/script. E-mail goes over SMTP everywhere — the login is kept
+  in Windows Credential Manager on Windows and in the app's encrypted secrets
+  store elsewhere — and on Windows also via the default mail client (MAPI) or
+  classic Outlook.
 - **Desktop niceties** — tray icon with quick actions, optional
   close-to-tray, choice of start page (Library or Live) and startup layout,
   light/dark themes with accent colors.

@@ -94,7 +94,7 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
         if (string.IsNullOrWhiteSpace(s.SignalHost) || s.SignalPort is <= 0 or > 65535)
             throw new InvalidOperationException("Signal host and port (1–65535) are required");
 
-        var payload = SignalPayload.Encode(EventActionTemplate.Render(s.SignalPayload, context));
+        var payload = SignalPayload.Build(s.SignalPayload, context);
         var host = s.SignalHost.Trim();
 
         if (string.Equals(s.SignalProtocol, EventActionSettings.ProtocolUdp, StringComparison.OrdinalIgnoreCase))
@@ -124,8 +124,9 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
     private async Task SendHttpAsync(EventActionContext context, EventActionSettings s, CancellationToken ct)
     {
         var url = EventActionTemplate.Render(s.HttpUrl.Trim(), context, Uri.EscapeDataString);
+        // The URL often carries a token — never put it into an error/log line.
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-            throw new InvalidOperationException($"Not an http(s) URL: {url}");
+            throw new InvalidOperationException("The webhook URL is not a valid http(s) address");
 
         var method = (s.HttpMethod ?? "POST").Trim().ToUpperInvariant() switch
         {
@@ -179,50 +180,72 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
 
     // --- Program -----------------------------------------------------------
 
+    // Event data (camera name, summary…) is never pasted into a command line.
+    // The argument template is split into arguments first and each one is
+    // expanded on its own into ProcessStartInfo.ArgumentList, so a value can't
+    // become extra arguments. cmd.exe re-parses .bat/.cmd command lines (and
+    // expands %VAR%), so for those targets cmd metacharacters are also stripped
+    // from the event data — in arguments and in the OPENIPC_* variables alike.
+    // A camera's name may come from the device itself, so it is untrusted input.
     private static void StartProgram(EventActionContext context, EventActionSettings s)
     {
-        var path = Environment.ExpandEnvironmentVariables(s.ProgramPath.Trim().Trim('"'));
+        var path = Environment.ExpandEnvironmentVariables((s.ProgramPath ?? "").Trim().Trim('"'));
         if (!File.Exists(path))
             throw new FileNotFoundException("Program not found", path);
 
-        var args = EventActionTemplate.Render(s.ProgramArguments ?? "", context);
         var ext = Path.GetExtension(path).ToLowerInvariant();
+        var windows = OperatingSystem.IsWindows();
+        Func<string, string> clean = windows && ext is ".bat" or ".cmd"
+            ? EventActionTemplate.StripCmdMetacharacters
+            // Windows PowerShell's own command-line parser mishandles embedded quotes.
+            : ext == ".ps1"
+                ? v => EventActionTemplate.StripControlChars(v).Replace("\"", "")
+                : EventActionTemplate.StripControlChars;
 
         ProcessStartInfo psi;
         if (ext == ".ps1")
         {
-            // A script the user picked themselves; run it without the profile and
-            // without tripping over the machine's default execution policy.
-            psi = new ProcessStartInfo("powershell.exe",
-                $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{path}\" {args}");
+            // A script the user picked themselves: no profile, and on Windows not
+            // blocked by the machine's default execution policy.
+            psi = new ProcessStartInfo(windows ? "powershell.exe" : "pwsh");
+            psi.ArgumentList.Add("-NoProfile");
+            psi.ArgumentList.Add("-NonInteractive");
+            if (windows)
+            {
+                psi.ArgumentList.Add("-ExecutionPolicy");
+                psi.ArgumentList.Add("Bypass");
+            }
+            psi.ArgumentList.Add("-File");
+            psi.ArgumentList.Add(path);
         }
-        else if (ext is ".exe" or ".bat" or ".cmd" or ".com" || !OperatingSystem.IsWindows())
+        else if (!windows || ext is ".exe" or ".com" or ".bat" or ".cmd")
         {
-            psi = new ProcessStartInfo(path, args);
+            psi = new ProcessStartInfo(path);
         }
         else
         {
-            // .vbs, .py, … — let the shell pick the associated interpreter.
-            psi = new ProcessStartInfo(path, args) { UseShellExecute = true };
+            throw new NotSupportedException(
+                $"\"{ext}\" files can't be started directly — use .exe, .bat, .cmd or .ps1 (a .bat can call any other interpreter)");
         }
 
-        if (!psi.UseShellExecute)
-        {
-            psi.CreateNoWindow = true;
-            psi.WorkingDirectory = Path.GetDirectoryName(path) ?? "";
-            // The same facts as environment variables, so a script needn't parse
-            // its command line.
-            var e = context.Event;
-            psi.Environment["OPENIPC_EVENT_KIND"] = context.KindToken;
-            psi.Environment["OPENIPC_EVENT_TITLE"] = context.Title;
-            psi.Environment["OPENIPC_EVENT_ID"] = e.Id.ToString();
-            psi.Environment["OPENIPC_CAMERA"] = context.CameraName;
-            psi.Environment["OPENIPC_CAMERA_ID"] = e.CameraId.ToString();
-            psi.Environment["OPENIPC_SUMMARY"] = e.Summary ?? "";
-            psi.Environment["OPENIPC_CONFIDENCE"] = EventActionTemplate.Render("{confidence}", context);
-            psi.Environment["OPENIPC_OBJECTS"] = EventActionTemplate.Render("{objects}", context);
-            psi.Environment["OPENIPC_TIME_UTC"] = EventActionTemplate.Render("{timeUtc}", context);
-        }
+        foreach (var arg in EventActionTemplate.SplitArguments(s.ProgramArguments))
+            psi.ArgumentList.Add(EventActionTemplate.Render(arg, context, clean));
+
+        psi.UseShellExecute = false;
+        psi.CreateNoWindow = true;
+        psi.WorkingDirectory = Path.GetDirectoryName(path) ?? "";
+        // The same facts as environment variables, so a script needn't parse
+        // its command line.
+        var e = context.Event;
+        psi.Environment["OPENIPC_EVENT_KIND"] = context.KindToken;
+        psi.Environment["OPENIPC_EVENT_TITLE"] = clean(context.Title);
+        psi.Environment["OPENIPC_EVENT_ID"] = e.Id.ToString();
+        psi.Environment["OPENIPC_CAMERA"] = clean(context.CameraName);
+        psi.Environment["OPENIPC_CAMERA_ID"] = e.CameraId.ToString();
+        psi.Environment["OPENIPC_SUMMARY"] = clean(e.Summary ?? "");
+        psi.Environment["OPENIPC_CONFIDENCE"] = EventActionTemplate.Resolve("confidence", context);
+        psi.Environment["OPENIPC_OBJECTS"] = EventActionTemplate.Resolve("objects", context);
+        psi.Environment["OPENIPC_TIME_UTC"] = EventActionTemplate.Resolve("timeUtc", context);
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Could not start {path}");

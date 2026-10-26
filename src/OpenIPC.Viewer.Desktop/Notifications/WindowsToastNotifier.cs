@@ -90,17 +90,24 @@ public sealed unsafe class WindowsToastNotifier : ISystemNotificationSink, IDisp
             $"<text>{SecurityElement.Escape(request.Title)}</text>" +
             $"<text>{SecurityElement.Escape(request.Body)}</text>" +
             "</binding></visual></toast>";
-        _work.Add(() =>
+        try
         {
-            try
+            _work.Add(() =>
             {
-                ShowCore(xml);
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "Windows toast failed");
-            }
-        });
+                try
+                {
+                    ShowCore(xml);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Windows toast failed");
+                }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // Disposed (app shutting down) — nothing to show it with.
+        }
     }
 
     public void OpenSettings()

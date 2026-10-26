@@ -35,17 +35,18 @@ public sealed class NotificationSoundPlayer : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            // Cancel, don't dispose: the superseded run may still be waiting on
-            // its token's handle.
+            // Cancel only: the superseded run disposes its own source when it
+            // has finished with the token.
             _current?.Cancel();
             _current = cts = new CancellationTokenSource();
         }
         var pcm = clip.WithVolume(volume);
-        _ = Task.Run(() => Run(clip, pcm, cts.Token));
+        _ = Task.Run(() => Run(clip, pcm, cts));
     }
 
-    private void Run(PcmClip clip, byte[] pcm, CancellationToken ct)
+    private void Run(PcmClip clip, byte[] pcm, CancellationTokenSource cts)
     {
+        var ct = cts.Token;
         IAudioOutput? output;
         try
         {
@@ -92,6 +93,14 @@ public sealed class NotificationSoundPlayer : IDisposable
         {
             // A sound is a nicety — never let it take anything down.
         }
+        finally
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_current, cts)) _current = null;
+            }
+            cts.Dispose();
+        }
     }
 
     private static int Align(int bytes, int block) => Math.Max(block, bytes - bytes % block);
@@ -102,8 +111,7 @@ public sealed class NotificationSoundPlayer : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            _current?.Cancel();
-            _current?.Dispose();
+            _current?.Cancel(); // the running playback disposes it
             _current = null;
             try { _output?.Dispose(); } catch (Exception) { /* tearing down */ }
             _output = null;

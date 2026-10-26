@@ -90,7 +90,7 @@ public sealed class NotificationSoundService
                     return _custom;
             }
             using var stream = File.OpenRead(path);
-            var clip = WavCodec.Read(stream);
+            var clip = WavCodec.Read(stream, MaxCustomLength);
             lock (_gate)
             {
                 _custom = clip;
@@ -106,28 +106,38 @@ public sealed class NotificationSoundService
         }
     }
 
+    // The managed WAV reader, bounded to MaxCustomLength. Null when the file
+    // isn't a WAV it can read (then FFmpeg gets a go).
+    private PcmClip? TryReadWav(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return WavCodec.Read(stream, MaxCustomLength);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+        catch (EndOfStreamException)
+        {
+            return null;
+        }
+    }
+
     // Decodes the picked file (any format FFmpeg reads; WAV even without FFmpeg),
     // trims it to MaxCustomLength and stores it as AppDataDir/sounds/notification.wav.
     // Returns the stored path. Throws with a readable message on a bad file.
     public async Task<string> ImportAsync(string sourcePath, CancellationToken ct)
     {
-        PcmClip clip;
-        var isWav = string.Equals(Path.GetExtension(sourcePath), ".wav", StringComparison.OrdinalIgnoreCase);
-        if (isWav || _decoder is null)
+        // Off the UI thread: even a bounded read of a big file takes a moment.
+        var clip = await Task.Run(() => TryReadWav(sourcePath), ct).ConfigureAwait(false);
+        if (clip is null)
         {
-            try
-            {
-                using var stream = File.OpenRead(sourcePath);
-                clip = WavCodec.Read(stream);
-            }
-            catch (InvalidDataException) when (_decoder is not null)
-            {
-                // e.g. a compressed WAV (ADPCM/µ-law) — let FFmpeg try.
-                clip = await _decoder.DecodeAsync(sourcePath, MaxCustomLength, ct).ConfigureAwait(false);
-            }
-        }
-        else
-        {
+            if (_decoder is null)
+                throw new InvalidDataException("Only WAV files can be used on this device");
+            // Compressed audio, or a WAV encoding the managed reader doesn't do
+            // (ADPCM, µ-law…) — let FFmpeg decode it.
             clip = await _decoder.DecodeAsync(sourcePath, MaxCustomLength, ct).ConfigureAwait(false);
         }
         clip = clip.Truncate(MaxCustomLength);
