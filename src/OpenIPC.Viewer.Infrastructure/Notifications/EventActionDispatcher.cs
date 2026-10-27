@@ -183,9 +183,9 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
     // Event data (camera name, summary…) is never pasted into a command line.
     // The argument template is split into arguments first and each one is
     // expanded on its own into ProcessStartInfo.ArgumentList, so a value can't
-    // become extra arguments. cmd.exe re-parses .bat/.cmd command lines (and
-    // expands %VAR%), so for those targets cmd metacharacters are also stripped
-    // from the event data — in arguments and in the OPENIPC_* variables alike.
+    // become extra arguments. Shells and interpreters that re-parse their
+    // arguments (cmd.exe, .bat/.cmd, PowerShell, sh) get the extra rules in
+    // ProgramCommandLine — in arguments and in the OPENIPC_* variables alike.
     // A camera's name may come from the device itself, so it is untrusted input.
     private static void StartProgram(EventActionContext context, EventActionSettings s)
     {
@@ -195,12 +195,8 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
 
         var ext = Path.GetExtension(path).ToLowerInvariant();
         var windows = OperatingSystem.IsWindows();
-        Func<string, string> clean = windows && ext is ".bat" or ".cmd"
-            ? EventActionTemplate.StripCmdMetacharacters
-            // Windows PowerShell's own command-line parser mishandles embedded quotes.
-            : ext == ".ps1"
-                ? v => EventActionTemplate.StripControlChars(v).Replace("\"", "")
-                : EventActionTemplate.StripControlChars;
+        var clean = ProgramCommandLine.CleanerFor(path, windows);
+        var arguments = ProgramCommandLine.RenderArguments(path, s.ProgramArguments, context, windows);
 
         ProcessStartInfo psi;
         if (ext == ".ps1")
@@ -228,8 +224,8 @@ public sealed class EventActionDispatcher : IEventActionDispatcher, IDisposable
                 $"\"{ext}\" files can't be started directly — use .exe, .bat, .cmd or .ps1 (a .bat can call any other interpreter)");
         }
 
-        foreach (var arg in EventActionTemplate.SplitArguments(s.ProgramArguments))
-            psi.ArgumentList.Add(EventActionTemplate.Render(arg, context, clean));
+        foreach (var arg in arguments)
+            psi.ArgumentList.Add(arg);
 
         psi.UseShellExecute = false;
         psi.CreateNoWindow = true;
