@@ -36,6 +36,11 @@ public sealed class UserSettingsService : IUserSettingsAccessor
     public bool QuietHoursEnabled => Current.QuietHoursEnabled;
     public int QuietHoursStartHour => Current.QuietHoursStartHour;
     public int QuietHoursEndHour => Current.QuietHoursEndHour;
+    public int NotifyMinConfidencePercent => Current.NotifyMinConfidencePercent;
+    public int NotifyMinDurationSeconds => Current.NotifyMinDurationSeconds;
+    public int NotifyMinObjects => Current.NotifyMinObjects;
+    public OpenIPC.Viewer.Core.Notifications.EventActionSettings EventActions =>
+        Current.EventActions ?? OpenIPC.Viewer.Core.Notifications.EventActionSettings.Default;
     public OpenIPC.Viewer.Core.Analytics.AiAcceleration AiAcceleration =>
         string.Equals(Current.AiAcceleration, "force-cpu", StringComparison.OrdinalIgnoreCase)
             ? OpenIPC.Viewer.Core.Analytics.AiAcceleration.ForceCpu
@@ -68,6 +73,24 @@ public sealed class UserSettingsService : IUserSettingsAccessor
         try
         {
             Current = next;
+            await SaveAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    // Applies mutate to the LATEST settings inside the save gate, so two pages
+    // persisting different fields back-to-back can't overwrite each other with
+    // a stale snapshot (UpdateAsync(Current with …) reads Current before the gate).
+    public async Task UpdateAsync(Func<UserSettings, UserSettings> mutate, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            Current = mutate(Current);
             await SaveAsync(ct).ConfigureAwait(false);
         }
         finally

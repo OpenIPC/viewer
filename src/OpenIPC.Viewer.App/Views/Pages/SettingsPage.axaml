@@ -4,6 +4,7 @@
              xmlns:svc="using:OpenIPC.Viewer.App.Services"
              xmlns:conv="using:OpenIPC.Viewer.App.Converters"
              xmlns:controls="using:OpenIPC.Viewer.App.Controls"
+             xmlns:b="using:OpenIPC.Viewer.App.Behaviors"
              x:Class="OpenIPC.Viewer.App.Views.Pages.SettingsPage"
              x:DataType="vm:SettingsPageViewModel">
 
@@ -65,6 +66,20 @@
       <Setter Property="Height" Value="14" />
       <Setter Property="Stroke" Value="{StaticResource TextTertiaryBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Notifications section: value pickers give way on phone widths
+         (b:Adaptive.CompactBelow on the section toggles .compact). -->
+    <Style Selector="ComboBox.field">
+      <Setter Property="MinWidth" Value="150" />
+    </Style>
+    <Style Selector="ComboBox.field-wide">
+      <Setter Property="MinWidth" Value="240" />
+    </Style>
+    <Style Selector="StackPanel.compact ComboBox.field">
+      <Setter Property="MinWidth" Value="110" />
+    </Style>
+    <Style Selector="StackPanel.compact ComboBox.field-wide">
+      <Setter Property="MinWidth" Value="150" />
     </Style>
     <Style Selector="Button.back-link">
       <Setter Property="Background" Value="Transparent" />
@@ -169,6 +184,19 @@
                     Margin="0,0,12,0" />
               <TextBlock Grid.Column="1"
                          Text="{Binding [Settings.Advanced], Source={x:Static svc:Localizer.Instance}}"
+                         VerticalAlignment="Center" />
+              <Path Grid.Column="2" Classes="lucide tile-chevron"
+                    Data="{StaticResource IconChevronRight}"
+                    IsVisible="{Binding !IsWide}" />
+            </Grid>
+          </ListBoxItem>
+          <ListBoxItem>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Path Grid.Column="0" Classes="lucide tile-icon"
+                    Data="{StaticResource IconBell}"
+                    Margin="0,0,12,0" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding [Settings.Notifications.Section], Source={x:Static svc:Localizer.Instance}}"
                          VerticalAlignment="Center" />
               <Path Grid.Column="2" Classes="lucide tile-chevron"
                     Data="{StaticResource IconChevronRight}"
@@ -576,28 +604,78 @@
                      Text="{Binding ConfigSyncStatusText}"
                      IsVisible="{Binding ConfigSyncStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-          <!-- Notifications (Phase 19.3) -->
-          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
-          <TextBlock Classes="section-title"
-                     Text="{Binding [Settings.Notifications.Section], Source={x:Static svc:Localizer.Instance}}" />
+        </StackPanel>
+
+        <!-- Notifications (Phase 19.3): what fires, how it looks/sounds, external actions.
+             Visibility binds on the page VM; the inner panel switches to the
+             section's own VM (DataContext set on a middle element so its binding
+             still resolves against the page VM). -->
+        <Panel IsVisible="{Binding IsNotifications}">
+        <Panel DataContext="{Binding Notifications}">
+        <StackPanel Spacing="16" x:DataType="vm:NotificationSettingsViewModel"
+                    b:Adaptive.CompactBelow="560">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Path Classes="lucide section-icon" Data="{StaticResource IconBell}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Notifications.Section], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+
           <CheckBox IsChecked="{Binding NotificationsEnabled}"
                     Content="{Binding [Settings.Notifications.Enable], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+          <!-- Event types (apply to notifications and external actions) -->
+          <TextBlock Classes="field-label"
+                     Text="{Binding [Settings.Notify.Types], Source={x:Static svc:Localizer.Instance}}" />
           <CheckBox IsChecked="{Binding NotifyOnMotion}"
-                    IsEnabled="{Binding NotificationsEnabled}"
                     Content="{Binding [Settings.Notifications.Motion], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
           <CheckBox IsChecked="{Binding NotifyOnDetection}"
-                    IsEnabled="{Binding NotificationsEnabled}"
                     Content="{Binding [Settings.Notifications.Detection], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
-          <StackPanel Orientation="Horizontal" Spacing="8" IsEnabled="{Binding NotificationsEnabled}">
-            <TextBlock Text="{Binding [Settings.Notifications.Cooldown], Source={x:Static svc:Localizer.Instance}}"
-                       VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
-            <ComboBox ItemsSource="{Binding CooldownOptions}" SelectedItem="{Binding NotificationCooldownSeconds}" Width="90" />
+
+          <!-- Thresholds -->
+          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,4" />
+          <TextBlock Classes="section-title"
+                     Text="{Binding [Settings.Notify.Thresholds], Source={x:Static svc:Localizer.Instance}}" />
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                     Text="{Binding [Settings.Notify.Thresholds.Note], Source={x:Static svc:Localizer.Instance}}" />
+          <StackPanel Spacing="4">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.Notify.Confidence], Source={x:Static svc:Localizer.Instance}}" />
+            <Grid ColumnDefinitions="*,Auto">
+              <Slider Grid.Column="0" MaxWidth="360" Minimum="0" Maximum="95"
+                      TickFrequency="5" IsSnapToTickEnabled="True"
+                      Value="{Binding MinConfidencePercent, Mode=TwoWay}" />
+              <TextBlock Grid.Column="1" MinWidth="64" Margin="12,0,0,0" VerticalAlignment="Center"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         Text="{Binding MinConfidenceText}" />
+            </Grid>
           </StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Notify.Duration], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1" Classes="field"
+                      ItemsSource="{Binding DurationOptions}"
+                      SelectedItem="{Binding MinDuration, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}" />
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Notify.Objects], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1" Classes="field"
+                      ItemsSource="{Binding ObjectOptions}"
+                      SelectedItem="{Binding MinObjects, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Display}" />
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{Binding [Settings.Notifications.Cooldown], Source={x:Static svc:Localizer.Instance}}" />
+            <ComboBox Grid.Column="1" Classes="field"
+                      ItemsSource="{Binding CooldownOptions}"
+                      SelectedItem="{Binding NotificationCooldownSeconds}" />
+          </Grid>
           <CheckBox IsChecked="{Binding QuietHoursEnabled}"
-                    IsEnabled="{Binding NotificationsEnabled}"
                     Content="{Binding [Settings.Notifications.QuietHours], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
           <StackPanel Orientation="Horizontal" Spacing="8"
@@ -609,11 +687,297 @@
                        VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
             <ComboBox ItemsSource="{Binding HourOptions}" SelectedItem="{Binding QuietHoursEndHour}" Width="80" />
           </StackPanel>
+
+          <!-- Style: app toast + own sound, or native Windows toast -->
+          <StackPanel Spacing="12" IsVisible="{Binding IsDesktop}">
+            <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,4" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Notify.Style], Source={x:Static svc:Localizer.Instance}}" />
+            <StackPanel Spacing="6" IsVisible="{Binding IsSystemStyleSupported}">
+              <RadioButton GroupName="NotifyStyle"
+                           IsChecked="{Binding UseAppStyle, Mode=TwoWay}"
+                           Content="{Binding [Settings.Notify.Style.App], Source={x:Static svc:Localizer.Instance}}"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+              <RadioButton GroupName="NotifyStyle"
+                           IsChecked="{Binding UseSystemStyle, Mode=TwoWay}"
+                           Content="{Binding [Settings.Notify.Style.Windows], Source={x:Static svc:Localizer.Instance}}"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+            </StackPanel>
+
+            <!-- Windows style: everything else is configured in Windows Settings -->
+            <StackPanel Spacing="8" IsVisible="{Binding UseSystemStyle}">
+              <TextBlock Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                         Text="{Binding [Settings.Notify.Style.Windows.Note], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap"
+                         FontSize="{StaticResource FontSizeSm}"
+                         Text="{Binding SystemStatus}"
+                         IsVisible="{Binding SystemStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <Button Classes="outlined" HorizontalAlignment="Left"
+                      Content="{Binding [Settings.Notify.Style.OpenWindows], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding OpenSystemSettingsCommand}" />
+            </StackPanel>
+
+            <!-- App style: own sound -->
+            <StackPanel Spacing="10" IsVisible="{Binding ShowSoundSettings}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="field-label"
+                           Text="{Binding [Settings.Notify.Sound], Source={x:Static svc:Localizer.Instance}}" />
+                <ComboBox Grid.Column="1" Classes="field"
+                          ItemsSource="{Binding SoundModeOptions}"
+                          SelectedItem="{Binding SoundMode, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Display}" />
+              </Grid>
+              <StackPanel Spacing="4">
+                <TextBlock Classes="field-label"
+                           Text="{Binding [Settings.Notify.Volume], Source={x:Static svc:Localizer.Instance}}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <Slider Grid.Column="0" MaxWidth="360" Minimum="0" Maximum="100"
+                          TickFrequency="5" IsSnapToTickEnabled="True"
+                          Value="{Binding Volume, Mode=TwoWay}" />
+                  <TextBlock Grid.Column="1" MinWidth="56" Margin="12,0,0,0" VerticalAlignment="Center"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             Text="{Binding VolumeText}" />
+                </Grid>
+              </StackPanel>
+              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                <Button Classes="outlined"
+                        Content="{Binding [Settings.Notify.Sound.Pick], Source={x:Static svc:Localizer.Instance}}"
+                        Command="{Binding PickSoundCommand}" />
+                <Button Classes="outlined"
+                        Content="{Binding [Settings.Notify.Sound.Preview], Source={x:Static svc:Localizer.Instance}}"
+                        Command="{Binding PreviewSoundCommand}" />
+              </WrapPanel>
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap" IsVisible="{Binding IsCustomSound}"
+                         Text="{Binding CustomSoundName}" />
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap"
+                         Text="{Binding [Settings.Notify.Sound.Hint], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Foreground="{StaticResource WarningBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap" Text="{Binding SoundStatus}"
+                         IsVisible="{Binding SoundStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+          </StackPanel>
+
           <Button Classes="outlined"
                   Content="{Binding [Settings.Notifications.Test], Source={x:Static svc:Localizer.Instance}}"
                   Command="{Binding TestNotificationCommand}"
-                  HorizontalAlignment="Left" Margin="0,4,0,0" />
+                  HorizontalAlignment="Left" />
+          <TextBlock Foreground="{StaticResource WarningBrush}" FontSize="{StaticResource FontSizeSm}"
+                     TextWrapping="Wrap" Text="{Binding TestStatus}"
+                     IsVisible="{Binding TestStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <!-- External actions -->
+          <Border Background="{StaticResource BorderWeakBrush}" Height="1" Margin="0,8" />
+          <TextBlock Classes="section-title"
+                     Text="{Binding [Settings.Actions], Source={x:Static svc:Localizer.Instance}}" />
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                     Text="{Binding [Settings.Actions.Description], Source={x:Static svc:Localizer.Instance}}" />
+          <CheckBox IsChecked="{Binding ActionsEnabled}"
+                    Content="{Binding [Settings.Actions.Enable], Source={x:Static svc:Localizer.Instance}}"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+
+          <StackPanel Spacing="14" IsEnabled="{Binding ActionsEnabled}">
+            <TextBlock Classes="field-label"
+                       Text="{Binding [Settings.Actions.Types], Source={x:Static svc:Localizer.Instance}}" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
+              <CheckBox IsChecked="{Binding ActionsOnMotion}"
+                        Content="{Binding [Settings.Notifications.Motion], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+              <CheckBox IsChecked="{Binding ActionsOnDetection}"
+                        Content="{Binding [Settings.Notifications.Detection], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+            </WrapPanel>
+            <CheckBox IsChecked="{Binding ActionsIgnoreQuietHours}"
+                      Content="{Binding [Settings.Actions.IgnoreQuiet], Source={x:Static svc:Localizer.Instance}}"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Classes="field-label"
+                         Text="{Binding [Settings.Actions.Cooldown], Source={x:Static svc:Localizer.Instance}}" />
+              <ComboBox Grid.Column="1" Classes="field"
+                        ItemsSource="{Binding ActionCooldownOptions}"
+                        SelectedItem="{Binding ActionsCooldown, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" />
+            </Grid>
+            <StackPanel Spacing="4">
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap"
+                         Text="{Binding [Settings.Actions.Placeholders], Source={x:Static svc:Localizer.Instance}}" />
+              <SelectableTextBlock FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                   Text="{Binding PlaceholdersHint}" />
+            </StackPanel>
+
+            <!-- TCP/UDP signal -->
+            <Border Background="{StaticResource BorderWeakBrush}" Height="1" />
+            <CheckBox IsChecked="{Binding SignalEnabled}" FontWeight="SemiBold"
+                      Content="{Binding [Settings.Actions.Signal], Source={x:Static svc:Localizer.Instance}}"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            <StackPanel Spacing="8" IsEnabled="{Binding SignalEnabled}">
+              <Grid ColumnDefinitions="Auto,*,Auto" >
+                <ComboBox Grid.Column="0" Width="90"
+                          ItemsSource="{Binding SignalProtocolOptions}"
+                          SelectedItem="{Binding SignalProtocol, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Display}" />
+                <TextBox Grid.Column="1" Margin="8,0"
+                         Text="{Binding SignalHost, Mode=TwoWay}"
+                         PlaceholderText="{Binding [Settings.Actions.Signal.Host], Source={x:Static svc:Localizer.Instance}}" />
+                <NumericUpDown Grid.Column="2" Value="{Binding SignalPort, Mode=TwoWay}"
+                               Minimum="1" Maximum="65535" Increment="1" FormatString="0" MinWidth="120" />
+              </Grid>
+              <TextBox Text="{Binding SignalPayload, Mode=TwoWay}"
+                       FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                       PlaceholderText="{Binding [Settings.Actions.Signal.Payload], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap"
+                         Text="{Binding [Settings.Actions.Signal.Hint], Source={x:Static svc:Localizer.Instance}}" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
+                      Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding TestSignalCommand}" />
+              <TextBlock TextWrapping="Wrap"
+                         Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         Text="{Binding SignalStatus}"
+                         IsVisible="{Binding SignalStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+
+            <!-- HTTP webhook -->
+            <Border Background="{StaticResource BorderWeakBrush}" Height="1" />
+            <CheckBox IsChecked="{Binding HttpEnabled}" FontWeight="SemiBold"
+                      Content="{Binding [Settings.Actions.Http], Source={x:Static svc:Localizer.Instance}}"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            <StackPanel Spacing="8" IsEnabled="{Binding HttpEnabled}">
+              <Grid ColumnDefinitions="Auto,*">
+                <ComboBox Grid.Column="0" Width="90"
+                          ItemsSource="{Binding HttpMethodOptions}"
+                          SelectedItem="{Binding HttpMethod, Mode=TwoWay}" />
+                <TextBox Grid.Column="1" Margin="8,0,0,0"
+                         Text="{Binding HttpUrl, Mode=TwoWay}"
+                         FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                         PlaceholderText="https://example.com/hook?camera={camera}" />
+              </Grid>
+              <TextBox Text="{Binding HttpBody, Mode=TwoWay}"
+                       AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
+                       FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
+                      Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding TestHttpCommand}" />
+              <TextBlock TextWrapping="Wrap"
+                         Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         Text="{Binding HttpStatus}"
+                         IsVisible="{Binding HttpStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+
+            <!-- E-mail -->
+            <Border Background="{StaticResource BorderWeakBrush}" Height="1" />
+            <CheckBox IsChecked="{Binding EmailEnabled}" FontWeight="SemiBold"
+                      Content="{Binding [Settings.Actions.Email], Source={x:Static svc:Localizer.Instance}}"
+                      Foreground="{StaticResource TextPrimaryBrush}" />
+            <StackPanel Spacing="8" IsEnabled="{Binding EmailEnabled}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="field-label"
+                           Text="{Binding [Settings.Actions.Email.Transport], Source={x:Static svc:Localizer.Instance}}" />
+                <ComboBox Grid.Column="1" Classes="field-wide"
+                          ItemsSource="{Binding EmailTransportOptions}"
+                          SelectedItem="{Binding EmailTransport, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Display}" />
+              </Grid>
+              <TextBox Text="{Binding EmailTo, Mode=TwoWay}"
+                       PlaceholderText="{Binding [Settings.Actions.Email.To], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBox Text="{Binding EmailSubject, Mode=TwoWay}"
+                       PlaceholderText="{Binding [Settings.Actions.Email.Subject], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBox Text="{Binding EmailBody, Mode=TwoWay}"
+                       AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
+
+              <!-- SMTP server; login/password live in the OS credential store -->
+              <StackPanel Spacing="8" IsVisible="{Binding IsSmtp}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Grid.Column="0" Text="{Binding SmtpHost, Mode=TwoWay}"
+                           PlaceholderText="{Binding [Settings.Actions.Smtp.Host], Source={x:Static svc:Localizer.Instance}}" />
+                  <NumericUpDown Grid.Column="1" Margin="8,0,0,0" Value="{Binding SmtpPort, Mode=TwoWay}"
+                                 Minimum="1" Maximum="65535" Increment="1" FormatString="0" MinWidth="120" />
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0" Classes="field-label"
+                             Text="{Binding [Settings.Actions.Smtp.Security], Source={x:Static svc:Localizer.Instance}}" />
+                  <ComboBox Grid.Column="1" Classes="field"
+                            ItemsSource="{Binding SmtpSecurityOptions}"
+                            SelectedItem="{Binding SmtpSecurity, Mode=TwoWay}"
+                            DisplayMemberBinding="{Binding Display}" />
+                </Grid>
+                <TextBox Text="{Binding SmtpFrom, Mode=TwoWay}"
+                         PlaceholderText="{Binding [Settings.Actions.Smtp.From], Source={x:Static svc:Localizer.Instance}}" />
+                <TextBox Text="{Binding SmtpUser, Mode=TwoWay}"
+                         PlaceholderText="{Binding [Settings.Actions.Smtp.User], Source={x:Static svc:Localizer.Instance}}" />
+                <TextBox Text="{Binding SmtpPassword, Mode=TwoWay}" PasswordChar="•"
+                         PlaceholderText="{Binding [Settings.Actions.Smtp.Password], Source={x:Static svc:Localizer.Instance}}" />
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                  <Button Classes="outlined"
+                          Content="{Binding [Settings.Actions.Smtp.Save], Source={x:Static svc:Localizer.Instance}}"
+                          Command="{Binding SaveCredentialsCommand}" />
+                  <Button Classes="outlined" IsVisible="{Binding IsWindows}"
+                          Content="{Binding [Settings.Actions.Smtp.OpenCredMan], Source={x:Static svc:Localizer.Instance}}"
+                          Command="{Binding OpenCredentialManagerCommand}" />
+                </WrapPanel>
+                <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                           TextWrapping="Wrap" Text="{Binding CredentialStorageHint}" />
+              </StackPanel>
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap" IsVisible="{Binding IsMapi}"
+                         Text="{Binding [Settings.Actions.Email.Mapi.Hint], Source={x:Static svc:Localizer.Instance}}" />
+              <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         TextWrapping="Wrap" IsVisible="{Binding IsOutlook}"
+                         Text="{Binding [Settings.Actions.Email.Outlook.Hint], Source={x:Static svc:Localizer.Instance}}" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <Button Classes="outlined" HorizontalAlignment="Left"
+                      Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding TestEmailCommand}" />
+              <TextBlock TextWrapping="Wrap"
+                         Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                         Text="{Binding EmailStatus}"
+                         IsVisible="{Binding EmailStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+
+            <!-- Program / script -->
+            <StackPanel Spacing="14" IsVisible="{Binding IsDesktop}">
+              <Border Background="{StaticResource BorderWeakBrush}" Height="1" />
+              <CheckBox IsChecked="{Binding ProgramEnabled}" FontWeight="SemiBold"
+                        Content="{Binding [Settings.Actions.Program], Source={x:Static svc:Localizer.Instance}}"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+              <StackPanel Spacing="8" IsEnabled="{Binding ProgramEnabled}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Grid.Column="0" Text="{Binding ProgramPath, Mode=TwoWay}"
+                           FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                           PlaceholderText="{Binding [Settings.Actions.Program.Path], Source={x:Static svc:Localizer.Instance}}" />
+                  <Button Grid.Column="1" Classes="outlined" Margin="8,0,0,0"
+                          Content="{Binding [Settings.Actions.Program.Browse], Source={x:Static svc:Localizer.Instance}}"
+                          Command="{Binding PickProgramCommand}" />
+                </Grid>
+                <TextBox Text="{Binding ProgramArguments, Mode=TwoWay}"
+                         FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                         PlaceholderText="{Binding [Settings.Actions.Program.Args], Source={x:Static svc:Localizer.Instance}}" />
+                <TextBlock Foreground="{StaticResource TextTertiaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                           TextWrapping="Wrap"
+                           Text="{Binding [Settings.Actions.Program.Hint], Source={x:Static svc:Localizer.Instance}}" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <Button Classes="outlined" HorizontalAlignment="Left"
+                        Content="{Binding [Settings.Actions.Test], Source={x:Static svc:Localizer.Instance}}"
+                        Command="{Binding TestProgramCommand}" />
+                <TextBlock TextWrapping="Wrap"
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}"
+                           Text="{Binding ProgramStatus}"
+                           IsVisible="{Binding ProgramStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
         </StackPanel>
+        </Panel>
+        </Panel>
 
         <!-- About -->
         <StackPanel IsVisible="{Binding IsAbout}" Spacing="16">

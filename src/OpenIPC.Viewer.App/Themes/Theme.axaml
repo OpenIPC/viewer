@@ -80,6 +80,8 @@
   <StreamGeometry x:Key="IconRecord">M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z M10,12 A2,2 0 1 0 14,12 A2,2 0 1 0 10,12 Z</StreamGeometry>
   <!-- IconRadar — for Discovery section (LAN scan affordance). -->
   <StreamGeometry x:Key="IconRadar">M19.07,4.93 A10,10 0 0 0 6.99,3.34 M4,6 h0.01 M2.29,9.62 A10,10 0 1 0 21.31,8.35 M16.24,7.76 A6,6 0 1 0 8.23,16.67 M12,18 h0.01 M17.99,11.66 A6,6 0 0 1 15.77,16.67 M10,12 A2,2 0 1 0 14,12 A2,2 0 1 0 10,12 Z M13.41,10.59 L19.07,4.93</StreamGeometry>
+  <!-- Lucide "bell" — Settings → Notifications. -->
+  <StreamGeometry x:Key="IconBell">M10.268,21 a2,2 0 0 0 3.464,0 M3.262,15.326 A1,1 0 0 0 4,17 h16 a1,1 0 0 0 0.74,-1.673 C19.41,13.956 18,12.499 18,8 A6,6 0 0 0 6,8 c0,4.499 -1.411,5.956 -2.738,7.326</StreamGeometry>
   <!-- IconAdvanced — sliders-horizontal. -->
   <StreamGeometry x:Key="IconAdvanced">M10,5 H3 M12,19 H3 M14,3 V7 M16,17 V21 M21,12 H12 M21,19 H16 M21,5 H14 M8,10 V14 M8,12 H3</StreamGeometry>
   <!-- IconAbout — info (i in circle). -->

@@ -12,6 +12,12 @@ namespace OpenIPC.Viewer.Core.Events;
 //        -> open CameraEvent in repo with OccurredAt
 //        -> 5s of quiet -> close event (set EndedAt, persist)
 // Plays back to a single Observed event channel that UI subscribes to once.
+// Besides open and close, an open event is re-published (same Id, EndedAt
+// still null) whenever its peak confidence or object count grows, and at most
+// once per second while ticks keep coming (LastSeenAt = latest tick). That lets
+// the notification thresholds see a detection that firms up mid-episode and
+// an activity that has really lasted N seconds — not just an episode that is
+// still waiting out its quiet window. Subscribers de-dup by Id.
 public sealed class EventIngestionService : IAsyncDisposable
 {
     private readonly IEnumerable<IMotionEventSource> _sources;
@@ -20,6 +26,7 @@ public sealed class EventIngestionService : IAsyncDisposable
 
     private static readonly TimeSpan DebounceWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan CloseAfterQuiet = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(1);
 
     private readonly object _gate = new();
     private readonly Dictionary<CameraId, OpenEventState> _open = new();
@@ -64,6 +71,7 @@ public sealed class EventIngestionService : IAsyncDisposable
     {
         OpenEventState? state;
         bool isNew = false;
+        CameraEvent? update = null;
         lock (_gate)
         {
             if (!_open.TryGetValue(tick.CameraId, out state))
@@ -75,30 +83,72 @@ public sealed class EventIngestionService : IAsyncDisposable
             state.LastTickAt = tick.At;
             // Latest tick's summary wins (e.g. peak class counts during the episode).
             if (tick.Summary is not null) state.Summary = tick.Summary;
+
+            var grew = false;
+            if (tick.Confidence is { } c && (state.PeakConfidence is not { } peak || c > peak))
+            {
+                state.PeakConfidence = c;
+                grew = true;
+            }
+            if (tick.Objects > state.PeakObjects)
+            {
+                state.PeakObjects = tick.Objects;
+                grew = true;
+            }
+            // Until OpenAsync has published, the open event itself carries the
+            // latest peaks — no separate update needed. After that: on a peak
+            // rise, or as throttled progress so LastSeenAt keeps moving.
+            if (!isNew && state.Published && (grew || tick.At - state.LastPublishedTickAt >= ProgressInterval))
+            {
+                update = Snapshot(state, endedAt: null);
+                state.LastPublishedTickAt = tick.At;
+            }
+
             state.QuietTimer?.Change(CloseAfterQuiet, Timeout.InfiniteTimeSpan);
             state.QuietTimer ??= new Timer(CloseQuietState, state, CloseAfterQuiet, Timeout.InfiniteTimeSpan);
         }
 
         if (isNew)
-            _ = OpenAsync(state);
+        {
+            var opening = OpenAsync(state);
+            lock (_gate) state.OpenTask = opening;
+        }
+        else if (update is not null)
+        {
+            NotifyObservers(update);
+        }
     }
 
     private async Task OpenAsync(OpenEventState state)
     {
-        var ev = new CameraEvent(
-            Id: state.EventId,
-            CameraId: state.CameraId,
-            Kind: state.Kind,
-            Severity: EventSeverity.Info,
-            OccurredAt: state.StartedAt,
-            EndedAt: null,
-            Source: state.Source,
-            Summary: state.Summary);
+        CameraEvent ev;
+        lock (_gate) ev = Snapshot(state, endedAt: null);
         try { await _repo.AddAsync(ev, CancellationToken.None).ConfigureAwait(false); }
         catch { /* surface via finalize event instead — swallow here */ }
 
+        // Re-snapshot: ticks that landed while the row was being written may
+        // have raised the peaks.
+        lock (_gate)
+        {
+            ev = Snapshot(state, endedAt: null);
+            state.Published = true;
+            state.LastPublishedTickAt = state.LastTickAt;
+        }
         NotifyObservers(ev);
     }
+
+    private static CameraEvent Snapshot(OpenEventState state, DateTime? endedAt) => new(
+        Id: state.EventId,
+        CameraId: state.CameraId,
+        Kind: state.Kind,
+        Severity: EventSeverity.Info,
+        OccurredAt: state.StartedAt,
+        EndedAt: endedAt,
+        Source: state.Source,
+        Summary: state.Summary,
+        PeakConfidence: state.PeakConfidence,
+        PeakObjects: state.PeakObjects,
+        LastSeenAt: state.LastTickAt);
 
     private void CloseQuietState(object? boxed)
     {
@@ -121,15 +171,19 @@ public sealed class EventIngestionService : IAsyncDisposable
 
     private async Task FinalizeAsync(OpenEventState state)
     {
-        var finalized = new CameraEvent(
-            Id: state.EventId,
-            CameraId: state.CameraId,
-            Kind: state.Kind,
-            Severity: EventSeverity.Info,
-            OccurredAt: state.StartedAt,
-            EndedAt: state.LastTickAt,
-            Source: state.Source,
-            Summary: state.Summary);
+        // The open must go out (and its row exist) before the close: a slow
+        // insert must not let subscribers see the close first and then a
+        // stale "open" for an episode that is already over.
+        Task? opening;
+        lock (_gate) opening = state.OpenTask;
+        if (opening is not null)
+        {
+            try { await opening.ConfigureAwait(false); }
+            catch { /* OpenAsync swallows its own errors */ }
+        }
+
+        CameraEvent finalized;
+        lock (_gate) finalized = Snapshot(state, endedAt: state.LastTickAt);
         try { await _repo.UpdateAsync(finalized, CancellationToken.None).ConfigureAwait(false); }
         catch { /* swallow */ }
 
@@ -173,6 +227,14 @@ public sealed class EventIngestionService : IAsyncDisposable
         public string? Source { get; }
         public EventKind Kind { get; }
         public string? Summary { get; set; }
+        public float? PeakConfidence { get; set; }
+        public int PeakObjects { get; set; }
+        // Set once the open event has gone out; later peak rises publish updates.
+        public bool Published { get; set; }
+        // Tick time of the last publish, for the throttled progress updates.
+        public DateTime LastPublishedTickAt { get; set; }
+        // The open publication in flight; the close waits for it.
+        public Task? OpenTask { get; set; }
         public Timer? QuietTimer { get; set; }
 
         public OpenEventState(EventId id, CameraId cam, DateTime started, string? source, EventKind kind)
