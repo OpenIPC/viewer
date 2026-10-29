@@ -111,6 +111,10 @@
     <DockPanel Grid.Column="1" LastChildFill="True">
       <views:BottomNavBar DockPanel.Dock="Bottom"
                           IsVisible="{Binding #Root.ShowBottomNav}" />
+      <!-- New-version strip; hidden in fullscreen/kiosk with the rest of the chrome. -->
+      <Panel DockPanel.Dock="Top" IsVisible="{Binding !IsFullscreen}">
+        <views:UpdateBanner DataContext="{Binding Update}" />
+      </Panel>
       <ContentControl Content="{Binding CurrentPage}"
                       Padding="{Binding #Root.ContentPadding}" />
     </DockPanel>

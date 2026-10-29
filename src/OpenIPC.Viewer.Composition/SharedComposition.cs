@@ -249,6 +249,23 @@ public static class SharedComposition
         // shared file at startup. Run from StartupViewModel and Settings.
         services.AddSingleton<ConfigSyncService>();
 
+        // Update notifications (Phase 11.5). The feed comes from the build's UpdateFeed
+        // property — GitHub Releases by default, a latest.json manifest for builds published
+        // elsewhere, none for store builds — so UpdateService takes it nullable and goes quiet without one.
+        services.AddSingleton<OpenIPC.Viewer.Core.Updates.IUpdateDownloader>(sp =>
+            new OpenIPC.Viewer.Infrastructure.Updates.UpdateDownloader(
+                // A full archive is ~200 MB; the user can cancel, so no overall timeout.
+                new System.Net.Http.HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan },
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OpenIPC.Viewer.Infrastructure.Updates.UpdateDownloader>>()));
+        services.AddSingleton(sp => new UpdateService(
+            OpenIPC.Viewer.Infrastructure.Updates.UpdateFeedFactory.Create(
+                OpenIPC.Viewer.Infrastructure.Updates.UpdateFeedFactory.ConfiguredSpec,
+                new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(20) }),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.Updates.IUpdateDownloader>(),
+            sp.GetRequiredService<UserSettingsService>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<UpdateService>>()));
+        services.AddSingleton<UpdateBannerViewModel>();
+
         // ViewModels — singletons so navigation preserves state across
         // sidebar/tab switches and messenger registrations stay alive.
         services.AddSingleton<MainWindowViewModel>();

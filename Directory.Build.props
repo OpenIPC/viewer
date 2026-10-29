@@ -20,6 +20,16 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
+  <!-- Where the app looks for new versions (Infrastructure/Updates/UpdateFeedFactory):
+       github:<owner>/<repo>, an https:// URL of a latest.json manifest, or none to turn
+       update checks off (store builds such as F-Droid update through the store). -->
+  <PropertyGroup>
+    <UpdateFeed Condition="'$(UpdateFeed)' == ''">github:OpenIPC/viewer</UpdateFeed>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="OpenIpc.UpdateFeed" Value="$(UpdateFeed)" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(TargetFramework)' != 'netstandard2.1'">
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
