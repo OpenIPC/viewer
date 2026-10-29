@@ -25,12 +25,18 @@ public sealed class UpdateDownloader : IUpdateDownloader
 
     public async Task<string> DownloadAsync(UpdateAsset asset, IProgress<double>? progress, CancellationToken ct)
     {
+        // Never a file nobody can check: the caller sends hashless assets to the browser instead.
+        if (asset.Sha256 is not { } expected)
+            throw new InvalidDataException($"Update {asset.FileName} has no published SHA-256.");
+        if (asset.Url.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidDataException($"Update {asset.FileName} is not served over https.");
+
         var dir = Directory.CreateDirectory(DownloadsDirectory());
         var target = Path.Combine(dir.FullName, Path.GetFileName(asset.FileName));
 
         // A previous download of the same build: reuse it instead of fetching 200 MB again.
-        if (File.Exists(target) && asset.Sha256 is not null
-            && string.Equals(await HashAsync(target, ct).ConfigureAwait(false), asset.Sha256, StringComparison.Ordinal))
+        if (File.Exists(target)
+            && string.Equals(await HashAsync(target, ct).ConfigureAwait(false), expected, StringComparison.Ordinal))
         {
             progress?.Report(1);
             return target;
@@ -62,9 +68,9 @@ public sealed class UpdateDownloader : IUpdateDownloader
             }
 
             var actual = Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
-            if (asset.Sha256 is not null && !string.Equals(actual, asset.Sha256, StringComparison.Ordinal))
+            if (!string.Equals(actual, expected, StringComparison.Ordinal))
                 throw new InvalidDataException(
-                    $"Update {asset.FileName} failed its integrity check (expected {asset.Sha256}, got {actual}).");
+                    $"Update {asset.FileName} failed its integrity check (expected {expected}, got {actual}).");
 
             File.Move(tmp, target, overwrite: true);
             _log.LogInformation("Update saved to {Path}", target);

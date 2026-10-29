@@ -117,10 +117,47 @@ public sealed class UpdateFeedTests
     }
 
     // Directory.Build.props stamps UpdateFeed into every assembly; without it no build would check.
+    // "none" is a valid stamp (store builds), so this checks the stamp, not that a feed comes out.
     [Fact]
-    public void Build_is_stamped_with_a_feed()
+    public void Build_is_stamped_with_a_feed() =>
+        Assert.False(string.IsNullOrEmpty(UpdateFeedFactory.ConfiguredSpec));
+
+    [Fact]
+    public void Github_skips_a_pre_release_tag_it_was_handed()
     {
-        using var http = new HttpClient();
-        Assert.NotNull(UpdateFeedFactory.Create(UpdateFeedFactory.ConfiguredSpec, http));
+        var json = GithubJson.Replace("\"v0.3.19\"", "\"v0.3.20-preview1\"", StringComparison.Ordinal);
+        Assert.Null(GithubReleaseFeed.Parse(json));
+    }
+
+    [Fact]
+    public void Manifest_accepts_only_https_links()
+    {
+        const string json = """
+            {
+              "version": "0.3.20",
+              "pageUrl": "file:///C:/Windows/System32/calc.exe",
+              "files": [
+                { "platform": "windows", "file": "http://updates.example.com/a-win-x64.zip", "sha256": "11" },
+                { "platform": "linux", "file": "ms-settings:privacy", "sha256": "22" },
+                { "platform": "macos", "file": "https://mirror.example.com/a-osx-arm64.tar.gz", "sha256": "33" }
+              ]
+            }
+            """;
+        var r = ManifestUpdateFeed.Parse(json, new Uri("https://updates.example.com/viewer/latest.json"))!;
+
+        Assert.Null(r.PageUrl);
+        var only = Assert.Single(r.Assets);
+        Assert.Equal(UpdatePlatforms.MacOs, only.Platform);
+    }
+
+    [Fact]
+    public void Manifest_skips_entries_that_are_not_objects()
+    {
+        const string json = """
+            { "version": "0.3.20", "files": [ 42, "x", null,
+              { "platform": "linux", "file": "a-linux-x64.tar.gz", "sha256": "44" } ] }
+            """;
+        var r = ManifestUpdateFeed.Parse(json, new Uri("https://updates.example.com/viewer/latest.json"))!;
+        Assert.Single(r.Assets);
     }
 }

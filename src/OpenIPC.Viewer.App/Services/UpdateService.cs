@@ -35,6 +35,11 @@ public sealed class UpdateService
     private readonly UserSettingsService _settings;
     private readonly ILogger<UpdateService> _logger;
     private bool _backgroundStarted;
+    // Bumped by every check and by Skip: only the newest check may publish, so a slow background
+    // check finishing after a manual one (or after Skip) can't bring back a stale offer.
+    private int _generation;
+    // Set before the settings write starts, so a check racing that write already sees it.
+    private string? _skippedVersion;
 
     public UpdateService(
         IUpdateFeed? feed,
@@ -53,6 +58,10 @@ public sealed class UpdateService
     public bool IsEnabled => _feed is not null;
     public string? FeedName => _feed?.DisplayName;
     public bool SupportsInAppDownload => _downloader.SupportsInAppDownload;
+
+    // An asset without a published hash goes to the browser like an APK does: the in-app
+    // download promises a verified file and can't keep that promise without one.
+    public bool CanDownloadInApp => SupportsInAppDownload && AvailableAsset?.Sha256 is not null;
 
     // Same git-derived string as Settings → About. Null when it doesn't parse (a build from a tree
     // without tags): such a build is never told it is out of date.
@@ -81,8 +90,16 @@ public sealed class UpdateService
         while (true)
         {
             // Re-read each round: the toggle in Settings applies without a restart.
-            if (_settings.Current.CheckForUpdates)
-                await CheckAsync(manual: false, CancellationToken.None).ConfigureAwait(true);
+            try
+            {
+                if (_settings.Current.CheckForUpdates)
+                    await CheckAsync(manual: false, CancellationToken.None).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                // Fire-and-forget loop: anything escaping here would end the daily checks silently.
+                _logger.LogWarning(ex, "Background update check failed");
+            }
             await Task.Delay(CheckInterval).ConfigureAwait(true);
         }
     }
@@ -93,6 +110,7 @@ public sealed class UpdateService
     public async Task<UpdateCheckOutcome> CheckAsync(bool manual, CancellationToken ct)
     {
         if (_feed is null) return new UpdateCheckOutcome(UpdateCheckStatus.Disabled);
+        var generation = ++_generation;
 
         UpdateRelease? latest;
         try
@@ -105,12 +123,21 @@ public sealed class UpdateService
             _logger.LogInformation("Update check against {Feed} failed: {Error}", _feed.DisplayName, ex.Message);
             return new UpdateCheckOutcome(UpdateCheckStatus.Failed, Error: ex.Message);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A feed answering with something unexpected — worth a stack trace, not a dead check.
+            _logger.LogWarning(ex, "Update check against {Feed} failed", _feed.DisplayName);
+            return new UpdateCheckOutcome(UpdateCheckStatus.Failed, Error: ex.Message);
+        }
+
+        // A newer check (or Skip) started meanwhile: answer the caller, but leave the offer to it.
+        var superseded = generation != _generation;
 
         if (latest is null || Current is null || latest.Version <= Current)
         {
             _logger.LogInformation("Update check: {Current} is current ({Feed} has {Latest})",
                 VersionText, _feed.DisplayName, latest?.Version.ToString() ?? "nothing");
-            Publish(null, null);
+            if (!superseded) Publish(null, null);
             return new UpdateCheckOutcome(UpdateCheckStatus.UpToDate, latest);
         }
 
@@ -119,13 +146,16 @@ public sealed class UpdateService
         if (asset is null)
         {
             _logger.LogInformation("Update {Latest} has no build for {Platform}/{Arch}", latest.Version, platform, arch);
-            Publish(null, null);
+            if (!superseded) Publish(null, null);
             return new UpdateCheckOutcome(UpdateCheckStatus.NoBuildForPlatform, latest);
         }
 
         _logger.LogInformation("Update available: {Current} → {Latest} ({File})", VersionText, latest.Version, asset.FileName);
-        var skipped = !manual && string.Equals(_settings.Current.SkippedUpdateVersion, latest.Version.ToString(), StringComparison.Ordinal);
-        Publish(skipped ? null : latest, skipped ? null : asset, force: manual);
+        var latestText = latest.Version.ToString();
+        var skipped = !manual
+            && (string.Equals(_settings.Current.SkippedUpdateVersion, latestText, StringComparison.Ordinal)
+                || string.Equals(_skippedVersion, latestText, StringComparison.Ordinal));
+        if (!superseded) Publish(skipped ? null : latest, skipped ? null : asset, force: manual);
         return new UpdateCheckOutcome(UpdateCheckStatus.Available, latest);
     }
 
@@ -134,8 +164,12 @@ public sealed class UpdateService
     {
         if (Available is null) return;
         var version = Available.Version.ToString();
+        _skippedVersion = version;
+        _generation++;
         Publish(null, null);
-        await _settings.UpdateAsync(_settings.Current with { SkippedUpdateVersion = version }).ConfigureAwait(true);
+        // The mutate overload applies the change to the settings as they are inside the save
+        // gate, so a toggle saved at the same moment isn't overwritten by a stale snapshot.
+        await _settings.UpdateAsync(s => s with { SkippedUpdateVersion = version }).ConfigureAwait(true);
     }
 
     public Task<string> DownloadAsync(IProgress<double>? progress, CancellationToken ct) =>

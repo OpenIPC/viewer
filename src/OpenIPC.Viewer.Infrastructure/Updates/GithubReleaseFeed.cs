@@ -41,6 +41,9 @@ public sealed class GithubReleaseFeed : IUpdateFeed
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         if (!AppVersion.TryParse(Str(root, "tag_name"), out var version)) return null;
+        // releases/latest already skips releases marked pre-release; this also catches a tag
+        // like -preview1 that the release workflow didn't mark.
+        if (version.IsPreRelease) return null;
 
         var assets = new List<UpdateAsset>();
         if (root.TryGetProperty("assets", out var list) && list.ValueKind == JsonValueKind.Array)
@@ -49,7 +52,7 @@ public sealed class GithubReleaseFeed : IUpdateFeed
             {
                 var name = Str(a, "name");
                 var url = Str(a, "browser_download_url");
-                if (name is null || !Uri.TryCreate(url, UriKind.Absolute, out var uri)) continue;
+                if (name is null || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || !IsHttps(uri)) continue;
                 if (ClassifyAsset(name) is not { } target) continue;
                 var size = a.TryGetProperty("size", out var s) && s.TryGetInt64(out var n) ? n : 0;
                 // "sha256:<hex>" — GitHub computes it for every uploaded asset.
@@ -61,7 +64,7 @@ public sealed class GithubReleaseFeed : IUpdateFeed
             }
         }
 
-        var page = Uri.TryCreate(Str(root, "html_url"), UriKind.Absolute, out var p) ? p : null;
+        var page = Uri.TryCreate(Str(root, "html_url"), UriKind.Absolute, out var p) && IsHttps(p) ? p : null;
         var published = DateTimeOffset.TryParse(Str(root, "published_at"),
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeUniversal, out var at) ? at : (DateTimeOffset?)null;
@@ -90,6 +93,9 @@ public sealed class GithubReleaseFeed : IUpdateFeed
         return null;
     }
 
+    private static bool IsHttps(Uri uri) => uri.Scheme == Uri.UriSchemeHttps;
+
     private static string? Str(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        e.ValueKind == JsonValueKind.Object
+        && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 }

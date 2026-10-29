@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -8,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.Core.Platform;
+using OpenIPC.Viewer.Core.Updates;
 
 namespace OpenIPC.Viewer.App.ViewModels;
 
@@ -21,6 +21,9 @@ public sealed partial class UpdateBannerViewModel : ViewModelBase
     private readonly IShareService _share;
     private readonly ILogger<UpdateBannerViewModel> _logger;
     private CancellationTokenSource? _downloadCts;
+    // The release DownloadedPath (or the download in flight) belongs to. Feeds reuse file names
+    // across releases (openipc-viewer-win-x64.zip), so the name can't tell an old archive apart.
+    private AppVersion? _downloadVersion;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsVisible))]
@@ -88,9 +91,14 @@ public sealed partial class UpdateBannerViewModel : ViewModelBase
     {
         // Whatever the trigger — a newer release, or a manual check — the banner is wanted again.
         Dismissed = false;
-        if (DownloadedPath is not null && _updates.AvailableAsset is { } asset
-            && !string.Equals(Path.GetFileName(DownloadedPath), asset.FileName, StringComparison.Ordinal))
+        if (_downloadVersion is not null && _updates.Available?.Version != _downloadVersion)
+        {
+            // A different release (or none) is on offer now: the saved archive or the download
+            // in flight is for the old one.
+            _downloadCts?.Cancel();
+            _downloadVersion = null;
             DownloadedPath = null;
+        }
         Error = null;
         RaiseTexts();
         OnPropertyChanged(nameof(IsVisible));
@@ -106,18 +114,20 @@ public sealed partial class UpdateBannerViewModel : ViewModelBase
     [RelayCommand]
     private async Task DownloadAsync()
     {
-        if (_updates.AvailableAsset is not { } asset) return;
+        if (_updates.AvailableAsset is not { } asset || _updates.Available is not { } release) return;
 
-        if (!_updates.SupportsInAppDownload)
+        if (!_updates.CanDownloadInApp)
         {
-            // The browser downloads the APK and the system installer takes it from there.
+            // The browser downloads the APK and the system installer takes it from there; an
+            // archive without a published hash goes the same way rather than as "verified".
             if (!await _dialogs.OpenUrlAsync(asset.Url.AbsoluteUri).ConfigureAwait(true))
                 Error = asset.Url.AbsoluteUri;
             return;
         }
 
         _downloadCts?.Dispose();
-        _downloadCts = new CancellationTokenSource();
+        var cts = _downloadCts = new CancellationTokenSource();
+        _downloadVersion = release.Version;
         Error = null;
         Progress = 0;
         IsDownloading = true;
@@ -125,16 +135,23 @@ public sealed partial class UpdateBannerViewModel : ViewModelBase
         {
             // Progress<T> captures the UI context it is created on.
             var progress = new Progress<double>(p => Progress = p);
-            DownloadedPath = await _updates.DownloadAsync(progress, _downloadCts.Token).ConfigureAwait(true);
+            var path = await _updates.DownloadAsync(progress, cts.Token).ConfigureAwait(true);
+            // The offer may have moved on while this was downloading.
+            if (_downloadVersion == release.Version) DownloadedPath = path;
         }
-        catch (OperationCanceledException) when (_downloadCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            // User pressed Cancel — back to the offer.
+            // User pressed Cancel, or the offer changed — back to the offer.
+            if (_downloadVersion == release.Version) _downloadVersion = null;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Update download failed");
-            Error = ex.Message;
+            if (_downloadVersion == release.Version)
+            {
+                _downloadVersion = null;
+                Error = ex.Message;
+            }
         }
         finally
         {

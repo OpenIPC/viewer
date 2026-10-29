@@ -53,13 +53,17 @@ public sealed class AppVersion : IComparable<AppVersion>, IEquatable<AppVersion>
         var m = Pattern.Match(text!.Trim());
         if (!m.Success) return false;
 
-        version = new AppVersion(
-            Int(m.Groups["major"].Value),
-            Int(m.Groups["minor"].Value),
-            Int(m.Groups["patch"].Value),
-            m.Groups["label"].Value.ToLowerInvariant(),
-            m.Groups["n"].Value.Length == 0 ? 0 : Int(m.Groups["n"].Value),
-            m.Groups["ahead"].Success ? Int(m.Groups["ahead"].Value) : 0);
+        // TryParse, not Parse: a digit run too long for an int is "not a version", not a crash.
+        var n = 0;
+        var ahead = 0;
+        if (!Int(m.Groups["major"].Value, out var major)
+            || !Int(m.Groups["minor"].Value, out var minor)
+            || !Int(m.Groups["patch"].Value, out var patch)
+            || (m.Groups["n"].Value.Length > 0 && !Int(m.Groups["n"].Value, out n))
+            || (m.Groups["ahead"].Success && !Int(m.Groups["ahead"].Value, out ahead)))
+            return false;
+
+        version = new AppVersion(major, minor, patch, m.Groups["label"].Value.ToLowerInvariant(), n, ahead);
         return true;
     }
 
@@ -104,5 +108,6 @@ public sealed class AppVersion : IComparable<AppVersion>, IEquatable<AppVersion>
         _ => 1,
     };
 
-    private static int Int(string s) => int.Parse(s, NumberStyles.None, CultureInfo.InvariantCulture);
+    private static bool Int(string s, out int value) =>
+        int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out value);
 }

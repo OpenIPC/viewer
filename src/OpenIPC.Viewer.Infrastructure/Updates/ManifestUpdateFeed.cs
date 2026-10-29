@@ -44,14 +44,16 @@ public sealed class ManifestUpdateFeed : IUpdateFeed
                 var file = Str(f, "file");
                 var platform = Str(f, "platform")?.ToLowerInvariant();
                 if (string.IsNullOrEmpty(file) || platform is null) continue;
-                if (!Uri.TryCreate(manifestUrl, file, out var url)) continue;
+                // "file" may be absolute; whatever it resolves to must still be https.
+                if (!Uri.TryCreate(manifestUrl, file, out var url) || !IsHttps(url)) continue;
                 var size = f.TryGetProperty("size", out var s) && s.TryGetInt64(out var n) ? n : 0;
                 var sha = Str(f, "sha256")?.ToLowerInvariant();
                 assets.Add(new UpdateAsset(platform, ArchOf(file, Str(f, "label")), file, url, size, sha));
             }
         }
 
-        var page = Uri.TryCreate(Str(root, "pageUrl"), UriKind.Absolute, out var p) ? p : null;
+        // The page goes straight to the OS URL handler: a web page or nothing, never file:/custom schemes.
+        var page = Uri.TryCreate(Str(root, "pageUrl"), UriKind.Absolute, out var p) && IsHttps(p) ? p : null;
         var published = DateTimeOffset.TryParse(Str(root, "publishedAt"),
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeUniversal, out var at) ? at : (DateTimeOffset?)null;
@@ -71,6 +73,10 @@ public sealed class ManifestUpdateFeed : IUpdateFeed
         return "x64";
     }
 
+    private static bool IsHttps(Uri uri) => uri.Scheme == Uri.UriSchemeHttps;
+
+    // Tolerates any element kind: a stray number or string in "files" is skipped, not a throw.
     private static string? Str(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        e.ValueKind == JsonValueKind.Object
+        && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 }

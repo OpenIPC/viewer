@@ -25,6 +25,8 @@ public sealed class AppVersionTests
     [InlineData("abc1234")]
     [InlineData("1.2")]
     [InlineData("0.3.19-dirty-x")]
+    [InlineData("99999999999.0.0")]
+    [InlineData("0.3.19-rc99999999999")]
     public void Rejects_what_is_not_a_release(string text) =>
         Assert.False(AppVersion.TryParse(text, out _));
 
