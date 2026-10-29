@@ -10,7 +10,8 @@ Built with .NET 9 / 10 and Avalonia 12.
 
 > Status: **beta** — releases ship as standalone builds for Windows / Linux /
 > macOS / Android from the [releases page](https://github.com/OpenIPC/viewer/releases).
-> Native installers, code signing and in-app auto-update come later.
+> The app tells you when a new release is out and can download it for you;
+> native installers and code signing come later.
 >
 > See the [Roadmap](docs/ROADMAP.md) for phase status.
 
@@ -121,8 +122,12 @@ installer is required for the beta — download, extract, run:
 | Android x64 | `org.openipc.viewer-x64-Signed.apk` | the same for emulators and x86-64 Android devices — phones want the arm64 one |
 
 Each build is self-contained (bundles the .NET runtime), so there's nothing
-to install alongside it. Native installers and in-app auto-update may come in
-a later release.
+to install alongside it. When a newer release is published, a strip at the top
+of the window offers it: *Download* saves the archive for your platform into
+Downloads (hash-checked), and you unpack it in place of the old folder — your
+cameras and settings live in the user data folder, not next to the app. On
+Android the APK opens in the browser. Turn the check off in *Settings → About*.
+Native installers may come in a later release.
 
 ### Runtime requirements
 

@@ -1003,6 +1003,23 @@
                     Content="{Binding [Settings.Report.OpenLogs], Source={x:Static svc:Localizer.Instance}}"
                     Command="{Binding OpenLogsDirectoryCommand}" />
           </WrapPanel>
+
+          <!-- Updates: notify-only — the app never replaces itself (Phase 11.5). -->
+          <StackPanel Spacing="8" IsVisible="{Binding UpdatesSupported}">
+            <CheckBox IsChecked="{Binding CheckForUpdates}"
+                      Content="{Binding [Settings.About.Updates.Auto], Source={x:Static svc:Localizer.Instance}}" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="8">
+              <Button Classes="outlined"
+                      Content="{Binding [Settings.About.Updates.Check], Source={x:Static svc:Localizer.Instance}}"
+                      Command="{Binding CheckForUpdatesNowCommand}" />
+              <TextBlock Text="{Binding UpdateStatusText}" TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+            </WrapPanel>
+            <TextBlock Text="{Binding UpdateSourceText}"
+                       Foreground="{StaticResource TextTertiaryBrush}"
+                       FontSize="{StaticResource FontSizeSm}" />
+          </StackPanel>
         </StackPanel>
 
       </StackPanel>

@@ -26,6 +26,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private readonly ConfigSyncService _configSync;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
+    private readonly UpdateService _updates;
     private readonly ILogger<SettingsPageViewModel> _logger;
     private bool _suppressSave;
 
@@ -223,6 +224,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         ConfigSyncService configSync,
         NotificationSettingsViewModel notifications,
         OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
+        UpdateService updates,
         ILogger<SettingsPageViewModel> logger)
     {
         _settings = settings;
@@ -233,6 +235,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         _configSync = configSync;
         Notifications = notifications;
         _layouts = layouts;
+        _updates = updates;
         _logger = logger;
 
         var options = new List<NetworkInterfaceOption>
@@ -298,6 +301,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             ShowSplash = s.ShowSplash;
             CloseToTray = s.CloseToTray;
             SingleInstance = s.SingleInstance;
+            CheckForUpdates = s.CheckForUpdates;
             StartPage = StartPageOptions.FirstOrDefault(o => o.Value == s.StartupPage) ?? StartPageOptions[0];
             StartupLayout = StartupLayoutOptions.FirstOrDefault(o => o.Id == s.StartupLayoutId);
             SshStrictHostKey = s.SshStrictHostKey;
@@ -334,6 +338,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     partial void OnShowSplashChanged(bool value) => Persist();
     partial void OnCloseToTrayChanged(bool value) => Persist();
     partial void OnSingleInstanceChanged(bool value) => Persist();
+    partial void OnCheckForUpdatesChanged(bool value) => Persist();
     partial void OnStartPageChanged(StartPageOption? value) => Persist();
     partial void OnStartupLayoutChanged(StartupLayoutOption? value) => Persist();
     partial void OnSshStrictHostKeyChanged(bool value) => Persist();
@@ -374,6 +379,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
             ShowSplash = ShowSplash,
             CloseToTray = CloseToTray,
             SingleInstance = SingleInstance,
+            CheckForUpdates = CheckForUpdates,
             StartupPage = StartPage?.Value ?? "library",
             // Null until the layout list has loaded — keep the saved choice.
             StartupLayoutId = StartupLayout?.Id ?? s.StartupLayoutId,
@@ -453,6 +459,44 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 
     [RelayCommand]
     private void OpenRepository() => OpenInShell(RepositoryUrl);
+
+    // --- Updates (Phase 11.5) ---------------------------------------------
+    [ObservableProperty] private bool _checkForUpdates = true;
+    [ObservableProperty] private string? _updateStatusText;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CheckForUpdatesNowCommand))]
+    private bool _isCheckingForUpdates;
+
+    /// <summary>False in a build made with UpdateFeed=none — the whole block hides.</summary>
+    public bool UpdatesSupported => _updates.IsEnabled;
+    public string UpdateSourceText => string.Format(CultureInfo.CurrentCulture,
+        Localizer.Instance["Settings.About.Updates.Source"], _updates.FeedName);
+
+    private bool CanCheckForUpdatesNow() => !IsCheckingForUpdates;
+
+    [RelayCommand(CanExecute = nameof(CanCheckForUpdatesNow))]
+    private async Task CheckForUpdatesNowAsync()
+    {
+        IsCheckingForUpdates = true;
+        UpdateStatusText = Localizer.Instance["Settings.About.Updates.Checking"];
+        try
+        {
+            var outcome = await _updates.CheckAsync(manual: true, CancellationToken.None).ConfigureAwait(true);
+            var version = outcome.Release?.Version.ToString();
+            UpdateStatusText = outcome.Status switch
+            {
+                UpdateCheckStatus.Available => string.Format(CultureInfo.CurrentCulture,
+                    Localizer.Instance["Settings.About.Updates.Available"], version),
+                UpdateCheckStatus.NoBuildForPlatform => string.Format(CultureInfo.CurrentCulture,
+                    Localizer.Instance["Settings.About.Updates.NoBuild"], version),
+                UpdateCheckStatus.Failed => string.Format(CultureInfo.CurrentCulture,
+                    Localizer.Instance["Settings.About.Updates.Failed"], outcome.Error),
+                _ => Localizer.Instance["Settings.About.Updates.UpToDate"],
+            };
+        }
+        finally { IsCheckingForUpdates = false; }
+    }
 
     // Issue-reporter (Phase 19.5, lightweight): open the repo's new-issue page
     // with version/OS pre-filled. No data leaves the machine until the user

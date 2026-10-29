@@ -133,7 +133,12 @@ public sealed record UserSettings(
     // With "live", StartupLayoutId picks the layout the grid opens on; 0 = the
     // one that was active when the app was last closed.
     string StartupPage = "library",
-    int StartupLayoutId = 0)
+    int StartupLayoutId = 0,
+    // Update notifications: check the build's feed (GitHub Releases or a release manifest) on launch and
+    // once a day after. SkippedUpdateVersion is a release the user dismissed with "Skip" —
+    // the banner stays quiet until a newer one comes out; a manual check still shows it.
+    bool CheckForUpdates = true,
+    string SkippedUpdateVersion = "")
 {
     public static UserSettings Default => new();
 }

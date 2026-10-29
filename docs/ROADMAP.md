@@ -41,7 +41,11 @@ things stand; it is a summary, not a commitment to dates.
 
 Everything left before the betas stop being betas is packaging and signing:
 
-- [ ] In-app auto-update (Velopack) + native installers
+- [x] Update notifications — the app checks GitHub Releases on launch and once
+      a day, offers the new version in a banner and downloads the archive for
+      the platform (APK link on Android); *Settings → About* has the toggle and
+      a manual check
+- [ ] Native installers + self-replacing update (Velopack)
 - [ ] Code signing (Windows / macOS) and Play / TestFlight signing
 - [ ] F-Droid packaging
 - [x] QR-code camera add (decode a saved QR image → pre-filled editor;
