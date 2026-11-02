@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
@@ -15,6 +16,7 @@ using Avalonia.Media;
 using Avalonia.Media.Transformation;
 using Avalonia.Reactive;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace OpenIPC.Viewer.App.Services;
 
@@ -85,7 +87,74 @@ public static class OverlayDialogPresenter
         return true;
     }
 
-    private sealed record OpenDialog(Control Content, TaskCompletionSource Dismissed);
+    private sealed record OpenDialog(Control Content, TaskCompletionSource Dismissed, Control Card);
+
+    // Whether the last input on the TopLevel was a key (keyboard, TV remote, gamepad) rather than
+    // a pointer. A dialog opened from a key puts the focus on its first control right away (the
+    // remote has nothing else to start from); one opened by a tap does not, so a form whose first
+    // control is a text field does not pop the soft keyboard on its own.
+    private static bool _lastInputWasKey;
+    private static TopLevel? _trackedTopLevel;
+
+    private static void TrackInputKind(TopLevel? top)
+    {
+        if (top is null || ReferenceEquals(top, _trackedTopLevel)) return;
+        _trackedTopLevel = top;
+        top.AddHandler(InputElement.KeyDownEvent, (object? _, KeyEventArgs e) =>
+            {
+                _lastInputWasKey = true;
+                PullFocusBackIntoDialog(top, e);
+            },
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        top.AddHandler(InputElement.PointerPressedEvent, (object? _, PointerPressedEventArgs _) => _lastInputWasKey = false,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    // A dialog is open but the focus is not in it — its focused control went away (a "Scan again"
+    // button replaced by the results) or was never set. A navigation key would then move from
+    // the page, behind the dim; start it from the topmost dialog's first control instead.
+    // Popups (a ComboBox list) are TopLevels of their own and never route through here.
+    private static void PullFocusBackIntoDialog(TopLevel top, KeyEventArgs e)
+    {
+        if (Open.Count == 0 || e.Handled) return;
+        if (e.Key is not (Key.Up or Key.Down or Key.Left or Key.Right or Key.Tab or Key.Enter or Key.Space))
+            return;
+        var card = Open[^1].Card;
+        if (top.FocusManager?.GetFocusedElement() is Visual focused
+            && (ReferenceEquals(focused, card) || card.IsVisualAncestorOf(focused)))
+            return;
+        (FirstFocusable(card) ?? card).Focus(NavigationMethod.Directional);
+        e.Handled = true;
+    }
+
+    // D-pad / arrow keys inside a dialog move the focus only among the dialog's own controls.
+    // Without this the XY focus navigation of a TV remote searches the whole TopLevel and walks
+    // off the sheet onto the page under the dim (the Welcome sheet → the Library search box).
+    // Arrows a control uses itself (a TextBox caret, a ComboBox) arrive here already handled.
+    private static void KeepArrowFocusInside(Control card, KeyEventArgs e)
+    {
+        if (e.Handled) return;
+        var direction = e.Key switch
+        {
+            Key.Up => NavigationDirection.Up,
+            Key.Down => NavigationDirection.Down,
+            Key.Left => NavigationDirection.Left,
+            Key.Right => NavigationDirection.Right,
+            _ => (NavigationDirection?)null,
+        };
+        if (direction is null) return;
+        var focusManager = TopLevel.GetTopLevel(card)?.FocusManager;
+        // The card itself holds the focus (dialog opened by a tap, or at start-up before any key):
+        // the first arrow goes to the dialog's first control.
+        if (ReferenceEquals(focusManager?.GetFocusedElement(), card))
+            FirstFocusable(card)?.Focus(NavigationMethod.Directional);
+        else
+            // Directional, so the focus ring shows as it does for the page's own D-pad moves.
+            (focusManager?.FindNextElement(direction.Value, new FindNextElementOptions { SearchRoot = card })
+                as InputElement)?.Focus(NavigationMethod.Directional);
+        // At the sheet's edge there is nothing to move to: stay put rather than leave it.
+        e.Handled = true;
+    }
 
     // fullScreen → fill the whole TopLevel (no bottom-sheet card / scroll wrapper).
     // Used for the SSH terminal and file manager, which are full-screen pages on
@@ -102,6 +171,9 @@ public static class OverlayDialogPresenter
         // We size the dim explicitly to the TopLevel client area instead, and
         // track it so rotation / soft-keyboard insets keep it full-bleed.
         var top = TopLevel.GetTopLevel(overlay);
+        TrackInputKind(top);
+        // Given back when the dialog closes, so a remote user lands where they were.
+        var focusBefore = top?.FocusManager?.GetFocusedElement();
 
         var card = new Border
         {
@@ -117,6 +189,9 @@ public static class OverlayDialogPresenter
             // inner content caps its width; content controls also paint Bg1.
             Background = ResolveBrush("Bg1Brush"),
             ClipToBounds = true,
+            // Holds the focus while no control of the dialog has it (opened by a tap); not a tab
+            // stop itself (set below).
+            Focusable = true,
             BoxShadow = fullScreen
                 ? default
                 : new BoxShadows(new BoxShadow
@@ -211,6 +286,13 @@ public static class OverlayDialogPresenter
 
         card.AddHandler(InputElement.GotFocusEvent, (object? _, RoutedEventArgs _) => ScrollFocusedIntoView(),
             RoutingStrategies.Bubble);
+        KeyboardNavigation.SetIsTabStop(card, false);
+
+        // Keyboard / remote focus stays in the dialog: Tab wraps around inside it, arrows are
+        // searched within the card only.
+        KeyboardNavigation.SetTabNavigation(dim, KeyboardNavigationMode.Cycle);
+        dim.AddHandler(InputElement.KeyDownEvent, (object? _, KeyEventArgs e) => KeepArrowFocusInside(card, e),
+            RoutingStrategies.Bubble);
 
         // Drive the dim to cover the full client area and cap the sheet to that
         // height (minus the top peek) so long forms scroll inside the card
@@ -235,7 +317,7 @@ public static class OverlayDialogPresenter
             sizeSub = top.GetObservable(TopLevel.ClientSizeProperty).Subscribe(ApplySize);
         }
 
-        var entry = new OpenDialog(content, new TaskCompletionSource());
+        var entry = new OpenDialog(content, new TaskCompletionSource(), card);
         overlay.Children.Add(dim);
         Open.Add(entry);
         ActiveChanged?.Invoke();
@@ -247,6 +329,13 @@ public static class OverlayDialogPresenter
             dim.Opacity = 1;
             if (!fullScreen)
                 card.RenderTransform = TransformOperations.Parse("translateY(0)");
+            // Opened from a key: start the remote on the dialog's first control. Opened by a tap:
+            // only take the focus off the page underneath, without a focus ring or a keyboard.
+            var first = _lastInputWasKey ? FirstFocusable(card) : null;
+            if (first is not null)
+                first.Focus(NavigationMethod.Directional);
+            else
+                card.Focus(NavigationMethod.Unspecified);
         }, DispatcherPriority.Background);
 
         try
@@ -266,8 +355,22 @@ public static class OverlayDialogPresenter
             overlay.Children.Remove(dim);
             Open.Remove(entry);
             ActiveChanged?.Invoke();
+            // Keyboard / remote only: after a tap there is no focus ring to restore, and giving the
+            // focus back to a text field would pop the soft keyboard. Posted: the button that opened
+            // the dialog is usually disabled until its async command, which awaits this dialog, ends.
+            if (_lastInputWasKey && focusBefore is InputElement before)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (before.IsEffectivelyVisible && before.IsEffectivelyEnabled)
+                        before.Focus(NavigationMethod.Directional);
+                }, DispatcherPriority.Background);
         }
     }
+
+    // The dialog's first control in visual (= reading) order that the keyboard can focus.
+    private static InputElement? FirstFocusable(Control card) =>
+        card.GetVisualDescendants().OfType<InputElement>().FirstOrDefault(e =>
+            e.Focusable && e.IsEffectivelyVisible && e.IsEffectivelyEnabled && KeyboardNavigation.GetIsTabStop(e));
 
     private static double Clamp(double inset) => Math.Clamp(inset, 0, MaxSafeInset);
 
