@@ -90,7 +90,11 @@ jobs:
         run: dotnet build OpenIPC.Viewer.Desktop.slnx --configuration Release --no-restore /warnaserror -p:IncludeMobileTargets=false
 
       - name: Test
-        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build --verbosity normal -p:IncludeMobileTargets=false
+        # -m:1: one test project at a time. Run side by side on windows-latest, Devices.Tests'
+        # ONVIF stub cameras (HttpListener, i.e. http.sys) and Infrastructure.Tests' loopback
+        # TcpListeners — both on ports picked by the OS — made five ONVIF tests time out, most
+        # likely a request reaching the other project's listener. The tests take seconds anyway.
+        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build -m:1 --verbosity normal -p:IncludeMobileTargets=false
 
       - name: Publish
         run: dotnet publish src/OpenIPC.Viewer.Desktop/OpenIPC.Viewer.Desktop.csproj -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeMobileTargets=false -o publish/${{ matrix.rid }}
