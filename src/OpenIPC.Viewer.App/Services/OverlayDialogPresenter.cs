@@ -329,6 +329,10 @@ public static class OverlayDialogPresenter
             dim.Opacity = 1;
             if (!fullScreen)
                 card.RenderTransform = TransformOperations.Parse("translateY(0)");
+            // The content already put the focus somewhere inside (the SSH terminal focuses its
+            // input surface itself): leave it there.
+            if (top?.FocusManager?.GetFocusedElement() is Visual inside && card.IsVisualAncestorOf(inside))
+                return;
             // Opened from a key: start the remote on the dialog's first control. Opened by a tap:
             // only take the focus off the page underneath, without a focus ring or a keyboard.
             var first = _lastInputWasKey ? FirstFocusable(card) : null;
