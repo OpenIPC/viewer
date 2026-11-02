@@ -32,6 +32,9 @@ public sealed class MainActivity : AvaloniaMainActivity
     {
         base.OnCreate(savedInstanceState);
 
+        // Android TV: text fields open the keyboard on OK instead of on D-pad focus.
+        Platform.TvSoftKeyboard.Install(this);
+
         // Request the mic (Phase 17.6 push-to-talk) and notifications (Phase 19.3)
         // permissions up front. Denied → those features degrade gracefully.
         var wanted = new System.Collections.Generic.List<string>();
