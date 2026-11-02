@@ -52,4 +52,10 @@ public sealed class MainActivity : AvaloniaMainActivity
         if (wanted.Count > 0)
             RequestPermissions(wanted.ToArray(), 1906);
     }
+
+    protected override void OnDestroy()
+    {
+        Platform.TvSoftKeyboard.Uninstall(this);
+        base.OnDestroy();
+    }
 }
