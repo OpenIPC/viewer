@@ -262,8 +262,12 @@
                               IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}">
                 <ContentControl.ContentTemplate>
                   <DataTemplate DataType="vm:CameraTileViewModel">
+                    <!-- Focusable + KeyDown: a TV remote (no touch) reaches the tile with the
+                         D-pad and opens the camera with OK. -->
                     <Grid Cursor="Hand"
                           Background="Transparent"
+                          Focusable="True"
+                          KeyDown="OnTileKeyDown"
                           Tapped="OnTileTapped"
                           PointerPressed="OnTilePointerPressed"
                           PointerMoved="OnTilePointerMoved">

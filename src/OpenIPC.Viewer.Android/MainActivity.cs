@@ -8,9 +8,9 @@ using Avalonia.Android;
 namespace OpenIPC.Viewer.Android;
 
 [Activity(
-    Label = "OpenIPC Viewer",
+    Label = "@string/app_name",
     Theme = "@style/MyTheme.NoActionBar",
-    Icon = "@mipmap/icon",
+    Icon = "@mipmap/ic_launcher",
     MainLauncher = true,
     // AdjustResize asks Android to shrink the TopLevel client area when the soft keyboard opens
     // rather than let it overlay the content. Under the edge-to-edge display a targetSdk-36 app
@@ -21,6 +21,12 @@ namespace OpenIPC.Viewer.Android;
     WindowSoftInputMode = SoftInput.AdjustResize | SoftInput.StateHidden,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize
                           | ConfigChanges.UiMode | ConfigChanges.Density)]
+// MainLauncher above adds the phone/tablet LAUNCHER entry; this one puts the app on the
+// Android TV home screen (shown with android:banner). The leanback and touchscreen
+// uses-feature entries in AndroidManifest.xml keep it installable on TV boxes.
+[IntentFilter(
+    new[] { global::Android.Content.Intent.ActionMain },
+    Categories = new[] { global::Android.Content.Intent.CategoryLeanbackLauncher })]
 public sealed class MainActivity : AvaloniaMainActivity
 {
     // All composition + early-startup work runs in MainApplication.OnCreate

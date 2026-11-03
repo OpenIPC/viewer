@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="36" />
 
+  <!-- Android TV: the app is also launched from the TV home screen (LEANBACK_LAUNCHER
+       on MainActivity, banner on <application>). Neither feature is required, so the
+       same APK installs on phones, tablets and TV boxes without a touchscreen. -->
+  <uses-feature android:name="android.software.leanback" android:required="false" />
+  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -16,10 +22,14 @@
   <!-- Phase 17.6 — push-to-talk backchannel. RECORD_AUDIO is a runtime
        permission prompted before the first talk attempt. -->
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <!-- RECORD_AUDIO implies a required microphone; talk-back is optional, so devices
+       without one (most TV boxes) can still install the app. -->
+  <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
   <application android:label="@string/app_name"
-               android:icon="@mipmap/icon"
-               android:roundIcon="@mipmap/icon"
+               android:icon="@mipmap/ic_launcher"
+               android:roundIcon="@mipmap/ic_launcher"
+               android:banner="@drawable/banner"
                android:allowBackup="true"
                android:supportsRtl="true"
                android:name=".MainApplication"

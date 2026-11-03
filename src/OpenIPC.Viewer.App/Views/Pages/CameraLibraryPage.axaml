@@ -242,11 +242,15 @@
           <ItemsControl ItemsSource="{Binding PageRows}" Grid.IsSharedSizeScope="True">
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="vm:CameraRowViewModel">
+                <!-- Focusable + KeyDown: a TV remote (no touch) reaches the row with the
+                     D-pad and opens the camera with OK. -->
                 <Border Classes="camera-row"
                         CornerRadius="8"
                         Padding="8,6"
                         Cursor="Hand"
-                        Tapped="OnCameraCardTapped">
+                        Focusable="True"
+                        Tapped="OnCameraCardTapped"
+                        KeyDown="OnCameraCardKeyDown">
                   <Border.ContextFlyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight" Opening="OnRowMenuOpening">
                       <MenuItem Header="{Binding [Library.RowEdit], Source={x:Static svc:Localizer.Instance}}"
