@@ -219,11 +219,14 @@ jobs:
               -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS"
           } >> "$GITHUB_ENV"
 
+      # -p:RuntimeIdentifiers=<rid>: the csproj lists both RIDs, and .NET Android packs every
+      # listed RID into the APK whatever -r says, so without it both APKs carried both ABIs
+      # (~71 MB each instead of ~36 MB).
       - name: Publish APK (android-arm64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       - name: Publish APK (android-x64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -p:RuntimeIdentifiers=android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       # Hard gate against shipping a corrupt APK. Both v0.3.4 and v0.3.6 went out
       # with a bad CRC-32 on lib/<abi>/libassembly-store.so (a floating-toolchain
@@ -242,6 +245,10 @@ jobs:
             echo "Integrity check: $apk"
             unzip -t "$apk" > /dev/null
           done
+          # One ABI per APK: arm64-v8a in the arm64 one, x86_64 in the x64 one.
+          abis() { unzip -Z1 "$1" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' '; }
+          [ "$(abis "$arm")" = "arm64-v8a " ] || { echo "arm64 APK ABIs: $(abis "$arm")"; exit 1; }
+          [ "$(abis "$x64")" = "x86_64 " ] || { echo "x64 APK ABIs: $(abis "$x64")"; exit 1; }
           mv "$x64" publish/android-x64/org.openipc.viewer-x64-Signed.apk
 
       - name: Upload artifact (arm64)
