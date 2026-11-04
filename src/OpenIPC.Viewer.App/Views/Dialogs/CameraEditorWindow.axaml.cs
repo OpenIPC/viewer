@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Threading;
 
 namespace OpenIPC.Viewer.App.Views.Dialogs;
@@ -24,6 +25,14 @@ public sealed partial class CameraEditorWindow : Window
         {
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
                 BeginMoveDrag(e);
+        };
+
+        // Here rather than IsCancel on the Cancel button: Android delivers Back
+        // as Escape as well, so IsCancel closed the overlay and the Back that
+        // followed found nothing open and left the app (#108).
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { content.Cancel(); e.Handled = true; }
         };
     }
 }
