@@ -70,7 +70,12 @@ public sealed partial class CameraEditorContent : UserControl
                     await vm.ConnectCommand.ExecuteAsync(null);
             }
         };
+
+        // System Back tears the overlay down without going through Finish.
+        DetachedFromVisualTree += (_, _) => (DataContext as CameraEditorViewModel)?.CancelPending();
     }
+
+    public void Cancel() => Finish(null);
 
     private void Finish(CameraEditorResult? result)
     {
