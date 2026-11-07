@@ -32,7 +32,7 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             archive: tar.gz
-          - os: macos-14
+          - os: macos-15
             rid: osx-arm64
             archive: tar.gz
     runs-on: ${{ matrix.os }}
@@ -270,7 +270,7 @@ jobs:
           if-no-files-found: error
 
   ios:
-    runs-on: macos-14
+    runs-on: macos-15
     name: build (ios)
     # Temporarily disabled: the .NET 10 iOS workload pins to an Xcode version
     # the GitHub macOS runners don't ship yet (workload 26.5 needs Xcode 26.5),
