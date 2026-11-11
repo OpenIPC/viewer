@@ -94,7 +94,15 @@ internal sealed partial class FfmpegRecordingSession : IRecordingSession
         // no row reaches the Recordings tab while REC keeps "running" (#91).
         psi.ArgumentList.Add(FfmpegCliOptions.RtspTimeoutFlag(_ffmpegPath)); psi.ArgumentList.Add(RtspTimeoutMicros);
         psi.ArgumentList.Add("-i"); psi.ArgumentList.Add(BuildRtspUri(_options.RtspUri, _options.Credentials).ToString());
-        psi.ArgumentList.Add("-c"); psi.ArgumentList.Add("copy");
+        // Video is copied untouched. Audio is re-encoded to AAC: OpenIPC cameras
+        // commonly send G.711 (pcm_alaw/pcm_mulaw), which mp4 has no tag for, and
+        // a plain "-c copy" failed the header write so nothing was recorded. AAC at
+        // 8-16 kHz costs next to no CPU. "0:a?" keeps silent cameras working, and
+        // mapping only video+audio drops ONVIF metadata/data tracks mp4 rejects too.
+        psi.ArgumentList.Add("-map"); psi.ArgumentList.Add("0:v");
+        psi.ArgumentList.Add("-map"); psi.ArgumentList.Add("0:a?");
+        psi.ArgumentList.Add("-c:v"); psi.ArgumentList.Add("copy");
+        psi.ArgumentList.Add("-c:a"); psi.ArgumentList.Add("aac");
         psi.ArgumentList.Add("-f"); psi.ArgumentList.Add("segment");
         psi.ArgumentList.Add("-segment_time"); psi.ArgumentList.Add(((int)_options.SegmentDuration.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("-reset_timestamps"); psi.ArgumentList.Add("1");

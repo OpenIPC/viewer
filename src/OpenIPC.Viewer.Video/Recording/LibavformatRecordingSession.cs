@@ -163,6 +163,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
             outputCtx = outRaw;
 
             streamMap = new int[(int)inputCtx->nb_streams];
+            var hasVideo = false;
             for (var i = 0; i < (int)inputCtx->nb_streams; i++)
             {
                 streamMap[i] = -1;
@@ -170,6 +171,18 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                 var kind = inStream->codecpar->codec_type;
                 if (kind != AVMediaType.AVMEDIA_TYPE_VIDEO && kind != AVMediaType.AVMEDIA_TYPE_AUDIO)
                     continue;
+
+                // OpenIPC cameras commonly send G.711 (pcm_alaw/pcm_mulaw) audio, which
+                // mp4 has no tag for: copying it made avformat_write_header fail with
+                // EINVAL and no recording at all. Drop what the container can't hold;
+                // the video is what a recording is for.
+                var codecId = inStream->codecpar->codec_id;
+                if (ffmpeg.avformat_query_codec(outputCtx->oformat, codecId, ffmpeg.FF_COMPLIANCE_NORMAL) != 1)
+                {
+                    _logger.LogWarning("Recording skips stream {Index}: mp4 cannot hold {Codec}",
+                        i, ffmpeg.avcodec_get_name(codecId));
+                    continue;
+                }
 
                 var outStream = ffmpeg.avformat_new_stream(outputCtx, null);
                 if (outStream == null)
@@ -183,7 +196,13 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                 outStream->codecpar->codec_tag = 0;
 
                 streamMap[i] = (int)outStream->index;
+                hasVideo |= kind == AVMediaType.AVMEDIA_TYPE_VIDEO;
             }
+
+            // Audio is optional, video is not: an audio-only file isn't a recording.
+            // Fail before avio_open so no empty/useless file is left on disk.
+            if (!hasVideo)
+                throw new InvalidOperationException("The camera stream has no video mp4 can hold");
 
             if ((outputCtx->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
             {
