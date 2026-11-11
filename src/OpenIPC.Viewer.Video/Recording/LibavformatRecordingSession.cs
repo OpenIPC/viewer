@@ -163,6 +163,7 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
             outputCtx = outRaw;
 
             streamMap = new int[(int)inputCtx->nb_streams];
+            var hasVideo = false;
             for (var i = 0; i < (int)inputCtx->nb_streams; i++)
             {
                 streamMap[i] = -1;
@@ -195,9 +196,12 @@ internal sealed class LibavformatRecordingSession : IRecordingSession
                 outStream->codecpar->codec_tag = 0;
 
                 streamMap[i] = (int)outStream->index;
+                hasVideo |= kind == AVMediaType.AVMEDIA_TYPE_VIDEO;
             }
 
-            if (outputCtx->nb_streams == 0)
+            // Audio is optional, video is not: an audio-only file isn't a recording.
+            // Fail before avio_open so no empty/useless file is left on disk.
+            if (!hasVideo)
                 throw new InvalidOperationException("The camera stream has no video mp4 can hold");
 
             if ((outputCtx->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
