@@ -29,7 +29,10 @@ internal static class TvSoftKeyboard
     {
         var uiMode = activity.GetSystemService(Context.UiModeService) as UiModeManager;
         if (uiMode?.CurrentModeType != UiMode.TypeTelevision) return;
+        var replaced = _activity is not null && !ReferenceEquals(_activity, activity);
         _activity = activity;
+        TvOnScreenKeyboard.Enabled = true;
+        if (replaced) TvOnScreenKeyboard.Reset();
         if (_registered) return;
         _registered = true;
 
@@ -39,7 +42,12 @@ internal static class TvSoftKeyboard
 
     public static void Uninstall(Activity activity)
     {
-        if (ReferenceEquals(_activity, activity)) _activity = null;
+        if (!ReferenceEquals(_activity, activity)) return;
+        // While this activity's tree can still drop the grid. A later activity
+        // must not inherit IsOpen from a layer that no longer exists.
+        TvOnScreenKeyboard.Reset();
+        TvOnScreenKeyboard.Enabled = false;
+        _activity = null;
     }
 
     private static void OnGotFocus(TextBox box, FocusChangedEventArgs e)

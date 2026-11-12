@@ -28,7 +28,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private readonly ConfigSyncService _configSync;
     private readonly CameraTransferService _transfer;
+    private readonly object _shareGate = new();
     private CancellationTokenSource? _shareCts;
+    private CancellationTokenSource _activity = new();
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
     private readonly UpdateService _updates;
     private readonly ILogger<SettingsPageViewModel> _logger;
@@ -190,8 +192,9 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 
     partial void OnSelectedSectionIndexChanged(int value)
     {
-        // Sharing opens a port. Leave it up only while this section is on screen.
-        if (value != 4) StopSharing();
+        // Sharing opens a port. Leave it up only while this section is on screen,
+        // and drop a pull that is still running so it cannot import afterwards.
+        if (value != 4) LeaveTransfer();
     }
 
     public bool IsRecordingsDirOverridden => !string.IsNullOrWhiteSpace(RecordingsDirOverride);
@@ -629,22 +632,31 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         ? Localizer.Instance["Settings.Transfer.Stop"]
         : Localizer.Instance["Settings.Transfer.Share"];
 
-    [RelayCommand]
+    // AllowConcurrentExecutions: the same button stops the share, and the default
+    // command stays disabled for the whole time HostAsync is running.
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ShareCamerasAsync()
     {
-        if (_shareCts is not null)
+        CancellationTokenSource cts;
+        lock (_shareGate)
         {
-            StopSharing();
-            return;
+            if (_shareCts is not null)
+            {
+                StopSharing();
+                return;
+            }
+
+            cts = new CancellationTokenSource();
+            _shareCts = cts;
         }
 
-        var cts = new CancellationTokenSource();
-        _shareCts = cts;
         IsSharing = true;
         TransferStatus = Localizer.Instance["Settings.Transfer.Waiting"];
         try
         {
-            await _transfer.HostAsync(ApproveTransferAsync, cts.Token).ConfigureAwait(true);
+            await _transfer.HostAsync(ApproveTransferAsync, cts.Token, ReportTransferFailure).ConfigureAwait(true);
+            if (!cts.IsCancellationRequested)
+                TransferStatus = Localizer.Instance["Settings.Transfer.Sent"];
         }
         catch (OperationCanceledException)
         {
@@ -656,7 +668,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         }
         finally
         {
-            if (ReferenceEquals(_shareCts, cts)) _shareCts = null;
+            lock (_shareGate)
+            {
+                if (ReferenceEquals(_shareCts, cts)) _shareCts = null;
+            }
             cts.Dispose();
             IsSharing = false;
         }
@@ -669,7 +684,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         TransferStatus = Localizer.Instance["Settings.Transfer.Searching"];
         try
         {
-            var found = await _transfer.DiscoverAsync(TimeSpan.FromSeconds(3), CancellationToken.None).ConfigureAwait(true);
+            var found = await _transfer.DiscoverAsync(TimeSpan.FromSeconds(3), _activity.Token).ConfigureAwait(true);
             foreach (var offer in found)
             {
                 var captured = offer;
@@ -679,6 +694,10 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
                 ? Localizer.Instance["Settings.Transfer.None"]
                 : Localizer.Instance["Settings.Transfer.Pick"];
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
         catch (Exception ex)
         {
             TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], ex.Message);
@@ -687,24 +706,30 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 
     private async Task PullFromHostAsync(CameraTransferOffer offer)
     {
+        var ct = _activity.Token;
         try
         {
             TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.WaitingAllow"], offer.Name);
-            var payload = await _transfer.PullAsync(offer, CancellationToken.None).ConfigureAwait(true);
-            var preview = await _backup.PreviewAsync(payload.Json, CancellationToken.None).ConfigureAwait(true);
+            var payload = await _transfer.PullAsync(offer, ct, code =>
+                Dispatcher.UIThread.Post(() => TransferStatus = string.Format(
+                    CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.WaitingCode"], offer.Name, code)))
+                .ConfigureAwait(true);
+            if (ct.IsCancellationRequested) return;
+            var preview = await _backup.PreviewAsync(payload.Json, ct).ConfigureAwait(true);
+            if (ct.IsCancellationRequested) return;
             var confirmed = await _dialogs.ConfirmAsync(
                 Localizer.Instance["Settings.Transfer.AllowTitle"],
                 string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Confirm"],
                     preview.CamerasAdded, preview.CamerasUpdated),
                 Localizer.Instance["Settings.Backup.ImportConfirm"],
                 Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
-            if (!confirmed)
+            if (!confirmed || ct.IsCancellationRequested)
             {
                 TransferStatus = Localizer.Instance["Settings.Transfer.Stopped"];
                 return;
             }
 
-            var result = await _backup.ImportAsync(payload.Json, CancellationToken.None, payload.Passphrase).ConfigureAwait(true);
+            var result = await _backup.ImportAsync(payload.Json, ct, payload.Passphrase).ConfigureAwait(true);
             TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Copied"],
                 result.CamerasAdded, result.CamerasUpdated);
             CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new Messages.ConfigImportedMessage());
@@ -713,26 +738,46 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         {
             TransferStatus = Localizer.Instance["Settings.Transfer.Denied"];
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
         catch (Exception ex)
         {
             TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], ex.Message);
         }
     }
 
-    private void StopSharing()
+    // Settings was left, or the Cameras section was. Sharing and any pull stop
+    // together so a dialog cannot import after the page is gone.
+    public void LeaveTransfer()
     {
-        if (_shareCts is null) return;
-        _shareCts.Cancel();
+        StopSharing();
+        _activity.Cancel();
+        _activity = new CancellationTokenSource();
     }
 
-    private async Task<bool> ApproveTransferAsync(string deviceName, CancellationToken ct)
+    private void StopSharing()
+    {
+        lock (_shareGate)
+        {
+            _shareCts?.Cancel();
+        }
+    }
+
+    private void ReportTransferFailure(string message) =>
+        Dispatcher.UIThread.Post(() => TransferStatus = string.Format(
+            CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], message));
+
+    private async Task<bool> ApproveTransferAsync(CameraTransferApproval request, CancellationToken ct)
     {
         return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             ct.ThrowIfCancellationRequested();
             return await _dialogs.ConfirmAsync(
                 Localizer.Instance["Settings.Transfer.AllowTitle"],
-                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.AllowMessage"], deviceName),
+                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.AllowMessage"],
+                    request.Name, request.Address, request.Code),
                 Localizer.Instance["Settings.Transfer.Allow"],
                 Localizer.Instance["Common.Cancel"]);
         });

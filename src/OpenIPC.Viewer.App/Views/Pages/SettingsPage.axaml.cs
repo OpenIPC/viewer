@@ -40,7 +40,11 @@ public sealed partial class SettingsPage : UserControl
             }
         };
         // Don't lose a debounced edit when the user navigates away mid-typing.
-        DetachedFromVisualTree += (_, _) => _ = _vm?.Notifications.FlushAsync();
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _ = _vm?.Notifications.FlushAsync();
+            _vm?.LeaveTransfer();
+        };
         SizeChanged += OnSizeChanged;
     }
 
@@ -153,9 +157,10 @@ public sealed partial class SettingsPage : UserControl
 
     private void FocusSectionList()
     {
+        // TryGoBack clears the selection, so the row has to be captured first.
+        var index = SectionList.SelectedIndex;
         if (_vm is { IsWide: false })
             _vm.TryGoBack();
-        var index = SectionList.SelectedIndex;
         Dispatcher.UIThread.Post(() =>
         {
             if (SectionList.ContainerFromIndex(index) is InputElement item)

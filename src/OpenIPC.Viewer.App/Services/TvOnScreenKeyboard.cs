@@ -27,9 +27,19 @@ public static class TvOnScreenKeyboard
 
     public static bool IsOpen => _layer is not null;
 
+    // Set by the TV head. Phones keep the system keyboard, so a request from
+    // the SSH key bar only opens this grid on a television.
+    public static bool Enabled { get; set; }
+
+    public static void ShowRequested(TextBox box)
+    {
+        if (!Enabled) return;
+        Show(box);
+    }
+
     public static void Show(TextBox box)
     {
-        if (!box.IsEffectivelyVisible) return;
+        if (box.IsReadOnly || !box.IsEffectivelyVisible) return;
         if (ReferenceEquals(_target, box) && _layer is not null) return;
         Dismiss();
         var overlay = Overlay();
@@ -122,10 +132,35 @@ public static class TvOnScreenKeyboard
         return true;
     }
 
+    // Activity teardown. Clears the static open state even when the overlay
+    // that owned the grid has already gone, so Back is not swallowed afterwards.
+    public static void Reset()
+    {
+        _sizeSub?.Dispose();
+        _sizeSub = null;
+        if (_layer is not null)
+        {
+            Overlay()?.Children.Remove(_layer);
+            _layer = null;
+        }
+        _target = null;
+        _preview = null;
+        _letters.Clear();
+        _shifted = false;
+    }
+
     private static void OnKey(object? sender, KeyEventArgs e)
     {
         if (e.Handled || _layer is null) return;
-        if (e.Key is Key.Escape or Key.Back)
+        // Key.Back is Backspace. The remote's Back button arrives as a back
+        // request and dismisses the grid there; this key has to delete.
+        if (e.Key == Key.Back)
+        {
+            Backspace();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape)
         {
             DismissAndRestoreFocus();
             e.Handled = true;
@@ -211,7 +246,7 @@ public static class TvOnScreenKeyboard
     private static void Type(string text)
     {
         var box = _target;
-        if (box is null) return;
+        if (box is null || box.IsReadOnly) return;
         var current = box.Text ?? "";
         var start = Math.Clamp(Math.Min(box.SelectionStart, box.SelectionEnd), 0, current.Length);
         var end = Math.Clamp(Math.Max(box.SelectionStart, box.SelectionEnd), 0, current.Length);
@@ -223,7 +258,7 @@ public static class TvOnScreenKeyboard
     private static void Backspace()
     {
         var box = _target;
-        if (box is null) return;
+        if (box is null || box.IsReadOnly) return;
         var current = box.Text ?? "";
         if (current.Length == 0) return;
         var start = Math.Clamp(Math.Min(box.SelectionStart, box.SelectionEnd), 0, current.Length);
@@ -259,19 +294,7 @@ public static class TvOnScreenKeyboard
         }, DispatcherPriority.Background);
     }
 
-    private static void Dismiss()
-    {
-        _sizeSub?.Dispose();
-        _sizeSub = null;
-        if (_layer is not null)
-        {
-            Overlay()?.Children.Remove(_layer);
-            _layer = null;
-        }
-        _target = null;
-        _preview = null;
-        _letters.Clear();
-    }
+    private static void Dismiss() => Reset();
 
     private static Panel? Overlay()
     {

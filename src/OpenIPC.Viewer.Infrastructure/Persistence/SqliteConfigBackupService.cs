@@ -85,7 +85,9 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
         if (!string.IsNullOrEmpty(c.PasswordRef))
             pass = await _secrets.GetAsync(c.PasswordRef, ct).ConfigureAwait(false);
         if (user is null && pass is null && sshUser is null && sshPass is null) return null;
-        var payload = JsonSerializer.Serialize(new CredsPayload(user ?? "", pass ?? "", sshUser, sshPass), JsonOpts);
+        // Null stays null. An SSH-only camera has no login secret; writing "" would
+        // make import replace a login the other screen already has.
+        var payload = JsonSerializer.Serialize(new CredsPayload(user, pass, sshUser, sshPass), JsonOpts);
         return CredentialCipher.Encrypt(payload, passphrase, salt);
     }
 
@@ -104,9 +106,9 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
         try { creds = JsonSerializer.Deserialize<CredsPayload>(plain, JsonOpts); }
         catch (JsonException) { return; }
         if (creds is null) return;
-        if (!string.IsNullOrEmpty(camera.UsernameRef))
+        if (creds.U is not null && !string.IsNullOrEmpty(camera.UsernameRef))
             await _secrets.SetAsync(camera.UsernameRef, creds.U, ct).ConfigureAwait(false);
-        if (!string.IsNullOrEmpty(camera.PasswordRef))
+        if (creds.P is not null && !string.IsNullOrEmpty(camera.PasswordRef))
             await _secrets.SetAsync(camera.PasswordRef, creds.P, ct).ConfigureAwait(false);
         if (creds.Su is not null)
             await _secrets.SetAsync(SshUsernameKey(camera.Id), creds.Su, ct).ConfigureAwait(false);
@@ -338,5 +340,5 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
     // The encrypted credential payload (AES-GCM plaintext). Short field names keep
     // the (already encrypted) blob compact.
     // Su/Sp are the SSH login. Absent on files written before they existed.
-    private sealed record CredsPayload(string U, string P, string? Su = null, string? Sp = null);
+    private sealed record CredsPayload(string? U, string? P, string? Su = null, string? Sp = null);
 }
