@@ -24,6 +24,8 @@ public sealed class UpdateFeedTests
               "browser_download_url": "https://github.com/OpenIPC/viewer/releases/download/v0.3.19/org.openipc.viewer-Signed.apk" },
             { "name": "org.openipc.viewer-x64-Signed.apk", "size": 70449103,
               "browser_download_url": "https://github.com/OpenIPC/viewer/releases/download/v0.3.19/org.openipc.viewer-x64-Signed.apk" },
+            { "name": "org.openipc.viewer-arm-Signed.apk", "size": 34733139,
+              "browser_download_url": "https://github.com/OpenIPC/viewer/releases/download/v0.3.19/org.openipc.viewer-arm-Signed.apk" },
             { "name": "notes.txt", "size": 10,
               "browser_download_url": "https://github.com/OpenIPC/viewer/releases/download/v0.3.19/notes.txt" }
           ]
@@ -37,13 +39,13 @@ public sealed class UpdateFeedTests
 
         Assert.Equal("0.3.19", r.Version.ToString());
         Assert.Equal("https://github.com/OpenIPC/viewer/releases/tag/v0.3.19", r.PageUrl!.AbsoluteUri);
-        Assert.Equal(5, r.Assets.Count);
+        Assert.Equal(6, r.Assets.Count);
         Assert.Equal("openipc-viewer-win-x64.zip", r.FindAsset(UpdatePlatforms.Windows, "x64")!.FileName);
         Assert.Equal("openipc-viewer-linux-x64.tar.gz", r.FindAsset(UpdatePlatforms.Linux, "x64")!.FileName);
         Assert.Equal("openipc-viewer-osx-arm64.tar.gz", r.FindAsset(UpdatePlatforms.MacOs, "arm64")!.FileName);
         Assert.Equal("org.openipc.viewer-Signed.apk", r.FindAsset(UpdatePlatforms.Android, "arm64")!.FileName);
         Assert.Equal("org.openipc.viewer-x64-Signed.apk", r.FindAsset(UpdatePlatforms.Android, "x64")!.FileName);
-        Assert.Null(r.FindAsset(UpdatePlatforms.Android, "armv7"));
+        Assert.Equal("org.openipc.viewer-arm-Signed.apk", r.FindAsset(UpdatePlatforms.Android, "armv7")!.FileName);
     }
 
     [Fact]

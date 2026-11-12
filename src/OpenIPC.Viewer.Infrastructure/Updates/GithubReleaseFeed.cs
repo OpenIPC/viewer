@@ -73,12 +73,16 @@ public sealed class GithubReleaseFeed : IUpdateFeed
 
     // Asset names as .github/workflows/build.yml uploads them:
     //   openipc-viewer-win-x64.zip, openipc-viewer-linux-x64.tar.gz, openipc-viewer-osx-arm64.tar.gz,
-    //   org.openipc.viewer-Signed.apk (arm64), org.openipc.viewer-{armv7,x64}-Signed.apk.
+    //   org.openipc.viewer-Signed.apk (arm64), org.openipc.viewer-x64-Signed.apk,
+    //   org.openipc.viewer-arm-Signed.apk (32-bit). "-armv7" is still accepted.
     public static (string Platform, string Arch)? ClassifyAsset(string name)
     {
         if (name.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
         {
+            // The 32-bit CI artifact is "-arm-Signed.apk", not "-armv7". Match that
+            // token exactly so a name containing "arm64" stays the canonical arm64 APK.
             var arch = name.Contains("-armv7", StringComparison.OrdinalIgnoreCase) ? "armv7"
+                : name.Contains("-arm-Signed.apk", StringComparison.OrdinalIgnoreCase) ? "armv7"
                 : name.Contains("-x64", StringComparison.OrdinalIgnoreCase) ? "x64"
                 : "arm64";
             return (UpdatePlatforms.Android, arch);
