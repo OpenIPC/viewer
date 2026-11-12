@@ -149,13 +149,14 @@ jobs:
         run: dotnet workload install android
 
       # FFmpeg .so build is the long pole (~15 min per ABI) — cache the output
-      # dirs for both ABIs in one entry. Key on FFmpeg version + NDK version
+      # dirs for every ABI in one entry. Key on FFmpeg version + NDK version
       # + the build script hash so any of those changing invalidates the cache.
-      - name: Cache FFmpeg android natives (arm64 + x64)
+      - name: Cache FFmpeg android natives (arm + arm64 + x64)
         id: ffmpeg-cache
         uses: actions/cache@v4
         with:
           path: |
+            runtimes/android-arm/native
             runtimes/android-arm64/native
             runtimes/android-x64/native
           key: ffmpeg-android-${{ env.FFMPEG_VERSION }}-ndk${{ env.NDK_VERSION }}-${{ hashFiles('tools/build-ffmpeg-android.sh') }}
@@ -174,7 +175,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y yasm nasm pkg-config
 
-      - name: Cross-compile FFmpeg for android-arm64 + android-x64
+      - name: Cross-compile FFmpeg for android-arm + android-arm64 + android-x64
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -223,11 +224,13 @@ jobs:
               -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS"
           } >> "$GITHUB_ENV"
 
-      # -p:RuntimeIdentifiers=<rid>: the csproj lists both RIDs, and .NET Android packs every
-      # listed RID into the APK whatever -r says, so without it both APKs carried both ABIs
-      # (~71 MB each instead of ~36 MB).
+      # -p:RuntimeIdentifiers=<rid>: the csproj lists every RID, and .NET Android packs every
+      # listed RID into the APK whatever -r says, so without it each APK carried every ABI.
       - name: Publish APK (android-arm64)
         run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
+
+      - name: Publish APK (android-arm)
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm -p:RuntimeIdentifiers=android-arm -o publish/android-arm -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       - name: Publish APK (android-x64)
         run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -p:RuntimeIdentifiers=android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
@@ -237,22 +240,25 @@ jobs:
       # packaging regression), so Android rejected them as "package corrupt" on
       # every device. `unzip -t` walks every entry and fails on a CRC mismatch,
       # so a malformed APK breaks the build here instead of reaching users.
-      # Also rename the x64 APK: both ABIs publish as org.openipc.viewer-Signed.apk,
-      # and the download-artifact merge in the release job would otherwise keep
-      # only one of them. arm64 stays canonical (what phones need); x64 gets a
-      # distinct name so both survive as separate release assets.
-      - name: Verify APK integrity + disambiguate x64
+      # Also rename the non-arm64 APKs: every ABI publishes as
+      # org.openipc.viewer-Signed.apk, and the download-artifact merge in the
+      # release job would otherwise keep only one of them. arm64 stays
+      # canonical (what phones need); arm and x64 get distinct names.
+      - name: Verify APK integrity + disambiguate arm and x64
         run: |
-          arm=$(ls publish/android-arm64/*-Signed.apk)
+          arm64=$(ls publish/android-arm64/*-Signed.apk)
+          arm=$(ls publish/android-arm/*-Signed.apk)
           x64=$(ls publish/android-x64/*-Signed.apk)
-          for apk in "$arm" "$x64"; do
+          for apk in "$arm64" "$arm" "$x64"; do
             echo "Integrity check: $apk"
             unzip -t "$apk" > /dev/null
           done
-          # One ABI per APK: arm64-v8a in the arm64 one, x86_64 in the x64 one.
+          # One ABI per APK.
           abis() { unzip -Z1 "$1" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' '; }
-          [ "$(abis "$arm")" = "arm64-v8a " ] || { echo "arm64 APK ABIs: $(abis "$arm")"; exit 1; }
+          [ "$(abis "$arm64")" = "arm64-v8a " ] || { echo "arm64 APK ABIs: $(abis "$arm64")"; exit 1; }
+          [ "$(abis "$arm")" = "armeabi-v7a " ] || { echo "arm APK ABIs: $(abis "$arm")"; exit 1; }
           [ "$(abis "$x64")" = "x86_64 " ] || { echo "x64 APK ABIs: $(abis "$x64")"; exit 1; }
+          mv "$arm" publish/android-arm/org.openipc.viewer-arm-Signed.apk
           mv "$x64" publish/android-x64/org.openipc.viewer-x64-Signed.apk
 
       - name: Upload artifact (arm64)
@@ -260,6 +266,13 @@ jobs:
         with:
           name: openipc-viewer-android-arm64
           path: publish/android-arm64/*-Signed.apk
+          if-no-files-found: error
+
+      - name: Upload artifact (arm)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openipc-viewer-android-arm
+          path: publish/android-arm/*-Signed.apk
           if-no-files-found: error
 
       - name: Upload artifact (x64)

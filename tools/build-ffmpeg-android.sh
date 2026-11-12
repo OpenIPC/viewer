@@ -2,10 +2,11 @@
 # tools/build-ffmpeg-android.sh
 #
 # Cross-compiles FFmpeg n7.1 from upstream (git.ffmpeg.org) for the Android
-# ABIs the app supports: arm64-v8a (default real-device ABI) and x86_64 (most
-# emulators on Windows/Linux hosts). Outputs land in:
+# ABIs the app supports: arm64-v8a (phones), armeabi-v7a (32-bit Android TV),
+# and x86_64 (most emulators on Windows/Linux hosts). Outputs land in:
 #   runtimes/android-arm64/native/   — picked up by AndroidNativeLibrary glob
-#   runtimes/android-x64/native/       in src/OpenIPC.Viewer.Android.csproj
+#   runtimes/android-arm/native/       in src/OpenIPC.Viewer.Android.csproj
+#   runtimes/android-x64/native/
 # and end up under lib/<abi>/ inside the produced APK.
 #
 # Requirements:
@@ -19,8 +20,8 @@
 #
 # Local usage:
 #   ANDROID_NDK_HOME=/path/to/ndk ./tools/build-ffmpeg-android.sh
-#   BUILD_ABIS=aarch64 ./tools/build-ffmpeg-android.sh    # single ABI
-#   BUILD_ABIS="aarch64 x86_64" ...                       # explicit (= default)
+#   BUILD_ABIS=arm ./tools/build-ffmpeg-android.sh        # single ABI
+#   BUILD_ABIS="aarch64 arm x86_64" ...                   # explicit (= default)
 #
 # CI usage: invoked by the android job in .github/workflows/build.yml.
 # Cache key is keyed on FFmpeg version + script hash; cache hit skips the
@@ -30,7 +31,7 @@ set -euo pipefail
 
 FFMPEG_VERSION="${FFMPEG_VERSION:-n7.1}"
 ANDROID_API="${ANDROID_API:-21}"
-BUILD_ABIS="${BUILD_ABIS:-aarch64 x86_64}"
+BUILD_ABIS="${BUILD_ABIS:-aarch64 arm x86_64}"
 NDK_HOME="${ANDROID_NDK_HOME:?ANDROID_NDK_HOME must be set}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -65,6 +66,15 @@ build_one() {
             ff_cpu=armv8-a
             rid=android-arm64
             ;;
+        arm)
+            # NDK's 32-bit triple is armv7a-linux-androideabi, which is the
+            # armeabi-v7a ABI. TCL G10 and a lot of other Android TV boards
+            # ship a 32-bit userspace, so an arm64-only APK will not install.
+            target=armv7a-linux-androideabi
+            ff_arch=arm
+            ff_cpu=armv7-a
+            rid=android-arm
+            ;;
         x86_64)
             target=x86_64-linux-android
             ff_arch=x86_64
@@ -72,7 +82,7 @@ build_one() {
             rid=android-x64
             ;;
         *)
-            echo "Unsupported BUILD_ABI '$abi' (expected: aarch64, x86_64)" >&2
+            echo "Unsupported BUILD_ABI '$abi' (expected: aarch64, arm, x86_64)" >&2
             exit 1
             ;;
     esac
@@ -105,6 +115,10 @@ build_one() {
     # Linux/Android tries the bare libfoo.so first. --disable-symver is the
     # canonical way to keep the output filenames unversioned.
     echo "==> [$abi] Configuring FFmpeg (api $ANDROID_API, cpu $ff_cpu)"
+    # Clang on Windows cannot tell .S from .s, so ARM assembly is assembled
+    # without the preprocessor and the neon sources fail. Forcing the language
+    # is harmless on Linux, where .S is already preprocessed.
+    export ASFLAGS="${ASFLAGS:-} -x assembler-with-cpp"
     ./configure \
         --prefix="$install_dir" \
         --target-os=android \

@@ -118,7 +118,7 @@ internal static class FfmpegRuntime
                 _initFailure = new FfmpegNativeLibsMissingException(
                     $"FFmpeg native libraries failed to load for runtime '{rid ?? "unknown"}'. " +
                     $"Probed: {probe}. " +
-                    $"Android: ensure runtimes/android-{{arm64,x64}}/native/*.so are populated " +
+                    $"Android: ensure runtimes/android-{{arm,arm64,x64}}/native/*.so are populated " +
                     $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
                     $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
                     $"or run tools/fetch-ffmpeg.ps1 (Windows) / tools/fetch-ffmpeg-linux.sh (Linux) / " +
