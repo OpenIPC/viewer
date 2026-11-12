@@ -203,6 +203,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     /// </summary>
     public bool TryGoBack()
     {
+        if (TvOnScreenKeyboard.TryDismiss())
+            return true;
+
         if (OverlayDialogPresenter.TryDismissTopmost())
             return true;
 

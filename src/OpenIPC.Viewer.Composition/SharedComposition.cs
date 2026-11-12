@@ -248,6 +248,7 @@ public static class SharedComposition
         // Network config auto-sync (Phase 20): mirrors cameras+layouts from a
         // shared file at startup. Run from StartupViewModel and Settings.
         services.AddSingleton<ConfigSyncService>();
+        services.AddSingleton<CameraTransferService>();
 
         // Update notifications (Phase 11.5). The feed comes from the build's UpdateFeed
         // property — GitHub Releases by default, a latest.json manifest for builds published
