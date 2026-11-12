@@ -145,6 +145,27 @@ public sealed class SqliteConfigBackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_WithPassphrase_RestoresLoginAndSshPassword()
+    {
+        var src = await NewDbAsync();
+        var cam = Cam("A") with { UsernameRef = "u-ref", PasswordRef = "p-ref" };
+        var id = await src.cams.AddAsync(cam, CancellationToken.None);
+        await src.secrets.SetAsync("u-ref", "admin", CancellationToken.None);
+        await src.secrets.SetAsync("p-ref", "hunter2", CancellationToken.None);
+        await src.secrets.SetAsync($"cam:{id}:ssh:password", "ssh-secret", CancellationToken.None);
+
+        var json = await src.backup.ExportAsync("one-time", CancellationToken.None);
+        Assert.DoesNotContain("hunter2", json);
+        Assert.DoesNotContain("ssh-secret", json);
+
+        var dst = await NewDbAsync();
+        await dst.backup.ImportAsync(json, CancellationToken.None, "one-time");
+        Assert.Equal("admin", await dst.secrets.GetAsync("u-ref", CancellationToken.None));
+        Assert.Equal("hunter2", await dst.secrets.GetAsync("p-ref", CancellationToken.None));
+        Assert.Equal("ssh-secret", await dst.secrets.GetAsync($"cam:{id}:ssh:password", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Mirror_WrongPassphrase_DoesNotRestoreCredentials()
     {
         var src = await NewDbAsync();

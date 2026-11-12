@@ -75,14 +75,22 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
 
     private async Task<string?> EncryptCredsAsync(Camera c, string passphrase, byte[] salt, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(c.UsernameRef) || string.IsNullOrEmpty(c.PasswordRef))
-            return null;
-        var user = await _secrets.GetAsync(c.UsernameRef, ct).ConfigureAwait(false);
-        var pass = await _secrets.GetAsync(c.PasswordRef, ct).ConfigureAwait(false);
-        if (user is null && pass is null) return null;
-        var payload = JsonSerializer.Serialize(new CredsPayload(user ?? "", pass ?? ""), JsonOpts);
+        // SSH logins live beside the camera login under keys CameraDirectoryService owns.
+        var sshUser = await _secrets.GetAsync(SshUsernameKey(c.Id), ct).ConfigureAwait(false);
+        var sshPass = await _secrets.GetAsync(SshPasswordKey(c.Id), ct).ConfigureAwait(false);
+        string? user = null;
+        string? pass = null;
+        if (!string.IsNullOrEmpty(c.UsernameRef))
+            user = await _secrets.GetAsync(c.UsernameRef, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(c.PasswordRef))
+            pass = await _secrets.GetAsync(c.PasswordRef, ct).ConfigureAwait(false);
+        if (user is null && pass is null && sshUser is null && sshPass is null) return null;
+        var payload = JsonSerializer.Serialize(new CredsPayload(user ?? "", pass ?? "", sshUser, sshPass), JsonOpts);
         return CredentialCipher.Encrypt(payload, passphrase, salt);
     }
+
+    private static string SshUsernameKey(CameraId id) => $"cam:{id}:ssh:username";
+    private static string SshPasswordKey(CameraId id) => $"cam:{id}:ssh:password";
 
     // Decrypt a camera's credentials from the file and store them under the
     // camera's secret refs (cam:{id}:username/password) so the local secrets
@@ -90,16 +98,20 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
     // null and is skipped — the camera just stays credential-less locally.
     private async Task RestoreCredsAsync(Camera camera, string encCreds, string passphrase, byte[] salt, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(camera.UsernameRef) || string.IsNullOrEmpty(camera.PasswordRef))
-            return;
         var plain = CredentialCipher.TryDecrypt(encCreds, passphrase, salt);
         if (plain is null) return;
         CredsPayload? creds;
         try { creds = JsonSerializer.Deserialize<CredsPayload>(plain, JsonOpts); }
         catch (JsonException) { return; }
         if (creds is null) return;
-        await _secrets.SetAsync(camera.UsernameRef, creds.U, ct).ConfigureAwait(false);
-        await _secrets.SetAsync(camera.PasswordRef, creds.P, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(camera.UsernameRef))
+            await _secrets.SetAsync(camera.UsernameRef, creds.U, ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(camera.PasswordRef))
+            await _secrets.SetAsync(camera.PasswordRef, creds.P, ct).ConfigureAwait(false);
+        if (creds.Su is not null)
+            await _secrets.SetAsync(SshUsernameKey(camera.Id), creds.Su, ct).ConfigureAwait(false);
+        if (creds.Sp is not null)
+            await _secrets.SetAsync(SshPasswordKey(camera.Id), creds.Sp, ct).ConfigureAwait(false);
     }
 
     public async Task<ConfigImportPreview> PreviewAsync(string json, CancellationToken ct)
@@ -119,11 +131,17 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
         return new ConfigImportPreview(added, updated, root.Layouts.Count);
     }
 
-    public async Task<ConfigImportPreview> ImportAsync(string json, CancellationToken ct)
+    public async Task<ConfigImportPreview> ImportAsync(string json, CancellationToken ct, string? credentialPassphrase = null)
     {
         var root = Parse(json);
         var added = 0;
         var updated = 0;
+        byte[]? salt = null;
+        if (!string.IsNullOrEmpty(credentialPassphrase) && !string.IsNullOrEmpty(root.CredsSalt))
+        {
+            try { salt = Convert.FromBase64String(root.CredsSalt); }
+            catch (FormatException) { salt = null; }
+        }
 
         foreach (var dto in root.Cameras)
         {
@@ -141,6 +159,9 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
                 await _cameras.UpdateAsync(camera with { CreatedAt = existing.CreatedAt }, ct).ConfigureAwait(false);
                 updated++;
             }
+
+            if (salt is not null && !string.IsNullOrEmpty(dto.EncCreds))
+                await RestoreCredsAsync(camera, dto.EncCreds!, credentialPassphrase!, salt, ct).ConfigureAwait(false);
         }
 
         // Only keep tiles for cameras that now exist (avoid orphan rows).
@@ -316,5 +337,6 @@ public sealed class SqliteConfigBackupService : IConfigBackupService
 
     // The encrypted credential payload (AES-GCM plaintext). Short field names keep
     // the (already encrypted) blob compact.
-    private sealed record CredsPayload(string U, string P);
+    // Su/Sp are the SSH login. Absent on files written before they existed.
+    private sealed record CredsPayload(string U, string P, string? Su = null, string? Sp = null);
 }

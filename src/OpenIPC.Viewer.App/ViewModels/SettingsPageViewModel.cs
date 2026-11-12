@@ -4,7 +4,9 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -25,6 +27,8 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private readonly ISshHostKeyStore _hostKeys;
     private readonly OpenIPC.Viewer.Core.Persistence.IConfigBackupService _backup;
     private readonly ConfigSyncService _configSync;
+    private readonly CameraTransferService _transfer;
+    private CancellationTokenSource? _shareCts;
     private readonly OpenIPC.Viewer.Core.Persistence.ILayoutRepository _layouts;
     private readonly UpdateService _updates;
     private readonly ILogger<SettingsPageViewModel> _logger;
@@ -120,7 +124,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     private string _recordingsDirOverride = "";
 
     // Master-detail state. -1 = no section selected (list view on narrow);
-    // 0..7 maps to Appearance/Video/Recording/Discovery/SSH/Advanced/
+    // 0..8 maps to Appearance/Video/Recording/Discovery/Cameras/SSH/Advanced/
     // Notifications/About. On wide viewports a section is always selected
     // (defaults to 0). Code-behind toggles IsWide based on viewport width and
     // resizes the Grid columns to hide one pane on narrow.
@@ -130,6 +134,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     [NotifyPropertyChangedFor(nameof(IsRecording))]
     [NotifyPropertyChangedFor(nameof(IsDiscovery))]
     [NotifyPropertyChangedFor(nameof(IsSsh))]
+    [NotifyPropertyChangedFor(nameof(IsCameras))]
     [NotifyPropertyChangedFor(nameof(IsAdvanced))]
     [NotifyPropertyChangedFor(nameof(IsNotifications))]
     [NotifyPropertyChangedFor(nameof(IsAbout))]
@@ -148,10 +153,11 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
     public bool IsVideo      => SelectedSectionIndex == 1;
     public bool IsRecording  => SelectedSectionIndex == 2;
     public bool IsDiscovery  => SelectedSectionIndex == 3;
-    public bool IsSsh        => SelectedSectionIndex == 4;
-    public bool IsAdvanced   => SelectedSectionIndex == 5;
-    public bool IsNotifications => SelectedSectionIndex == 6;
-    public bool IsAbout      => SelectedSectionIndex == 7;
+    public bool IsCameras    => SelectedSectionIndex == 4;
+    public bool IsSsh        => SelectedSectionIndex == 5;
+    public bool IsAdvanced   => SelectedSectionIndex == 6;
+    public bool IsNotifications => SelectedSectionIndex == 7;
+    public bool IsAbout      => SelectedSectionIndex == 8;
 
     public bool ShowList       => IsWide || SelectedSectionIndex < 0;
     public bool ShowDetail     => IsWide || SelectedSectionIndex >= 0;
@@ -180,7 +186,13 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 
     // Deep-link target for the tray "About" item — keeps the section index in
     // one place (it shifts between editions with different section sets).
-    public void SelectAboutSection() => SelectedSectionIndex = 7;
+    public void SelectAboutSection() => SelectedSectionIndex = 8;
+
+    partial void OnSelectedSectionIndexChanged(int value)
+    {
+        // Sharing opens a port. Leave it up only while this section is on screen.
+        if (value != 4) StopSharing();
+    }
 
     public bool IsRecordingsDirOverridden => !string.IsNullOrWhiteSpace(RecordingsDirOverride);
 
@@ -222,6 +234,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         ISshHostKeyStore hostKeys,
         OpenIPC.Viewer.Core.Persistence.IConfigBackupService backup,
         ConfigSyncService configSync,
+        CameraTransferService transfer,
         NotificationSettingsViewModel notifications,
         OpenIPC.Viewer.Core.Persistence.ILayoutRepository layouts,
         UpdateService updates,
@@ -233,6 +246,7 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         _hostKeys = hostKeys;
         _backup = backup;
         _configSync = configSync;
+        _transfer = transfer;
         Notifications = notifications;
         _layouts = layouts;
         _updates = updates;
@@ -602,6 +616,128 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
         }
     }
 
+    // --- Copy cameras to another screen on the LAN ------------------------
+    public ObservableCollection<TransferHostItem> TransferHosts { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShareButtonText))]
+    private bool _isSharing;
+
+    [ObservableProperty] private string? _transferStatus;
+
+    public string ShareButtonText => IsSharing
+        ? Localizer.Instance["Settings.Transfer.Stop"]
+        : Localizer.Instance["Settings.Transfer.Share"];
+
+    [RelayCommand]
+    private async Task ShareCamerasAsync()
+    {
+        if (_shareCts is not null)
+        {
+            StopSharing();
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _shareCts = cts;
+        IsSharing = true;
+        TransferStatus = Localizer.Instance["Settings.Transfer.Waiting"];
+        try
+        {
+            await _transfer.HostAsync(ApproveTransferAsync, cts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            TransferStatus = Localizer.Instance["Settings.Transfer.Stopped"];
+        }
+        catch (Exception ex)
+        {
+            TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], ex.Message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_shareCts, cts)) _shareCts = null;
+            cts.Dispose();
+            IsSharing = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task FindTransferHostsAsync()
+    {
+        TransferHosts.Clear();
+        TransferStatus = Localizer.Instance["Settings.Transfer.Searching"];
+        try
+        {
+            var found = await _transfer.DiscoverAsync(TimeSpan.FromSeconds(3), CancellationToken.None).ConfigureAwait(true);
+            foreach (var offer in found)
+            {
+                var captured = offer;
+                TransferHosts.Add(new TransferHostItem(captured.Name, new AsyncRelayCommand(() => PullFromHostAsync(captured))));
+            }
+            TransferStatus = found.Count == 0
+                ? Localizer.Instance["Settings.Transfer.None"]
+                : Localizer.Instance["Settings.Transfer.Pick"];
+        }
+        catch (Exception ex)
+        {
+            TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], ex.Message);
+        }
+    }
+
+    private async Task PullFromHostAsync(CameraTransferOffer offer)
+    {
+        try
+        {
+            TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.WaitingAllow"], offer.Name);
+            var payload = await _transfer.PullAsync(offer, CancellationToken.None).ConfigureAwait(true);
+            var preview = await _backup.PreviewAsync(payload.Json, CancellationToken.None).ConfigureAwait(true);
+            var confirmed = await _dialogs.ConfirmAsync(
+                Localizer.Instance["Settings.Transfer.AllowTitle"],
+                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Confirm"],
+                    preview.CamerasAdded, preview.CamerasUpdated),
+                Localizer.Instance["Settings.Backup.ImportConfirm"],
+                Localizer.Instance["Common.Cancel"]).ConfigureAwait(true);
+            if (!confirmed)
+            {
+                TransferStatus = Localizer.Instance["Settings.Transfer.Stopped"];
+                return;
+            }
+
+            var result = await _backup.ImportAsync(payload.Json, CancellationToken.None, payload.Passphrase).ConfigureAwait(true);
+            TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Copied"],
+                result.CamerasAdded, result.CamerasUpdated);
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new Messages.ConfigImportedMessage());
+        }
+        catch (CameraTransferDeniedException)
+        {
+            TransferStatus = Localizer.Instance["Settings.Transfer.Denied"];
+        }
+        catch (Exception ex)
+        {
+            TransferStatus = string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.Failed"], ex.Message);
+        }
+    }
+
+    private void StopSharing()
+    {
+        if (_shareCts is null) return;
+        _shareCts.Cancel();
+    }
+
+    private async Task<bool> ApproveTransferAsync(string deviceName, CancellationToken ct)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return await _dialogs.ConfirmAsync(
+                Localizer.Instance["Settings.Transfer.AllowTitle"],
+                string.Format(CultureInfo.CurrentCulture, Localizer.Instance["Settings.Transfer.AllowMessage"], deviceName),
+                Localizer.Instance["Settings.Transfer.Allow"],
+                Localizer.Instance["Common.Cancel"]);
+        });
+    }
+
     [RelayCommand]
     private async Task ImportConfigAsync()
     {
@@ -647,6 +783,18 @@ public sealed partial class SettingsPageViewModel : ViewModelBase, IBackNavigabl
 // Combo item for the Settings → Video network-interface picker (Phase 12.6).
 // Display is the human label ("Auto" / "Ethernet (192.168.1.5)"); Value is the
 // persisted IPv4 ("" = auto).
+public sealed class TransferHostItem
+{
+    public TransferHostItem(string name, CommunityToolkit.Mvvm.Input.IAsyncRelayCommand pull)
+    {
+        Name = name;
+        PullCommand = pull;
+    }
+
+    public string Name { get; }
+    public CommunityToolkit.Mvvm.Input.IAsyncRelayCommand PullCommand { get; }
+}
+
 public sealed record NetworkInterfaceOption(string Display, string Value);
 
 // Combo item for Settings → Video idle-pause picker. Display is the localized

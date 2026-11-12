@@ -3,23 +3,21 @@ using Android.Content;
 using Android.Content.Res;
 using Android.Views.InputMethods;
 using Avalonia.Controls;
-using Avalonia.Controls.Platform;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using OpenIPC.Viewer.App.Services;
 
 namespace OpenIPC.Viewer.Android.Platform;
 
-// Android TV: a text field opens the soft keyboard on OK, not when the D-pad reaches it.
+// Android TV: a text field opens an on-screen keyboard on OK, not when the D-pad reaches it.
 //
-// Avalonia.Android shows the keyboard as soon as a TextBox gets the focus (AndroidInputMethod
-// SetClient → ShowSoftInput). With a touch screen that is a tap on the field; with a TV remote
-// it fires whenever the D-pad merely passes through one (the Library search box sits between the
-// toolbar and the filters), and the keyboard then covers half the screen and takes the D-pad.
-// On a TV this hides the keyboard again when the focus reached the field by D-pad or Tab, and
-// shows it when OK (D-pad centre, which Avalonia maps to Key.Space, or Enter) is pressed on a
-// field whose keyboard is closed. Back closes it as usual. Focus set from code (the SSH
-// terminal's keyboard button) is left alone, and so are phones and tablets.
+// Avalonia.Android shows the system keyboard as soon as a TextBox gets the focus. On a TV the
+// remote's arrows never reach that keyboard: Avalonia still owns the focus, so Left/Right/Up/Down
+// move to the next control and the field is abandoned. The system keyboard is kept closed, and
+// OK (D-pad centre, which Avalonia maps to Key.Space, or Enter) opens TvOnScreenKeyboard, whose
+// keys are ordinary buttons the same D-pad can walk. A tap opens it too. Focus set from code
+// (the SSH terminal's keyboard button) is left alone, and so are phones and tablets.
 internal static class TvSoftKeyboard
 {
     private static bool _registered;
@@ -46,24 +44,24 @@ internal static class TvSoftKeyboard
 
     private static void OnGotFocus(TextBox box, FocusChangedEventArgs e)
     {
-        // Only the D-pad passing through: a focus set from code may be an explicit request for
-        // the keyboard.
-        if (e.NavigationMethod is not (NavigationMethod.Directional or NavigationMethod.Tab)) return;
-        // Posted: Avalonia shows the keyboard while it hands the field to the input method,
-        // around this focus change; hide it once that is done.
+        // Posted: Avalonia shows the system keyboard while it hands the field to the input
+        // method, around this focus change. Close it once that is done. A tap (pointer) also
+        // opens our key grid; D-pad focus waits for OK so passing through a field stays quiet.
+        // Focus set from code is neither, and is left alone.
+        var fromPointer = e.NavigationMethod == NavigationMethod.Pointer;
         Dispatcher.UIThread.Post(() =>
         {
-            if (box.IsFocused) SetKeyboard(show: false);
+            if (!box.IsFocused) return;
+            SetKeyboard(show: false);
+            if (fromPointer) TvOnScreenKeyboard.Show(box);
         }, DispatcherPriority.Background);
     }
 
     private static void OnKeyDown(TextBox box, KeyEventArgs e)
     {
         if (e.Handled || e.Key is not (Key.Space or Key.Enter)) return;
-        // With the keyboard up, the key is the keyboard's (or typing); only a closed keyboard —
-        // never opened on this field, or closed with Back while it kept the focus — opens on OK.
-        if (TopLevel.GetTopLevel(box)?.InputPane?.State == InputPaneState.Open) return;
-        SetKeyboard(show: true);
+        if (TvOnScreenKeyboard.IsOpen) return;
+        TvOnScreenKeyboard.Show(box);
         // OK only opens the keyboard: no space typed, no Enter action.
         e.Handled = true;
     }
