@@ -1,5 +1,47 @@
 <Project>
 
+  <!-- Publishing -r android-arm flows that RID into every net9.0 library.
+       NuGet then wants Microsoft.NETCore.App.Runtime.linux-bionic-arm, which
+       the .NET 9 packs do not ship (arm64 and x64 do). The Android head is
+       net10.0-android and brings its own runtime. Leave the RID in place so
+       native assets still match armeabi-v7a. This has to live in targets:
+       Directory.Build.props is imported before TargetFramework is set. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0' and '$(RuntimeIdentifier)' == 'android-arm'">
+    <EnableRuntimePackDownload>false</EnableRuntimePackDownload>
+  </PropertyGroup>
+
+  <!-- android-arm's RID graph parent is linux-bionic-arm. .NET 9 does not ship
+       that runtime pack (arm64 and x64 do). These libraries are managed IL; the
+       net10.0-android head brings the Mono runtime. Drop the missing pack so
+       publish does not fail NETSDK1112 after the download is suppressed. -->
+  <Target Name="DropUnsupportedBionicArmRuntimePack"
+          AfterTargets="ProcessFrameworkReferences"
+          Condition="'$(TargetFramework)' == 'net9.0' and '$(RuntimeIdentifier)' == 'android-arm'">
+    <ItemGroup>
+      <RuntimePack Remove="@(RuntimePack)"
+                   Condition="'%(RuntimePack.RuntimeIdentifier)' == 'linux-bionic-arm' or $([System.String]::Copy('%(Identity)').Contains('linux-bionic-arm'))" />
+      <UnavailableRuntimePack Remove="@(UnavailableRuntimePack)"
+                   Condition="'%(UnavailableRuntimePack.RuntimeIdentifier)' == 'linux-bionic-arm' or $([System.String]::Copy('%(Identity)').Contains('linux-bionic-arm'))" />
+      <PackageDownload Remove="@(PackageDownload)"
+                   Condition="$([System.String]::Copy('%(Identity)').Contains('linux-bionic-arm'))" />
+    </ItemGroup>
+  </Target>
+
+  <!-- ONNX Runtime's desktop props copy runtimes/win-arm/onnxruntime.dll whenever
+       PlatformTarget is ARM, and that file is not in the package. The Android
+       build sets PlatformTarget from the RID. armeabi-v7a ships inside
+       onnxruntime.aar and is packaged by the Android head. -->
+  <Target Name="DropMissingOnnxWindowsArmBinary"
+          BeforeTargets="AssignTargetPaths"
+          Condition="'$(TargetFramework)' == 'net9.0' and '$(RuntimeIdentifier)' == 'android-arm'">
+    <ItemGroup>
+      <None Remove="@(None)"
+            Condition="$([System.String]::Copy('%(Identity)').Contains('runtimes\win-arm\')) or $([System.String]::Copy('%(Identity)').Contains('runtimes/win-arm/'))" />
+      <Content Remove="@(Content)"
+            Condition="$([System.String]::Copy('%(Identity)').Contains('runtimes\win-arm\')) or $([System.String]::Copy('%(Identity)').Contains('runtimes/win-arm/'))" />
+    </ItemGroup>
+  </Target>
+
   <!-- Derive the assembly version from the nearest git release tag so the About
        screen shows the actual build (e.g. "0.1.9-rc1-23-g13a9f8b") instead of the
        default 1.0.0.0. Runs once per project before assembly-info generation.
