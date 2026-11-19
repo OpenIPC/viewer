@@ -108,6 +108,108 @@ public sealed class CameraLinkCommandsTests
     }
 
     [Fact]
+    public void IsComplete_NeedsInterfaceAndEndMarker()
+    {
+        Assert.True(CameraLinkCommands.IsComplete("if=eth0\nspeed=100\nend=1\n"));
+        Assert.True(CameraLinkCommands.IsComplete("if=eth0\r\nend=1\r\n"));
+        Assert.False(CameraLinkCommands.IsComplete("if=eth0\nspeed=100\n"));   // cut off
+        Assert.False(CameraLinkCommands.IsComplete("speed=100\nend=1\n"));     // no interface
+        Assert.False(CameraLinkCommands.IsComplete("if=\nend=1\n"));
+        Assert.False(CameraLinkCommands.IsComplete(""));
+        Assert.Contains("echo \"end=1\"", CameraLinkCommands.ReadLinkState());
+    }
+
+    [Fact]
+    public void Parse_ReadsAdvertisedModesAcrossLines()
+    {
+        var s = CameraLinkCommands.Parse(
+            "eth:\tAdvertised link modes:  10baseT/Half 10baseT/Full\neth:\t                        100baseT/Half 100baseT/Full\neth:\tAuto-negotiation: on\n");
+        Assert.Equal("10baseT/Half 10baseT/Full 100baseT/Half 100baseT/Full", s.AdvertisedModes);
+    }
+
+    [Theory]
+    [InlineData("10baseT/Full", CameraLinkMode.Force10Full, true)]
+    [InlineData("10baseT/Half 10baseT/Full 100baseT/Half 100baseT/Full", CameraLinkMode.Force10Full, false)]
+    [InlineData("10baseT/Half 10baseT/Full 100baseT/Half 100baseT/Full", CameraLinkMode.Auto, true)]
+    [InlineData("10baseT/Full", CameraLinkMode.Auto, false)]
+    [InlineData(null, CameraLinkMode.Auto, false)]
+    public void AdvertisesMode_MatchesTheRequestedMode(string? advertised, CameraLinkMode mode, bool expected)
+    {
+        Assert.Equal(expected, CameraLinkCommands.AdvertisesMode(advertised, mode));
+    }
+
+    [Fact]
+    public void RestartStreamer_PrintsTheMarkerOnlyOnSuccess()
+    {
+        var cmd = CameraLinkCommands.RestartStreamer();
+        Assert.Contains("restart >/dev/null 2>&1 && echo restarted=init", cmd);
+        Assert.Contains("killall -HUP majestic && echo restarted=hup", cmd);
+        Assert.DoesNotContain("2>&1; echo restarted", cmd);
+    }
+
+    [Fact]
+    public void RestartStreamer_FailingInitScript_KeepsNonZeroExit_InARealShell()
+    {
+        // Regression: "restart; echo restarted=init" turned a failed restart
+        // into exit 0. Runs the real command in sh when one is available.
+        var sh = FindShell();
+        if (sh is null) return;
+
+        var dir = Path.Combine(Path.GetTempPath(), "openipc-restart-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var failing = WriteScript(dir, "fail.sh", "#!/bin/sh\nexit 1\n");
+            var (code, output) = RunShell(sh, CameraLinkCommands.RestartStreamer(failing));
+            Assert.NotEqual(0, code);
+            Assert.DoesNotContain("restarted=", output);
+
+            var working = WriteScript(dir, "ok.sh", "#!/bin/sh\nexit 0\n");
+            (code, output) = RunShell(sh, CameraLinkCommands.RestartStreamer(working));
+            Assert.Equal(0, code);
+            Assert.Contains("restarted=init", output);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static string WriteScript(string dir, string name, string body)
+    {
+        var path = Path.Combine(dir, name);
+        File.WriteAllText(path, body);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        // MSYS sh on Windows wants forward slashes.
+        return path.Replace('\\', '/');
+    }
+
+    private static string? FindShell()
+    {
+        var candidates = OperatingSystem.IsWindows()
+            ? new[] { @"C:\Program Files\Git\usr\bin\sh.exe", @"C:\Program Files\Git\bin\sh.exe" }
+            : new[] { "/bin/sh", "/usr/bin/sh" };
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static (int Code, string Output) RunShell(string sh, string command)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(sh)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add(command);
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit(15_000);
+        return (p.ExitCode, output);
+    }
+
+    [Fact]
     public void ReadLinkState_IsReadOnly()
     {
         var cmd = CameraLinkCommands.ReadLinkState();

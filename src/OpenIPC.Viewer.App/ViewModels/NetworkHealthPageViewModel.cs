@@ -34,6 +34,13 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
     private readonly Dictionary<CameraId, string> _names = new();
     private readonly Dictionary<string, string> _namesByHost = new(StringComparer.OrdinalIgnoreCase);
     private bool _active;
+    // Cancelled when the page leaves the screen: page-started checks stop and
+    // their completions no longer touch the detached page. A new one per visit.
+    private CancellationTokenSource? _lifetime;
+    private static readonly CancellationToken Cancelled = new(true);
+
+    internal CancellationToken Lifetime => _lifetime?.Token ?? Cancelled;
+    internal bool IsActive => _active;
     private bool _refreshQueued;
 
     public ObservableCollection<LinkHealthRowViewModel> Rows { get; } = new();
@@ -89,11 +96,13 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
     {
         if (_active) return;
         _active = true;
+        _lifetime = new CancellationTokenSource();
         _journal.Changed += OnJournalChanged;
         _service.ReportReady += OnReportReady;
         _service.RoutingReady += OnRoutingReady;
         Localizer.Instance.PropertyChanged += OnLanguageChanged;
         await LoadAsync().ConfigureAwait(true);
+        if (!_active) return;
         // The routing check is cheap (a few seconds) and answers the most common
         // "camera is plugged in but unreachable" question, so it runs on open.
         if (_service.LastRouting is null || DateTimeOffset.Now - _service.LastRouting.At > TimeSpan.FromMinutes(1))
@@ -106,6 +115,9 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
     {
         if (!_active) return;
         _active = false;
+        // Cancel, don't dispose: tasks still holding the token may register on it.
+        _lifetime?.Cancel();
+        _lifetime = null;
         _journal.Changed -= OnJournalChanged;
         _service.ReportReady -= OnReportReady;
         _service.RoutingReady -= OnRoutingReady;
@@ -117,12 +129,18 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanCheckRoutes))]
     private async Task CheckRoutesAsync()
     {
+        var ct = Lifetime;
+        if (ct.IsCancellationRequested) return;
         IsCheckingRoutes = true;
         RoutesStatus = Localizer.Instance["LinkHealth.Routes.Checking"];
         try
         {
-            await _service.CheckRoutingAsync(CancellationToken.None).ConfigureAwait(true);
+            await _service.CheckRoutingAsync(ct).ConfigureAwait(true);
             RoutesStatus = string.Empty;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return; // the page left
         }
         catch (Exception ex)
         {
@@ -133,7 +151,7 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
         {
             IsCheckingRoutes = false;
         }
-        UpdateRoutes();
+        if (_active) UpdateRoutes();
     }
 
     [RelayCommand]
@@ -170,15 +188,19 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
         try
         {
             // Rewrite first so the file matches what the page shows.
-            FixScriptPath = RouteFixScriptFile.Write(_fs.AppDataDir.FullName, report.Fix, IsRussian);
+            // The hash is of the bytes written here; the elevated stub refuses
+            // to run anything else.
+            var written = RouteFixScriptFile.Write(_fs.AppDataDir.FullName, report.Fix, IsRussian);
+            FixScriptPath = written.Path;
             FixLogText = string.Empty;
             RoutesStatus = loc["LinkHealth.Routes.Running"];
-            var exitCode = await RouteFixScriptFile.RunElevatedAsync(FixScriptPath).ConfigureAwait(true);
+            var exitCode = await RouteFixScriptFile.RunElevatedAsync(written, IsRussian).ConfigureAwait(true);
             if (exitCode is null)
             {
                 RoutesStatus = loc["LinkHealth.Routes.Declined"];
                 return;
             }
+            if (!_active) return; // left the page while the script ran
             FixLogText = RouteFixScriptFile.ReadLog(FixScriptPath);
             await CheckRoutesAsync().ConfigureAwait(true);
             // After the re-check (which clears the status line) say how the script ended.
@@ -186,6 +208,7 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
             {
                 0 => "LinkHealth.Routes.Result.Done",
                 2 => "LinkHealth.Routes.Result.Partial",
+                4 => "LinkHealth.Routes.Result.Tampered",
                 _ => "LinkHealth.Routes.Result.Failed",
             }];
         }
@@ -231,7 +254,7 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
             FixScriptText = RouteFixScriptFile.Text(report.Fix, IsRussian);
             try
             {
-                FixScriptPath = RouteFixScriptFile.Write(_fs.AppDataDir.FullName, report.Fix, IsRussian);
+                FixScriptPath = RouteFixScriptFile.Write(_fs.AppDataDir.FullName, report.Fix, IsRussian).Path;
             }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
             {
@@ -270,7 +293,10 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
         // Sequential: parallel checks would load the shared segment and blur
         // whose counters moved.
         foreach (var row in Rows.ToList())
+        {
+            if (!_active) break;
             await row.CheckCommand.ExecuteAsync(null).ConfigureAwait(true);
+        }
     }
 
     [RelayCommand]
@@ -297,10 +323,12 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
     private async Task LoadAsync()
     {
         if (IsLoading) return;
+        var ct = Lifetime;
         IsLoading = true;
         try
         {
-            var cameras = await _directory.ListAsync(CancellationToken.None).ConfigureAwait(true);
+            var cameras = await _directory.ListAsync(ct).ConfigureAwait(true);
+            if (!_active) return;
             _names.Clear();
             _namesByHost.Clear();
             foreach (var c in cameras)
@@ -314,6 +342,10 @@ public sealed partial class NetworkHealthPageViewModel : ViewModelBase
                 Rows.Add(new LinkHealthRowViewModel(c, this, _service, _journal, _logger));
             IsEmpty = Rows.Count == 0;
             UpdateAll();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // the page left before the list arrived
         }
         catch (Exception ex)
         {
@@ -442,7 +474,7 @@ public sealed partial class LinkHealthRowViewModel : ViewModelBase
             return;
         await ActAsync(async () =>
         {
-            await _service.RestartStreamerAsync(Camera, CancellationToken.None).ConfigureAwait(true);
+            await _service.RestartStreamerAsync(Camera, _page.Lifetime).ConfigureAwait(true);
             _journal.Record(Camera.Id, ConnectionEventKind.AutoFix, "RestartStreamer:manual");
             return Localizer.Instance["LinkHealth.Fix.RestartDone"];
         }).ConfigureAwait(true);
@@ -456,7 +488,7 @@ public sealed partial class LinkHealthRowViewModel : ViewModelBase
             return;
         await ActAsync(async () =>
         {
-            var ok = await _service.SetLinkModeAsync(Camera, CameraLinkMode.Force10Full, CancellationToken.None).ConfigureAwait(true);
+            var ok = await _service.SetLinkModeAsync(Camera, CameraLinkMode.Force10Full, _page.Lifetime).ConfigureAwait(true);
             if (ok) _journal.Record(Camera.Id, ConnectionEventKind.AutoFix, "LinkMode:10Full");
             return Localizer.Instance[ok ? "LinkHealth.Fix.SlowDone" : "LinkHealth.Fix.NoEthtool"];
         }).ConfigureAwait(true);
@@ -467,7 +499,7 @@ public sealed partial class LinkHealthRowViewModel : ViewModelBase
     {
         await ActAsync(async () =>
         {
-            var ok = await _service.SetLinkModeAsync(Camera, CameraLinkMode.Auto, CancellationToken.None).ConfigureAwait(true);
+            var ok = await _service.SetLinkModeAsync(Camera, CameraLinkMode.Auto, _page.Lifetime).ConfigureAwait(true);
             if (ok) _journal.Record(Camera.Id, ConnectionEventKind.AutoFix, "LinkMode:Auto");
             return Localizer.Instance[ok ? "LinkHealth.Fix.AutoDone" : "LinkHealth.Fix.NoEthtool"];
         }).ConfigureAwait(true);
@@ -477,19 +509,24 @@ public sealed partial class LinkHealthRowViewModel : ViewModelBase
     {
         await ActAsync(async () =>
         {
-            await _service.RunCheckAsync(Camera, trigger, CancellationToken.None).ConfigureAwait(true);
+            await _service.RunCheckAsync(Camera, trigger, _page.Lifetime).ConfigureAwait(true);
             return string.Empty;
         }, busyKey).ConfigureAwait(true);
-        Update();
+        if (_page.IsActive) Update();
     }
 
     private async Task ActAsync(Func<Task<string>> action, string busyKey = "LinkHealth.Working")
     {
+        if (!_page.IsActive) return;
         IsBusy = true;
         ActionText = Localizer.Instance[busyKey];
         try
         {
             ActionText = await action().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!_page.IsActive)
+        {
+            ActionText = string.Empty; // the page left; nothing to report
         }
         catch (Exception ex)
         {

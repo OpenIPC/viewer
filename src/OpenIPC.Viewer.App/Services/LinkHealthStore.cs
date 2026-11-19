@@ -16,16 +16,28 @@ namespace OpenIPC.Viewer.App.Services;
 // (connects, drops, failed attempts) and the drop history used for the
 // shared-segment analysis survive a restart of the app or of the computer.
 // Saves are debounced: a burst of reconnect attempts writes the file once.
+//
+// Writes are serialized (snapshot + write + move under one lock), and Dispose
+// waits for a timer save already in flight before the final save, so two
+// writers never share the .tmp file and an older snapshot can't land last.
+// Loading never throws: the store is resolved at startup by every head, so a
+// damaged or hand-edited file must fall back to an empty journal, not stop
+// the app.
 public sealed class LinkHealthStore : IDisposable
 {
     private static readonly TimeSpan SaveDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DisposeWait = TimeSpan.FromSeconds(5);
+    // Longest outage worth keeping (100 years); anything beyond is a corrupt value.
+    private const double MaxOutageSeconds = 100 * 365.25 * 24 * 3600;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     private readonly ConnectionJournal _journal;
     private readonly ILogger<LinkHealthStore> _logger;
     private readonly string _path;
-    private readonly object _gate = new();
+    private readonly object _gate = new();      // timer + disposed flag
+    private readonly object _saveGate = new();  // one writer at a time
     private Timer? _timer;
+    private bool _disposed;
 
     public LinkHealthStore(ConnectionJournal journal, IFileSystem fs, ILogger<LinkHealthStore> logger)
     {
@@ -39,10 +51,24 @@ public sealed class LinkHealthStore : IDisposable
     public void Dispose()
     {
         _journal.Changed -= OnChanged;
+        Timer? timer;
         lock (_gate)
         {
-            _timer?.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            timer = _timer;
             _timer = null;
+        }
+        if (timer is not null)
+        {
+            // Stop new callbacks and wait for one that is already saving, so the
+            // final save below is the last write.
+            var done = new ManualResetEvent(false);
+            // Dispose the event only once it fired: the timer signals it later
+            // if the in-flight save outlives the wait, and a closed handle there
+            // would fault a pool thread. (A leak only in that shutdown corner.)
+            if (!timer.Dispose(done) || done.WaitOne(DisposeWait))
+                done.Dispose();
         }
         Save();
     }
@@ -51,6 +77,7 @@ public sealed class LinkHealthStore : IDisposable
     {
         lock (_gate)
         {
+            if (_disposed) return;
             _timer ??= new Timer(_ => Save(), null, Timeout.Infinite, Timeout.Infinite);
             _timer.Change(SaveDelay, Timeout.InfiniteTimeSpan);
         }
@@ -63,57 +90,78 @@ public sealed class LinkHealthStore : IDisposable
             if (!File.Exists(_path)) return;
             var dto = JsonSerializer.Deserialize<StoreDto>(File.ReadAllText(_path), Json);
             if (dto is null) return;
-            var counters = (dto.Counters ?? new List<CounterDto>())
-                .Where(c => Guid.TryParse(c.CameraId, out _))
-                .ToDictionary(
-                    c => new CameraId(Guid.Parse(c.CameraId!)),
-                    c => new ConnectionCounters(c.Connects, c.Drops, c.FailedAttempts, 0,
-                        c.LastConnectedAt, c.LastDropAt, c.LastRecoveredAt,
-                        c.LastOutageSeconds is { } s ? TimeSpan.FromSeconds(s) : null));
-            var events = (dto.Events ?? new List<EventDto>())
-                .Where(e => Guid.TryParse(e.CameraId, out _))
-                .Select(e => new ConnectionEvent(new CameraId(Guid.Parse(e.CameraId!)), e.At, e.Kind, e.Detail));
+
+            // A loop, not ToDictionary: the same camera twice (e.g. its GUID in
+            // two letter cases) keeps the last entry instead of throwing.
+            var counters = new Dictionary<CameraId, ConnectionCounters>();
+            foreach (var c in dto.Counters ?? new List<CounterDto>())
+            {
+                if (c is null || !Guid.TryParse(c.CameraId, out var id)) continue;
+                counters[new CameraId(id)] = new ConnectionCounters(
+                    Math.Max(0, c.Connects), Math.Max(0, c.Drops), Math.Max(0, c.FailedAttempts), 0,
+                    c.LastConnectedAt, c.LastDropAt, c.LastRecoveredAt,
+                    Outage(c.LastOutageSeconds));
+            }
+
+            var events = new List<ConnectionEvent>();
+            foreach (var e in dto.Events ?? new List<EventDto>())
+            {
+                if (e is null || !Guid.TryParse(e.CameraId, out var id)) continue;
+                if (!Enum.IsDefined(typeof(ConnectionEventKind), e.Kind)) continue;
+                events.Add(new ConnectionEvent(new CameraId(id), e.At, e.Kind, e.Detail));
+            }
+
             _journal.Import(counters, events);
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
+            // Anything wrong with the file — unreadable, not JSON, or JSON with
+            // values out of range — means "no history", never a failed startup.
             _logger.LogWarning(ex, "Could not read {Path}; starting with an empty connection journal", _path);
         }
     }
 
+    private static TimeSpan? Outage(double? seconds) =>
+        seconds is { } s && !double.IsNaN(s) && !double.IsInfinity(s) && s >= 0 && s <= MaxOutageSeconds
+            ? TimeSpan.FromSeconds(s)
+            : null;
+
     private void Save()
     {
-        try
+        lock (_saveGate)
         {
-            var (counters, events) = _journal.Export();
-            var dto = new StoreDto
+            try
             {
-                Counters = counters.Select(kv => new CounterDto
+                var (counters, events) = _journal.Export();
+                var dto = new StoreDto
                 {
-                    CameraId = kv.Key.Value.ToString(),
-                    Connects = kv.Value.Connects,
-                    Drops = kv.Value.Drops,
-                    FailedAttempts = kv.Value.FailedAttempts,
-                    LastConnectedAt = kv.Value.LastConnectedAt,
-                    LastDropAt = kv.Value.LastDropAt,
-                    LastRecoveredAt = kv.Value.LastRecoveredAt,
-                    LastOutageSeconds = kv.Value.LastOutage?.TotalSeconds,
-                }).ToList(),
-                Events = events.Select(e => new EventDto
-                {
-                    CameraId = e.CameraId.Value.ToString(),
-                    At = e.At,
-                    Kind = e.Kind,
-                    Detail = e.Detail,
-                }).ToList(),
-            };
-            var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(dto, Json));
-            File.Move(tmp, _path, overwrite: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(ex, "Could not write {Path}", _path);
+                    Counters = counters.Select(kv => new CounterDto
+                    {
+                        CameraId = kv.Key.Value.ToString(),
+                        Connects = kv.Value.Connects,
+                        Drops = kv.Value.Drops,
+                        FailedAttempts = kv.Value.FailedAttempts,
+                        LastConnectedAt = kv.Value.LastConnectedAt,
+                        LastDropAt = kv.Value.LastDropAt,
+                        LastRecoveredAt = kv.Value.LastRecoveredAt,
+                        LastOutageSeconds = kv.Value.LastOutage?.TotalSeconds,
+                    }).ToList(),
+                    Events = events.Select(e => new EventDto
+                    {
+                        CameraId = e.CameraId.Value.ToString(),
+                        At = e.At,
+                        Kind = e.Kind,
+                        Detail = e.Detail,
+                    }).ToList(),
+                };
+                var tmp = _path + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(dto, Json));
+                File.Move(tmp, _path, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Could not write {Path}", _path);
+            }
         }
     }
 

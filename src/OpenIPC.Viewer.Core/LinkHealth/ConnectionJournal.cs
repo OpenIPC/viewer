@@ -41,8 +41,13 @@ public sealed class ConnectionRecoveredEventArgs : EventArgs
 // "Connecting → Failed → Reconnecting" and a drop of a live stream as
 // "Playing → Failed → Reconnecting": the first failure state after a non-failure
 // state is the event, the second is the wrapper's own badge and is ignored.
-// Several tiles showing one camera repeat the same transitions, which the
-// "state unchanged" check collapses.
+//
+// One camera can be on screen in several tiles at once (grid + single view,
+// main + sub stream), each with its own session. States are therefore kept per
+// reporting tile, and the camera is "live" while ANY tile streams: a connection
+// is the camera going from no live tile to one, a drop is the last live tile
+// failing, and a failed attempt only counts while no tile streams — one tile
+// closing or retrying while another plays is not a network event.
 //
 // Thread-safe. Events fire outside the lock.
 public sealed class ConnectionJournal : IDisposable
@@ -105,8 +110,14 @@ public sealed class ConnectionJournal : IDisposable
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Feeds one live-session state (null = the tile went away).</summary>
-    public void Report(CameraId id, SessionState? state)
+    // Key for callers that don't say which tile reports (one tile per camera).
+    private static readonly object DefaultSource = new();
+
+    /// <summary>
+    /// Feeds one live-session state from one reporting tile (<paramref name="source"/>,
+    /// any stable per-tile object); null = that tile went away.
+    /// </summary>
+    public void Report(CameraId id, SessionState? state, object? source = null)
     {
         ConnectionThresholdEventArgs? threshold = null;
         ConnectionRecoveredEventArgs? recovered = null;
@@ -120,75 +131,79 @@ public sealed class ConnectionJournal : IDisposable
                 _cameras[id] = s;
             }
 
-            var prev = s.Last;
+            var key = source ?? DefaultSource;
+            SessionState? prev = s.Tiles.TryGetValue(key, out var p) ? p : null;
             if (prev == state)
                 return;
-            s.Last = state;
+            if (state is { } st) s.Tiles[key] = st;
+            else s.Tiles.Remove(key);
+
+            var wasLive = s.Live;
+            var nowLive = s.Tiles.Values.Any(t => IsLive(t));
+            s.Live = nowLive;
             var now = _clock();
 
-            switch (state)
+            if (!wasLive && nowLive)
             {
-                case SessionState.Playing:
-                case SessionState.Paused:
-                    if (IsLive(prev))
-                        break; // pause/resume of a live stream
-                    var c = s.Counters;
-                    if (s.OutageStart is { } start)
-                    {
-                        var outage = now - start;
-                        recovered = new ConnectionRecoveredEventArgs(id, outage, c.ConsecutiveFailures);
-                        c = c with { LastRecoveredAt = now, LastOutage = outage };
-                        AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Recovered,
-                            ((long)outage.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)));
-                    }
-                    else
-                    {
-                        AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Connected));
-                    }
-                    s.Counters = c with
-                    {
-                        Connects = c.Connects + 1,
-                        ConsecutiveFailures = 0,
-                        LastConnectedAt = now,
-                    };
-                    s.OutageStart = null;
-                    s.ThresholdRaised = false;
-                    changed = true;
-                    break;
-
-                case SessionState.Failed:
-                case SessionState.Reconnecting:
-                    if (IsFailure(prev))
-                        break; // the wrapper's own badge right after the inner failure
-                    if (IsLive(prev))
-                    {
-                        s.Counters = s.Counters with { Drops = s.Counters.Drops + 1, LastDropAt = now };
-                        s.OutageStart = now;
-                        AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Dropped));
-                    }
-                    else
-                    {
-                        var consecutive = s.Counters.ConsecutiveFailures + 1;
-                        s.Counters = s.Counters with
-                        {
-                            FailedAttempts = s.Counters.FailedAttempts + 1,
-                            ConsecutiveFailures = consecutive,
-                        };
-                        s.OutageStart ??= now;
-                        AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.FailedAttempt,
-                            consecutive.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-                        if (consecutive >= FailureThreshold && !s.ThresholdRaised)
-                        {
-                            s.ThresholdRaised = true;
-                            threshold = new ConnectionThresholdEventArgs(id, consecutive);
-                        }
-                    }
-                    changed = true;
-                    break;
-
-                // Connecting is the attempt itself; Idle/null is a tile being torn
-                // down or reset by the user — neither is a network event.
+                // The camera streams again (first tile live, or back after an outage).
+                var c = s.Counters;
+                if (s.OutageStart is { } start)
+                {
+                    var outage = now - start;
+                    recovered = new ConnectionRecoveredEventArgs(id, outage, c.ConsecutiveFailures);
+                    c = c with { LastRecoveredAt = now, LastOutage = outage };
+                    AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Recovered,
+                        ((long)outage.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                }
+                else
+                {
+                    AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Connected));
+                }
+                s.Counters = c with
+                {
+                    Connects = c.Connects + 1,
+                    ConsecutiveFailures = 0,
+                    LastConnectedAt = now,
+                };
+                s.OutageStart = null;
+                s.ThresholdRaised = false;
+                changed = true;
             }
+            else if (wasLive && !nowLive)
+            {
+                // The last live tile stopped. Only its failure is a drop; closing
+                // it or the user's retry / quality swap is not a network event.
+                if (IsFailure(state))
+                {
+                    s.Counters = s.Counters with { Drops = s.Counters.Drops + 1, LastDropAt = now };
+                    s.OutageStart = now;
+                    AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.Dropped));
+                    changed = true;
+                }
+            }
+            else if (!nowLive && IsFailure(state) && !IsFailure(prev))
+            {
+                // An attempt of this tile failed and no tile streams the camera.
+                // (The first failure state after a non-failure one; the wrapper's
+                // own Reconnecting badge right after it is not a second attempt.)
+                var consecutive = s.Counters.ConsecutiveFailures + 1;
+                s.Counters = s.Counters with
+                {
+                    FailedAttempts = s.Counters.FailedAttempts + 1,
+                    ConsecutiveFailures = consecutive,
+                };
+                s.OutageStart ??= now;
+                AddEvent(new ConnectionEvent(id, now, ConnectionEventKind.FailedAttempt,
+                    consecutive.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                if (consecutive >= FailureThreshold && !s.ThresholdRaised)
+                {
+                    s.ThresholdRaised = true;
+                    threshold = new ConnectionThresholdEventArgs(id, consecutive);
+                }
+                changed = true;
+            }
+            // wasLive && nowLive: another tile still streams — whatever this tile
+            // does (fails, retries, closes) the camera itself is reachable.
         }
 
         if (threshold is not null) ThresholdReached?.Invoke(this, threshold);
@@ -263,7 +278,7 @@ public sealed class ConnectionJournal : IDisposable
             _registry.SessionReported -= OnSessionReported;
     }
 
-    private void OnSessionReported(object? sender, CameraSessionReport e) => Report(e.CameraId, e.State);
+    private void OnSessionReported(object? sender, CameraSessionReport e) => Report(e.CameraId, e.State, e.Source);
 
     private void AddEvent(ConnectionEvent e)
     {
@@ -277,7 +292,10 @@ public sealed class ConnectionJournal : IDisposable
 
     private sealed class CameraState
     {
-        public SessionState? Last;
+        // Per reporting tile; a tile that went away (null) is removed.
+        public readonly Dictionary<object, SessionState> Tiles = new();
+        // Any tile Playing/Paused.
+        public bool Live;
         public ConnectionCounters Counters = ConnectionCounters.Empty;
         public DateTimeOffset? OutageStart;
         public bool ThresholdRaised;

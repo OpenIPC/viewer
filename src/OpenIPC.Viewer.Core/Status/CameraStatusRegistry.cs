@@ -12,14 +12,19 @@ public readonly record struct CameraStatusSnapshot(CameraId CameraId, CameraStat
 // transitions (drop, failed attempt) that the merged verdict can hide.
 public sealed class CameraSessionReport : EventArgs
 {
-    public CameraSessionReport(CameraId cameraId, SessionState? state)
+    public CameraSessionReport(CameraId cameraId, SessionState? state, object? source = null)
     {
         CameraId = cameraId;
         State = state;
+        Source = source;
     }
 
     public CameraId CameraId { get; }
     public SessionState? State { get; }
+
+    // Which tile/session reported (any stable per-tile object), so consumers can
+    // tell two tiles of one camera apart. Null = the caller didn't say.
+    public object? Source { get; }
 }
 
 // Process-wide merge point for camera status. A camera's verdict is fed by two
@@ -50,10 +55,11 @@ public sealed class CameraStatusRegistry
 
     // A live session reported a new state. Pass null to clear the session signal
     // (e.g. the tile was torn down) and fall back to the probe input alone.
-    public void ReportSession(CameraId id, SessionState? state)
+    // source: the reporting tile (any stable object), passed through to SessionReported.
+    public void ReportSession(CameraId id, SessionState? state, object? source = null)
     {
         Update(id, prev => prev with { Session = state });
-        SessionReported?.Invoke(this, new CameraSessionReport(id, state));
+        SessionReported?.Invoke(this, new CameraSessionReport(id, state, source));
     }
 
     // Every raw session report (see CameraSessionReport).

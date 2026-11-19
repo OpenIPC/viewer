@@ -43,16 +43,44 @@ public static class CameraLinkCommands
         echo "uptime=$(cut -d' ' -f1 /proc/uptime 2>/dev/null)"
         if command -v ethtool >/dev/null 2>&1; then echo "ethtool=1"; ethtool "$IF" 2>/dev/null | sed 's/^/eth:/'; else echo "ethtool=0"; fi
         awk 'NR>1 && $4=="01"{print "tcp="$2" "$3}' /proc/net/tcp 2>/dev/null
+        echo "end=1"
         """;
+
+    /// <summary>
+    /// True when <paramref name="output"/> is a whole run of <see cref="ReadLinkState"/>:
+    /// it names the interface and reaches the closing <c>end=1</c> marker. A
+    /// failed or cut-off command must not pass for measurements (the parser
+    /// would otherwise fill in defaults such as <c>eth0</c>).
+    /// </summary>
+    public static bool IsComplete(string? output)
+    {
+        if (string.IsNullOrEmpty(output)) return false;
+        var hasInterface = false;
+        var hasEnd = false;
+        foreach (var raw in output!.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.StartsWith("if=", StringComparison.Ordinal) && line.Length > 3) hasInterface = true;
+            else if (line == "end=1") hasEnd = true;
+        }
+        return hasInterface && hasEnd;
+    }
+
+    public const string DefaultInitScript = "/etc/init.d/S95majestic";
 
     /// <summary>
     /// Restarts the streamer, which drops every RTSP client — stale sessions left
     /// behind by a computer that rebooted or lost the link included. Uses the
-    /// init script when present; otherwise a SIGHUP reload.
+    /// init script when present; otherwise a SIGHUP reload. The success marker
+    /// is chained with <c>&amp;&amp;</c>, so a failing restart leaves a non-zero exit
+    /// status instead of being masked by the echo.
     /// </summary>
-    public const string RestartStreamer =
-        "if [ -x /etc/init.d/S95majestic ]; then /etc/init.d/S95majestic restart >/dev/null 2>&1; echo restarted=init; " +
-        "else killall -HUP majestic && echo restarted=hup; fi";
+    public static string RestartStreamer(string initScript = DefaultInitScript)
+    {
+        var q = ShQuote(initScript);
+        return $"if [ -x {q} ]; then {q} restart >/dev/null 2>&1 && echo restarted=init; " +
+               "else killall -HUP majestic && echo restarted=hup; fi";
+    }
 
     /// <summary>
     /// Changes what the PHY advertises. Not persistent: the camera returns to
@@ -66,12 +94,36 @@ public static class CameraLinkCommands
                $"ethtool -s \"$IF\" autoneg on advertise {advertise} && echo ok=1";
     }
 
+    /// <summary>
+    /// Reads back what the PHY advertises (ethtool), to confirm a link-mode
+    /// change whose SSH channel was cut by the renegotiation. Exit code 3 = no ethtool.
+    /// </summary>
+    public static string ReadLinkMode() => ResolveInterface + "\n" +
+        "command -v ethtool >/dev/null 2>&1 || { echo noethtool=1; exit 3; }\n" +
+        "echo \"if=$IF\"\n" +
+        "ethtool \"$IF\" 2>/dev/null | sed 's/^/eth:/'\n" +
+        "echo \"end=1\"";
+
+    /// <summary>Whether ethtool's "Advertised link modes" match <paramref name="mode"/>.</summary>
+    public static bool AdvertisesMode(string? advertised, CameraLinkMode mode)
+    {
+        if (string.IsNullOrWhiteSpace(advertised)) return false;
+        var has100 = advertised!.IndexOf("100baseT", StringComparison.OrdinalIgnoreCase) >= 0;
+        return mode == CameraLinkMode.Force10Full
+            ? !has100 && advertised.IndexOf("10baseT/Full", StringComparison.OrdinalIgnoreCase) >= 0
+            : has100;
+    }
+
+    // Single-quoted sh literal.
+    private static string ShQuote(string s) => "'" + s.Replace("'", "'\\''") + "'";
+
     public static CameraLinkSnapshot Parse(string output)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         var connections = new List<CameraTcpConnection>();
         string? autoneg = null;
         string? partner = null;
+        string? advertised = null;
         string? ethKey = null;
 
         foreach (var raw in (output ?? string.Empty).Split('\n'))
@@ -79,7 +131,7 @@ public static class CameraLinkCommands
             var line = raw.TrimEnd('\r');
             if (line.StartsWith("eth:", StringComparison.Ordinal))
             {
-                ParseEthtoolLine(line.Substring(4), ref ethKey, ref autoneg, ref partner);
+                ParseEthtoolLine(line.Substring(4), ref ethKey, ref autoneg, ref partner, ref advertised);
                 continue;
             }
             if (line.StartsWith("tcp=", StringComparison.Ordinal))
@@ -123,12 +175,17 @@ public static class CameraLinkCommands
             HasEthtool: Str("ethtool") == "1",
             AutoNegotiation: autoneg is null ? null : autoneg.Equals("on", StringComparison.OrdinalIgnoreCase),
             LinkPartnerModes: partner,
-            Connections: connections);
+            Connections: connections,
+            AdvertisedModes: advertised);
     }
+
+    private const string PartnerKey = "Link partner advertised link modes";
+    private const string AdvertisedKey = "Advertised link modes";
 
     // ethtool prints "Key: value" with multi-line values continued on indented
     // lines that have no colon of their own.
-    private static void ParseEthtoolLine(string line, ref string? key, ref string? autoneg, ref string? partner)
+    private static void ParseEthtoolLine(
+        string line, ref string? key, ref string? autoneg, ref string? partner, ref string? advertised)
     {
         var trimmed = line.Trim();
         if (trimmed.Length == 0) return;
@@ -139,12 +196,18 @@ public static class CameraLinkCommands
             var value = trimmed.Substring(colon + 1).Trim();
             if (key.Equals("Auto-negotiation", StringComparison.OrdinalIgnoreCase))
                 autoneg = value;
-            else if (key.Equals("Link partner advertised link modes", StringComparison.OrdinalIgnoreCase))
+            else if (key.Equals(PartnerKey, StringComparison.OrdinalIgnoreCase))
                 partner = value;
+            else if (key.Equals(AdvertisedKey, StringComparison.OrdinalIgnoreCase))
+                advertised = value;
         }
-        else if (key is not null && key.Equals("Link partner advertised link modes", StringComparison.OrdinalIgnoreCase))
+        else if (key is not null && key.Equals(PartnerKey, StringComparison.OrdinalIgnoreCase))
         {
             partner = string.IsNullOrEmpty(partner) ? trimmed : partner + " " + trimmed;
+        }
+        else if (key is not null && key.Equals(AdvertisedKey, StringComparison.OrdinalIgnoreCase))
+        {
+            advertised = string.IsNullOrEmpty(advertised) ? trimmed : advertised + " " + trimmed;
         }
     }
 

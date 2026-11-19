@@ -87,7 +87,17 @@ public sealed class LinkHealthMonitor : IDisposable
             var camera = await _directory.GetAsync(id, _cts.Token).ConfigureAwait(false);
             if (camera is null) return;
 
-            var report = await _service.RunCheckAsync(camera, trigger, _cts.Token).ConfigureAwait(false);
+            LinkCheckReport report;
+            try
+            {
+                report = await _service.RunCheckAsync(camera, trigger, _cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!_cts.IsCancellationRequested)
+            {
+                // Joined a check the Health page started and then cancelled by
+                // leaving; that run is gone, so start our own.
+                report = await _service.RunCheckAsync(camera, trigger, _cts.Token).ConfigureAwait(false);
+            }
             var worst = report.Findings.FirstOrDefault(f => f.Severity >= FindingSeverity.Warning);
             _journal.Record(id, ConnectionEventKind.AutoCheck,
                 $"{trigger}:{worst?.Code ?? "Ok"}");

@@ -13,4 +13,9 @@
     <PackageReference Include="Onvif.Core" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Lets tests shorten SshCameraLinkClient's renegotiation wait. -->
+    <InternalsVisibleTo Include="OpenIPC.Viewer.Devices.Tests" />
+  </ItemGroup>
+
 </Project>

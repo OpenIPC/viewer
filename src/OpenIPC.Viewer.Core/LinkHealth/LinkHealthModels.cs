@@ -78,7 +78,9 @@ public sealed record CameraLinkSnapshot(
     bool HasEthtool,
     bool? AutoNegotiation,
     string? LinkPartnerModes,
-    IReadOnlyList<CameraTcpConnection> Connections)
+    IReadOnlyList<CameraTcpConnection> Connections,
+    // What this camera's PHY advertises (ethtool), when ethtool is present.
+    string? AdvertisedModes = null)
 {
     /// <summary>CRC + frame (alignment) errors — the physical-layer damage signal.</summary>
     public long PhysicalErrors => (RxCrcErrors ?? 0) + (RxFrameErrors ?? 0);

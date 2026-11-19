@@ -78,7 +78,7 @@ public static class RouteFixScript
         sb.Append("  ").Append(t.UsageUndo).Append("   .\\fix-camera-routes.ps1 -Undo\r\n");
         sb.Append("#>\r\n");
         sb.Append("[CmdletBinding(SupportsShouldProcess = $true)]\r\n");
-        sb.Append("param([switch]$Undo, [switch]$Pause)\r\n\r\n");
+        sb.Append("param([switch]$Undo, [switch]$Pause, [string]$LogFile)\r\n\r\n");
         sb.Append("$ErrorActionPreference = 'Stop'\r\n\r\n");
 
         sb.Append("$msg = @{\r\n");
@@ -130,7 +130,8 @@ public static class RouteFixScript
         Import-Module NetTCPIP, NetAdapter -ErrorAction SilentlyContinue
         $WhatIfPreference = $whatIf
 
-        $logPath = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'fix-camera-routes.log' } else { $null }
+        # -LogFile: set by the app when it runs the script from memory (no $PSScriptRoot then).
+        $logPath = if ($LogFile) { $LogFile } elseif ($PSScriptRoot) { Join-Path $PSScriptRoot 'fix-camera-routes.log' } else { $null }
         $logging = [bool]$logPath -and -not $WhatIfPreference
         if ($logging) {
             try { Set-Content -LiteralPath $logPath -Value @() -Encoding UTF8 -WhatIf:$false -ErrorAction Stop } catch { $logging = $false }
@@ -138,9 +139,11 @@ public static class RouteFixScript
 
         function Write-Step([string]$text, [string]$color = 'Gray') {
             Write-Host $text -ForegroundColor $color
-            if ($script:logging) {
+            # Plain names, no script-scope prefix: run from memory by the elevated
+            # stub there is no script scope; these live in the caller's scope.
+            if ($logging) {
                 try {
-                    Add-Content -LiteralPath $script:logPath -Value ('{0:HH:mm:ss} {1}' -f (Get-Date), $text) `
+                    Add-Content -LiteralPath $logPath -Value ('{0:HH:mm:ss} {1}' -f (Get-Date), $text) `
                         -Encoding UTF8 -WhatIf:$false -ErrorAction Stop
                 } catch { }
             }
@@ -295,24 +298,119 @@ public static class RouteFixScript
                 """);
         }
 
+        // Same contract as the PowerShell version: every camera is tried, a
+        // failure is counted, and the script ends with exit 2 instead of "Done".
+        sb.Append("failed=0\n");
         var any = false;
         foreach (var r in routes)
         {
             if (!SafeUnixName.IsMatch(r.InterfaceName))
             {
                 sb.Append("# skipped ").Append(r.CameraIp).Append(": unusual adapter name\n");
+                sb.Append("failed=$((failed+1))\n");
                 continue;
             }
-            sb.Append("pin ").Append(r.CameraIp).Append(' ').Append(r.InterfaceName).Append('\n');
+            sb.Append("pin ").Append(r.CameraIp).Append(' ').Append(r.InterfaceName)
+              .Append(" || { echo ").Append(Sh(string.Format(CultureInfo.InvariantCulture, t.Messages["Failed"], r.CameraIp,
+                  string.Format(CultureInfo.InvariantCulture, t.Messages["CmdFailed"], mac ? "route add" : "ip route replace"))))
+              .Append(" >&2; failed=$((failed+1)); }\n");
             any = true;
         }
-        if (!any)
+        if (!any && routes.Count == 0)
             sb.Append("echo ").Append(Sh(t.Messages["Nothing"])).Append('\n');
+        sb.Append("if [ \"$failed\" -gt 0 ]; then echo ").Append(ShFormatCount(t.Messages["SomeFailed"]))
+          .Append(" >&2; exit 2; fi\n");
         sb.Append("echo ").Append(Sh(t.Messages["Done"])).Append('\n');
         return sb.ToString();
     }
 
-    private static string Ps(string s) => s.Replace("'", "''");
+    // "{0}" in a message becomes the runtime $failed count; the rest stays quoted.
+    private static string ShFormatCount(string template)
+    {
+        var at = template.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0
+            ? Sh(template)
+            : Sh(template.Substring(0, at)) + "\"$failed\"" + Sh(template.Substring(at + 3));
+    }
+
+    // Single-quoted PowerShell literal body. PowerShell treats the typographic
+    // quotes U+2018–U+201B as single-quote delimiters too, so all five are
+    // doubled — otherwise an adapter named "Bob’s Ethernet" would end the
+    // literal early and the rest of the name would run as code.
+    private static string Ps(string s)
+    {
+        var sb = new StringBuilder(s.Length + 4);
+        foreach (var c in s)
+        {
+            sb.Append(c);
+            if (c is '\'' or '‘' or '’' or '‚' or '‛')
+                sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>A single-quoted PowerShell string literal of <paramref name="s"/>.</summary>
+    public static string PsLiteral(string s) => "'" + Ps(s) + "'";
+
+    /// <summary>The bytes a script file is written with (UTF-8, BOM where <see cref="NeedsBom"/>).</summary>
+    public static byte[] FileBytes(string text, RouteScriptTarget target)
+    {
+        var encoding = new UTF8Encoding(NeedsBom(target));
+        var preamble = encoding.GetPreamble();
+        var body = encoding.GetBytes(text);
+        var bytes = new byte[preamble.Length + body.Length];
+        Buffer.BlockCopy(preamble, 0, bytes, 0, preamble.Length);
+        Buffer.BlockCopy(body, 0, bytes, preamble.Length, body.Length);
+        return bytes;
+    }
+
+    /// <summary>Upper-case hex SHA-256, the form the elevated stub compares.</summary>
+    public static string Sha256Hex(byte[] bytes)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var hash = sha.ComputeHash(bytes);
+        var sb = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash) sb.Append(b.ToString("X2", CultureInfo.InvariantCulture));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The tiny command an elevated PowerShell runs instead of the script file.
+    /// The file lives in a user-writable folder, so another program running as
+    /// the same user could swap it between the app writing it and the elevated
+    /// process opening it (e.g. while the UAC prompt is up). The stub reads the
+    /// file once, checks the SHA-256 of exactly those bytes against the hash of
+    /// what the app generated, and runs them from memory — a swapped file never
+    /// runs (exit 4). It travels inline (<see cref="EncodeCommand"/>), not as a file.
+    /// </summary>
+    public static string ElevatedStub(string scriptPath, string sha256Hex, string logPath, bool russian, bool pause = true, bool whatIf = false)
+    {
+        if (!Regex.IsMatch(sha256Hex, "^[0-9A-F]{64}$", RegexOptions.CultureInvariant))
+            throw new ArgumentException("Expected an upper-case hex SHA-256.", nameof(sha256Hex));
+        var tampered = russian
+            ? "Скрипт исправления изменился после того, как приложение его создало, — он не будет запущен."
+            : "The fix script changed after the app generated it - it will not run.";
+        var press = russian ? Texts.Ru.Messages["PressEnter"] : Texts.En.Messages["PressEnter"];
+        var args = (pause ? " -Pause" : "") + (whatIf ? " -WhatIf" : "") + " -LogFile " + PsLiteral(logPath);
+        var sb = new StringBuilder();
+        sb.Append("$ErrorActionPreference = 'Stop'\n");
+        sb.Append("$bytes = [System.IO.File]::ReadAllBytes(").Append(PsLiteral(scriptPath)).Append(")\n");
+        sb.Append("$sha = [System.Security.Cryptography.SHA256]::Create()\n");
+        sb.Append("$hash = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('X2') })\n");
+        sb.Append("if ($hash -ne '").Append(sha256Hex).Append("') {\n");
+        sb.Append("    Write-Host ").Append(PsLiteral(tampered)).Append(" -ForegroundColor Red\n");
+        if (pause) sb.Append("    [void](Read-Host ").Append(PsLiteral(press)).Append(")\n");
+        sb.Append("    exit 4\n");
+        sb.Append("}\n");
+        sb.Append("$text = [System.Text.Encoding]::UTF8.GetString($bytes)\n");
+        sb.Append("if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }\n");
+        sb.Append("& ([ScriptBlock]::Create($text))").Append(args).Append('\n');
+        sb.Append("exit $LASTEXITCODE\n");
+        return sb.ToString();
+    }
+
+    /// <summary>Base64 of the UTF-16LE text, as <c>powershell -EncodedCommand</c> expects.</summary>
+    public static string EncodeCommand(string script) => Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
     // Single-quoted sh literal.
     private static string Sh(string s) => "'" + s.Replace("'", "'\\''") + "'";
@@ -374,6 +472,7 @@ public static class RouteFixScript
                 ["SomeFailed"] = "Cameras not pinned: {0}. See the messages above.",
                 ["Crashed"] = "The script stopped: {0}",
                 ["LogAt"] = "Log: {0}",
+                ["CmdFailed"] = "the {0} command failed",
                 ["Done"] = "Done.",
                 ["PressEnter"] = "Press Enter to close",
             },
@@ -423,6 +522,7 @@ public static class RouteFixScript
                 ["SomeFailed"] = "Не закреплено камер: {0}. Подробности выше.",
                 ["Crashed"] = "Скрипт остановился: {0}",
                 ["LogAt"] = "Журнал: {0}",
+                ["CmdFailed"] = "команда {0} не выполнилась",
                 ["Done"] = "Готово.",
                 ["PressEnter"] = "Нажмите Enter, чтобы закрыть",
             },

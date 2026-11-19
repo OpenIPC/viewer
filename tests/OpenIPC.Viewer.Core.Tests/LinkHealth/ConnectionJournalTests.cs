@@ -144,6 +144,118 @@ public sealed class ConnectionJournalTests
         Assert.Equal(1, j.Get(Cam).Drops);
     }
 
+    // --- Several tiles of one camera (regression: they used to share one state) ---
+
+    private static readonly object TileA = new();
+    private static readonly object TileB = new();
+
+    [Fact]
+    public void TwoTilesPlaying_CountOneConnection()
+    {
+        var j = Create();
+        j.Report(Cam, SessionState.Connecting, TileA);
+        j.Report(Cam, SessionState.Playing, TileA);
+        j.Report(Cam, SessionState.Connecting, TileB);
+        j.Report(Cam, SessionState.Playing, TileB);
+
+        Assert.Equal(1, j.Get(Cam).Connects);
+        Assert.Equal(0, j.Get(Cam).FailedAttempts);
+    }
+
+    [Fact]
+    public void ClosingOneTile_WhileAnotherPlays_IsNotAnEvent()
+    {
+        var j = Create();
+        j.Report(Cam, SessionState.Playing, TileA);
+        j.Report(Cam, SessionState.Playing, TileB);
+        j.Report(Cam, null, TileB); // tile B closed
+
+        // Survivor keeps reporting: pause / resume is still the same connection.
+        j.Report(Cam, SessionState.Paused, TileA);
+        j.Report(Cam, SessionState.Playing, TileA);
+
+        var c = j.Get(Cam);
+        Assert.Equal(1, c.Connects);
+        Assert.Equal(0, c.Drops);
+        Assert.False(j.IsInOutage(Cam));
+    }
+
+    [Fact]
+    public void SurvivorFailing_AfterTheOtherTileClosed_IsADrop()
+    {
+        var j = Create();
+        j.Report(Cam, SessionState.Playing, TileA);
+        j.Report(Cam, SessionState.Playing, TileB);
+        j.Report(Cam, null, TileB);
+        j.Report(Cam, SessionState.Failed, TileA);
+        j.Report(Cam, SessionState.Reconnecting, TileA);
+
+        var c = j.Get(Cam);
+        Assert.Equal(1, c.Drops);
+        Assert.Equal(0, c.FailedAttempts);
+        Assert.True(j.IsInOutage(Cam));
+        // The drop is in the history the shared-segment analysis reads.
+        Assert.Single(j.Events(Cam), e => e.Kind == ConnectionEventKind.Dropped);
+    }
+
+    [Fact]
+    public void SecondTileFailing_WhileTheFirstPlays_RaisesNoOutage()
+    {
+        var j = Create();
+        var raised = 0;
+        j.ThresholdReached += (_, _) => raised++;
+        j.Report(Cam, SessionState.Playing, TileA);
+        for (var i = 0; i < 4; i++)
+        {
+            j.Report(Cam, SessionState.Connecting, TileB);
+            j.Report(Cam, SessionState.Failed, TileB);
+            j.Report(Cam, SessionState.Reconnecting, TileB);
+        }
+
+        var c = j.Get(Cam);
+        Assert.Equal(0, c.FailedAttempts);
+        Assert.Equal(0, c.Drops);
+        Assert.False(j.IsInOutage(Cam));
+        Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public void BothTilesDown_ThenOneBack_IsOneRecovery()
+    {
+        var j = Create();
+        var recoveries = 0;
+        j.Recovered += (_, _) => recoveries++;
+        j.Report(Cam, SessionState.Playing, TileA);
+        j.Report(Cam, SessionState.Playing, TileB);
+        j.Report(Cam, SessionState.Failed, TileA);   // B still live: not yet a drop
+        Assert.Equal(0, j.Get(Cam).Drops);
+        j.Report(Cam, SessionState.Failed, TileB);   // last live tile fails: drop
+        Assert.Equal(1, j.Get(Cam).Drops);
+
+        j.Report(Cam, SessionState.Connecting, TileA);
+        j.Report(Cam, SessionState.Playing, TileA);
+        j.Report(Cam, SessionState.Connecting, TileB);
+        j.Report(Cam, SessionState.Playing, TileB);
+
+        Assert.Equal(1, recoveries);
+        Assert.Equal(2, j.Get(Cam).Connects);
+        Assert.False(j.IsInOutage(Cam));
+    }
+
+    [Fact]
+    public void Registry_PassesTheTileThrough()
+    {
+        var registry = new CameraStatusRegistry();
+        using var j = new ConnectionJournal(registry, () => _now);
+        registry.ReportSession(Cam, SessionState.Playing, TileA);
+        registry.ReportSession(Cam, SessionState.Playing, TileB);
+        registry.ReportSession(Cam, null, TileB);
+        registry.ReportSession(Cam, SessionState.Failed, TileA);
+
+        Assert.Equal(1, j.Get(Cam).Connects);
+        Assert.Equal(1, j.Get(Cam).Drops);
+    }
+
     [Fact]
     public void ExportImport_KeepsCountersButNotTheLiveOutage()
     {
