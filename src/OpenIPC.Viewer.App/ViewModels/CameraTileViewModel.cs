@@ -400,9 +400,11 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
 
     // Mirror every state move into the shared registry so the library + Health
     // Center reflect this tile's live session (incl. Attention), not just their
-    // own probe. Covers manual Idle resets (quality swap / retry) too.
+    // own probe. Covers manual Idle resets (quality swap / retry) too. The tile
+    // itself is the source, so the connection journal can tell two tiles of one
+    // camera apart.
     partial void OnStateChanged(SessionState value) =>
-        _statusRegistry?.ReportSession(Camera.Id, value);
+        _statusRegistry?.ReportSession(Camera.Id, value, this);
 
     // Coordinator dropped every cached session (e.g. RtspTransport flipped in
     // Settings). Our current Session ref is now disposed — drop subscriptions,
@@ -564,7 +566,7 @@ public sealed partial class CameraTileViewModel : ViewModelBase, IAsyncDisposabl
         StillFrame = null;
         // No live session for this camera anymore — clear our signal so the
         // registry falls back to the reachability probe alone.
-        _statusRegistry.ReportSession(Camera.Id, null);
+        _statusRegistry.ReportSession(Camera.Id, null, this);
         _coordinator.Invalidated -= OnCoordinatorInvalidated;
         _audio.Changed -= OnAudioChanged;
         _audio.Detach(Camera.Id); // no-op unless this tile is the current source

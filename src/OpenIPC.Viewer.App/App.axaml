@@ -38,6 +38,9 @@
     <DataTemplate DataType="vm:SettingsPageViewModel">
       <pages:SettingsPage />
     </DataTemplate>
+    <DataTemplate DataType="vm:NetworkHealthPageViewModel">
+      <pages:NetworkHealthPage />
+    </DataTemplate>
   </Application.DataTemplates>
 
   <Application.Styles>

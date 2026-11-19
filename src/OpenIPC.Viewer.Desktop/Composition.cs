@@ -87,6 +87,8 @@ internal static class Composition
         // Eager resolve: the bridge subscribes in its ctor, so without this it
         // would never wire up (singletons are lazy).
         _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
+        // Link health: loads the connection journal and arms the automatic checks.
+        _ = provider.GetRequiredService<OpenIPC.Viewer.App.Services.LinkHealthMonitor>();
         provider.GetRequiredService<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>().Start();
         return provider;
     }
