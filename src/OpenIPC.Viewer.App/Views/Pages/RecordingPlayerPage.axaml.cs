@@ -63,6 +63,9 @@ public sealed partial class RecordingPlayerPage : UserControl
     {
         if (Vm is not { } vm || e.KeyModifiers != KeyModifiers.None) return;
         if (e.Source is TextBox) return;
+        // A mobile dialog over the player (the delete confirmation) owns the keys: the arrows
+        // move its focus and OK presses its buttons, they must not seek or toggle playback.
+        if (Services.OverlayDialogPresenter.IsAnyOpen) return;
 
         switch (e.Key)
         {

@@ -42,6 +42,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     public AnalyticsPageViewModel Analytics { get; }
     public SettingsPageViewModel Settings { get; }
     public NetworkHealthPageViewModel Health { get; }
+    public UpdateBannerViewModel Update { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLiveSelected))]
@@ -90,6 +91,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         SingleCameraPageFactory singleCameraFactory,
         RecordingPlayerPageFactory playerFactory,
         UserSettingsService userSettings,
+        UpdateBannerViewModel update,
         ILogger<MainWindowViewModel> logger)
     {
         Live = live;
@@ -99,6 +101,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         Analytics = analytics;
         Settings = settings;
         Health = health;
+        Update = update;
         _directory = directory;
         _singleCameraFactory = singleCameraFactory;
         _playerFactory = playerFactory;

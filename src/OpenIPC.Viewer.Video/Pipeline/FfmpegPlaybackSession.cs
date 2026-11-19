@@ -241,6 +241,7 @@ internal sealed class FfmpegPlaybackSession : IPlaybackSession
         try
         {
             fmtCtx = ffmpeg.avformat_alloc_context();
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&fmtCtx, _options.FilePath, null, null);
             FfmpegError.ThrowIfError(ret, "avformat_open_input");
 

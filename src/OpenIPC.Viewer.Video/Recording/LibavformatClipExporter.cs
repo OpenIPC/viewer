@@ -50,6 +50,7 @@ public sealed class LibavformatClipExporter : IClipExporter
         try
         {
             // --- Input ---
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&inputCtx, request.SourcePath, null, null);
             FfmpegError.ThrowIfError(ret, "avformat_open_input");
             ret = ffmpeg.avformat_find_stream_info(inputCtx, null);

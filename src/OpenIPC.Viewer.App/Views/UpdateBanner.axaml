@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             x:Class="OpenIPC.Viewer.App.Views.UpdateBanner"
+             x:DataType="vm:UpdateBannerViewModel">
+
+  <!-- "Version X is available" strip above the page. Text on the left, actions on the
+       right; on a narrow viewport the WrapPanel drops the buttons under the text. -->
+  <UserControl.Styles>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,5" />
+    </Style>
+    <Style Selector="Button.outline">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border IsVisible="{Binding IsVisible}"
+          Background="{StaticResource AccentTintBrush}"
+          BorderBrush="{StaticResource BorderWeakBrush}"
+          BorderThickness="0,0,0,1"
+          Padding="16,10">
+    <StackPanel Spacing="8">
+      <WrapPanel ItemSpacing="16" LineSpacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <Path Classes="lucide" Data="{StaticResource IconDownload}"
+                Stroke="{StaticResource AccentBrush}" Width="18" Height="18"
+                VerticalAlignment="Center" />
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" MaxWidth="560"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="{StaticResource FontSizeSm}" />
+          </StackPanel>
+        </StackPanel>
+
+        <WrapPanel ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
+          <Button Classes="primary" IsVisible="{Binding IsIdle}"
+                  Content="{Binding [Update.Download], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding DownloadCommand}" />
+          <Button Classes="outline" IsVisible="{Binding IsDownloading}"
+                  Content="{Binding [Update.Cancel], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding CancelDownloadCommand}" />
+          <Button Classes="primary" IsVisible="{Binding IsDownloaded}"
+                  Content="{Binding [Update.ShowInFolder], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding ShowInFolderCommand}" />
+          <Button Classes="outline" IsVisible="{Binding HasReleasePage}"
+                  Content="{Binding [Update.WhatsNew], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding OpenReleasePageCommand}" />
+          <Button Classes="link" IsVisible="{Binding IsIdle}"
+                  Content="{Binding [Update.Skip], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding SkipCommand}" />
+          <Button Classes="link"
+                  Content="{Binding [Update.Later], Source={x:Static svc:Localizer.Instance}}"
+                  Command="{Binding LaterCommand}" />
+        </WrapPanel>
+      </WrapPanel>
+
+      <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="4"
+                   IsVisible="{Binding IsDownloading}" />
+    </StackPanel>
+  </Border>
+
+</UserControl>

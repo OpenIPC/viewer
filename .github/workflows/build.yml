@@ -32,7 +32,7 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             archive: tar.gz
-          - os: macos-14
+          - os: macos-15
             rid: osx-arm64
             archive: tar.gz
     runs-on: ${{ matrix.os }}
@@ -71,7 +71,7 @@ jobs:
 
       - name: Install ffmpeg (macOS)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: brew install ffmpeg@7
 
       - name: Fetch bundled ffmpeg (Windows)
         if: runner.os == 'Windows'
@@ -90,7 +90,11 @@ jobs:
         run: dotnet build OpenIPC.Viewer.Desktop.slnx --configuration Release --no-restore /warnaserror -p:IncludeMobileTargets=false
 
       - name: Test
-        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build --verbosity normal -p:IncludeMobileTargets=false
+        # -m:1: one test project at a time. Run side by side on windows-latest, Devices.Tests'
+        # ONVIF stub cameras (HttpListener, i.e. http.sys) and Infrastructure.Tests' loopback
+        # TcpListeners — both on ports picked by the OS — made five ONVIF tests time out, most
+        # likely a request reaching the other project's listener. The tests take seconds anyway.
+        run: dotnet test OpenIPC.Viewer.Desktop.slnx --configuration Release --no-build -m:1 --verbosity normal -p:IncludeMobileTargets=false
 
       - name: Publish
         run: dotnet publish src/OpenIPC.Viewer.Desktop/OpenIPC.Viewer.Desktop.csproj -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeMobileTargets=false -o publish/${{ matrix.rid }}
@@ -219,11 +223,14 @@ jobs:
               -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS"
           } >> "$GITHUB_ENV"
 
+      # -p:RuntimeIdentifiers=<rid>: the csproj lists both RIDs, and .NET Android packs every
+      # listed RID into the APK whatever -r says, so without it both APKs carried both ABIs
+      # (~71 MB each instead of ~36 MB).
       - name: Publish APK (android-arm64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -o publish/android-arm64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       - name: Publish APK (android-x64)
-        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
+        run: dotnet publish src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release -f net10.0-android -r android-x64 -p:RuntimeIdentifiers=android-x64 -o publish/android-x64 -p:ApplicationVersion="${APP_VERSION:-1}" -p:ApplicationDisplayVersion="${APP_DISPLAY_VERSION:-0.1.0-beta}" $SIGN_ARGS
 
       # Hard gate against shipping a corrupt APK. Both v0.3.4 and v0.3.6 went out
       # with a bad CRC-32 on lib/<abi>/libassembly-store.so (a floating-toolchain
@@ -242,6 +249,10 @@ jobs:
             echo "Integrity check: $apk"
             unzip -t "$apk" > /dev/null
           done
+          # One ABI per APK: arm64-v8a in the arm64 one, x86_64 in the x64 one.
+          abis() { unzip -Z1 "$1" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' '; }
+          [ "$(abis "$arm")" = "arm64-v8a " ] || { echo "arm64 APK ABIs: $(abis "$arm")"; exit 1; }
+          [ "$(abis "$x64")" = "x86_64 " ] || { echo "x64 APK ABIs: $(abis "$x64")"; exit 1; }
           mv "$x64" publish/android-x64/org.openipc.viewer-x64-Signed.apk
 
       - name: Upload artifact (arm64)
@@ -259,7 +270,7 @@ jobs:
           if-no-files-found: error
 
   ios:
-    runs-on: macos-14
+    runs-on: macos-15
     name: build (ios)
     # Temporarily disabled: the .NET 10 iOS workload pins to an Xcode version
     # the GitHub macOS runners don't ship yet (workload 26.5 needs Xcode 26.5),
@@ -323,4 +334,4 @@ jobs:
         with:
           files: artifacts/**/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') }}
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-preview') }}

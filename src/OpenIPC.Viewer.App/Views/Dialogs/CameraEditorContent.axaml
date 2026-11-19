@@ -510,7 +510,7 @@
         <TextBlock Grid.Column="0" Text="{Binding FooterHint}" VerticalAlignment="Center"
                    FontSize="{StaticResource FontSizeSm}" Foreground="{StaticResource TextTertiaryBrush}"
                    TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
-        <Button Grid.Column="1" Name="CancelButton" Classes="outline" Margin="0,0,8,0" IsCancel="True"
+        <Button Grid.Column="1" Name="CancelButton" Classes="outline" Margin="0,0,8,0"
                 Content="{Binding [Common.Cancel], Source={x:Static svc:Localizer.Instance}}" />
         <Button Grid.Column="2" Name="SaveButton"
                 Content="{Binding SaveLabel}"

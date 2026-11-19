@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -70,6 +71,18 @@ internal sealed class FfmpegVideoSession : IVideoSession
     // function pointer alive — FFmpeg invokes it via the AVCodecContext.
     private AVCodecContext_get_format? _getFormatDelegate;
     private AVPixelFormat _selectedHwPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
+
+    // How long HW decode may keep failing (send/receive/transfer errors, no
+    // frame out) before the session gives up on HW and reconnects in software.
+    // Time-based, not a count: a 1 fps camera and a 30 fps one get the same
+    // grace for the next keyframe, and both trip well inside the reconnect
+    // watchdog's 5s no-frame window, which would otherwise retry HW.
+    private const long HwFallbackAfterMs = 2_500;
+    // Streams whose HW decode broke during this run. Static because every
+    // reconnect builds a new session; keyed without credentials. 2.5s of
+    // nothing but errors means HW can't handle this stream, not a blip.
+    private static readonly ConcurrentDictionary<string, byte> HwFailedStreams = new();
+    private string HwStreamKey => _options.RtspUri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.UriEscaped);
 
     // Snapshot of the most recently decoded frame, kept around for SnapshotAsync.
     private byte[]? _snapshotBgra;
@@ -182,7 +195,26 @@ internal sealed class FfmpegVideoSession : IVideoSession
         _decodeGate.Dispose();
     }
 
-    private unsafe void Run()
+    private void Run()
+    {
+        // A pass that gives up on HW decode (#94) is retried once on a fresh
+        // RTSP session inside this same session, so one-shot callers without
+        // the reconnect wrapper (connect check, snapshot) get the software
+        // fallback too. The stream is in HwFailedStreams by then, so the
+        // second pass decodes in software and can't ask for another retry.
+        if (!RunOnce()) return;
+        if (_cts!.IsCancellationRequested)
+        {
+            SetState(SessionState.Idle);
+            return;
+        }
+        SetState(SessionState.Connecting);
+        if (RunOnce()) SetState(SessionState.Idle);
+    }
+
+    // One RTSP session from open to close. Returns true when it stopped to be
+    // retried in software; otherwise it has already reported Idle or Failed.
+    private unsafe bool RunOnce()
     {
         AVFormatContext* fmtCtx = null;
         AVCodecContext* codecCtx = null;
@@ -197,6 +229,9 @@ internal sealed class FfmpegVideoSession : IVideoSession
         var audioProbedNoTrack = false;
         var swsSrcPixFmt = AVPixelFormat.AV_PIX_FMT_NONE;
         var hwActive = false;
+        var hwErrors = 0;
+        var lastFrameMs = 0L;
+        var retryInSoftware = false;
 
         try
         {
@@ -216,6 +251,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
             var url = BuildUrlWithCredentials(_options.RtspUri, _options.Credentials);
 
             ArmIoDeadline(ConnectBudgetMs);
+            FfmpegRuntime.ClearLastNativeError();
             var ret = ffmpeg.avformat_open_input(&fmtCtx, url, null, &opts);
             ThrowIfIoError(ret, "avformat_open_input", ConnectBudgetMs);
 
@@ -239,33 +275,17 @@ internal sealed class FfmpegVideoSession : IVideoSession
             if (codec == null)
                 throw new InvalidOperationException($"No decoder available for codec id {codecpar->codec_id}");
 
-            codecCtx = ffmpeg.avcodec_alloc_context3(codec);
-            ret = ffmpeg.avcodec_parameters_to_context(codecCtx, codecpar);
-            FfmpegError.ThrowIfError(ret, "avcodec_parameters_to_context");
-
-            // HW accel decision: pure policy in Resolve, native wiring inline.
-            // Any failure here logs and continues with software decode.
+            // HW accel decision: pure policy in Resolve, native wiring in
+            // OpenDecoder. Any failure there logs and continues with software
+            // decode. A stream that already broke the HW decoder in this run
+            // goes straight to software, so a reconnect doesn't repeat it.
             var resolved = HwAccelSelector.Resolve(_options.HwAccel, _hwFactory, _logger);
-            if (resolved != HwAccelHint.None)
-                hwActive = TryEnableHw(codecCtx, resolved, &hwDeviceCtx);
-
-            ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
-            if (ret < 0 && hwActive)
+            if (resolved != HwAccelHint.None && HwFailedStreams.ContainsKey(HwStreamKey))
             {
-                // HW open failed: tear down HW state and retry as software.
-                _logger.LogWarning("HW-accelerated avcodec_open2 failed: {Err}; retrying software", FfmpegError.Describe(ret));
-                TearDownHw(codecCtx, &hwDeviceCtx);
-                hwActive = false;
-                ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
+                _logger.LogInformation("HW decode skipped for {Host}: it failed on this stream earlier", _options.RtspUri.Host);
+                resolved = HwAccelHint.None;
             }
-            FfmpegError.ThrowIfError(ret, "avcodec_open2");
-
-            _width = codecCtx->width;
-            _height = codecCtx->height;
-            var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
-            _codecName = hwActive ? $"{baseName} ({resolved})" : baseName;
-            if (hwActive)
-                _logger.LogInformation("HW decode active: {Codec} via {Hint}", baseName, resolved);
+            hwActive = OpenDecoder(&codecCtx, &hwDeviceCtx, codecpar, codec, resolved);
 
             packet = ffmpeg.av_packet_alloc();
             frame = ffmpeg.av_frame_alloc();
@@ -273,6 +293,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
 
             SetState(SessionState.Playing);
             _lastFpsTick = DateTime.UtcNow;
+            lastFrameMs = Environment.TickCount64;
 
             var ct = _cts!.Token;
             while (!ct.IsCancellationRequested)
@@ -284,6 +305,8 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 {
                     try { _decodeGate.Wait(ct); }
                     catch (OperationCanceledException) { break; }
+                    // Time parked isn't time HW spent failing.
+                    lastFrameMs = Environment.TickCount64;
                 }
 
                 // Lazily spin the audio decoder up/down to track SetAudioEnabled.
@@ -334,11 +357,31 @@ internal sealed class FfmpegVideoSession : IVideoSession
                 // Demux-level byte count → video bitrate in MaybePublishTelemetry.
                 Interlocked.Add(ref _bytesSinceFpsTick, packet->size);
 
+                // The HW decoder can open fine and then reject every frame —
+                // VideoToolbox does this on HEVC when a reference picture is
+                // missing (#94). Once it has failed for HwFallbackAfterMs
+                // without a frame, mark the stream and close this RTSP session
+                // so Run reopens it in software. Swapping decoders in place
+                // doesn't work — the new decoder starts mid-stream, and on
+                // cameras whose frames keep referencing the keyframe sent at
+                // session start it never sees that keyframe and draws grey.
+                var sinceFrameMs = Environment.TickCount64 - lastFrameMs;
+                if (hwActive && hwErrors > 0 && sinceFrameMs >= HwFallbackAfterMs)
+                {
+                    _logger.LogWarning("HW decode failed {Count} times over {Ms} ms on {Host}; reopening with software decode",
+                        hwErrors, sinceFrameMs, _options.RtspUri.Host);
+                    HwFailedStreams.TryAdd(HwStreamKey, 0);
+                    ffmpeg.av_packet_unref(packet);
+                    retryInSoftware = true;
+                    break;
+                }
+
                 ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
                 ffmpeg.av_packet_unref(packet);
                 if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
                 {
                     _logger.LogWarning("avcodec_send_packet failed: {Err}", FfmpegError.Describe(ret));
+                    if (hwActive) hwErrors++;
                     continue;
                 }
 
@@ -350,6 +393,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
                     if (ret < 0)
                     {
                         _logger.LogWarning("avcodec_receive_frame failed: {Err}", FfmpegError.Describe(ret));
+                        if (hwActive) hwErrors++;
                         break;
                     }
 
@@ -360,11 +404,14 @@ internal sealed class FfmpegVideoSession : IVideoSession
                         if (transferRet < 0)
                         {
                             _logger.LogWarning("av_hwframe_transfer_data failed: {Err}", FfmpegError.Describe(transferRet));
+                            hwErrors++;
                             ffmpeg.av_frame_unref(frame);
                             continue;
                         }
                         presentable = swFrame;
                     }
+                    hwErrors = 0;
+                    lastFrameMs = Environment.TickCount64;
 
                     // Lazy sws init — the actual sw pixfmt is only known once
                     // the first frame arrives (matters for HW path where the
@@ -392,7 +439,7 @@ internal sealed class FfmpegVideoSession : IVideoSession
         {
             _logger.LogError(ex, "Video session loop failed");
             SetState(SessionState.Failed, ex.Message);
-            return;
+            return false;
         }
         finally
         {
@@ -410,7 +457,9 @@ internal sealed class FfmpegVideoSession : IVideoSession
             if (opts != null) ffmpeg.av_dict_free(&opts);
         }
 
+        if (retryInSoftware) return true;
         SetState(SessionState.Idle);
+        return false;
     }
 
     // The RTSP demuxer reports an interrupted read as "Invalid data found", so
@@ -430,6 +479,38 @@ internal sealed class FfmpegVideoSession : IVideoSession
     // Dispose, or once the current call has overrun its budget.
     private unsafe int OnInterrupt(void* opaque) =>
         _abortIo || Environment.TickCount64 > Volatile.Read(ref _ioDeadlineMs) ? 1 : 0;
+
+    // Allocates and opens the video decoder into *codecCtx (assigned before
+    // anything can throw, so the caller's cleanup frees it). Returns whether
+    // HW decode ended up active; a failed HW open retries as software.
+    private unsafe bool OpenDecoder(AVCodecContext** codecCtx, AVBufferRef** hwDeviceCtx,
+        AVCodecParameters* codecpar, AVCodec* codec, HwAccelHint hint)
+    {
+        var ctx = *codecCtx = ffmpeg.avcodec_alloc_context3(codec);
+        var ret = ffmpeg.avcodec_parameters_to_context(ctx, codecpar);
+        FfmpegError.ThrowIfError(ret, "avcodec_parameters_to_context");
+
+        var hwActive = hint != HwAccelHint.None && TryEnableHw(ctx, hint, hwDeviceCtx);
+
+        ret = ffmpeg.avcodec_open2(ctx, codec, null);
+        if (ret < 0 && hwActive)
+        {
+            // HW open failed: tear down HW state and retry as software.
+            _logger.LogWarning("HW-accelerated avcodec_open2 failed: {Err}; retrying software", FfmpegError.Describe(ret));
+            TearDownHw(ctx, hwDeviceCtx);
+            hwActive = false;
+            ret = ffmpeg.avcodec_open2(ctx, codec, null);
+        }
+        FfmpegError.ThrowIfError(ret, "avcodec_open2");
+
+        _width = ctx->width;
+        _height = ctx->height;
+        var baseName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
+        _codecName = hwActive ? $"{baseName} ({hint})" : baseName;
+        if (hwActive)
+            _logger.LogInformation("HW decode active: {Codec} via {Hint}", baseName, hint);
+        return hwActive;
+    }
 
     private unsafe bool TryEnableHw(AVCodecContext* ctx, HwAccelHint hint, AVBufferRef** outDeviceCtx)
     {
@@ -593,7 +674,10 @@ internal sealed class FfmpegVideoSession : IVideoSession
         ffmpeg.av_dict_set(opts, "max_delay", "200000", 0);          // 200ms reorder window
         ffmpeg.av_dict_set(opts, "buffer_size", "1048576", 0);
         ffmpeg.av_dict_set(opts, "reorder_queue_size", "0", 0);
-        ffmpeg.av_dict_set(opts, "fflags", "nobuffer", 0);
+        // No "fflags nobuffer": it throws away the packets read while
+        // avformat_find_stream_info probes, and some NVRs open every session
+        // with a keyframe that later frames keep referencing (POC 0). Without
+        // it neither software nor VideoToolbox can decode a frame (#94).
     }
 
     private static string BuildUrlWithCredentials(Uri uri, CameraCredentials? creds)

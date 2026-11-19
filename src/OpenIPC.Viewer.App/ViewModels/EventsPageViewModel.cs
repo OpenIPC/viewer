@@ -386,11 +386,41 @@ public sealed partial class EventsPageViewModel : ViewModelBase, IDisposable
         Dispatcher.UIThread.Post(() =>
         {
             var idx = _events.FindIndex(e => e.Id == ev.Id);
-            if (idx >= 0) _events[idx] = ev;
-            else _events.Insert(0, ev);
-            if (_events.Count > LoadLimit) _events.RemoveAt(_events.Count - 1);
+            if (idx >= 0)
+            {
+                var wasOpen = _events[idx].EndedAt is null;
+                _events[idx] = ev;
+                // An open episode is re-published on every peak rise and about once
+                // a second while it lasts (for the notification thresholds). Those
+                // only refresh its summary here, so coalesce them instead of
+                // rebuilding the whole list per camera per second.
+                if (wasOpen && ev.EndedAt is null)
+                {
+                    ScheduleCoalescedRefilter();
+                    return;
+                }
+            }
+            else
+            {
+                _events.Insert(0, ev);
+                if (_events.Count > LoadLimit) _events.RemoveAt(_events.Count - 1);
+            }
             ApplyFilter(resetPage: false);
         });
+    }
+
+    private static readonly TimeSpan OpenEventRefreshDelay = TimeSpan.FromSeconds(2);
+    private bool _refilterScheduled;
+
+    private void ScheduleCoalescedRefilter()
+    {
+        if (_refilterScheduled) return;
+        _refilterScheduled = true;
+        DispatcherTimer.RunOnce(() =>
+        {
+            _refilterScheduled = false;
+            ApplyFilter(resetPage: false);
+        }, OpenEventRefreshDelay);
     }
 
     public void Dispose()

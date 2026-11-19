@@ -55,9 +55,13 @@ public sealed class AnalyticsMotionEventSource : IMotionEventSource
         public void OnNext(DetectionResult value)
         {
             if (value.CameraId != _cameraId || value.Detections.Count == 0) return;
+            var best = 0f;
+            foreach (var d in value.Detections)
+                if (d.Confidence > best) best = d.Confidence;
             _target.OnNext(new MotionTick(
                 _cameraId, value.OccurredAt, "analytics",
-                EventKind.Detection, Summarize(value.Detections)));
+                EventKind.Detection, Summarize(value.Detections),
+                best, value.Detections.Count));
         }
 
         public void OnError(Exception error) { }

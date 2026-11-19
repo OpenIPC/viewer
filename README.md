@@ -10,7 +10,8 @@ Built with .NET 9 / 10 and Avalonia 12.
 
 > Status: **beta** — releases ship as standalone builds for Windows / Linux /
 > macOS / Android from the [releases page](https://github.com/OpenIPC/viewer/releases).
-> Native installers, code signing and in-app auto-update come later.
+> The app tells you when a new release is out and can download it for you;
+> native installers and code signing come later.
 >
 > See the [Roadmap](docs/ROADMAP.md) for phase status.
 
@@ -73,8 +74,16 @@ Built with .NET 9 / 10 and Avalonia 12.
   power loss from a data-link fault; which cameras drop together (shared
   segment vs. one branch); and this computer's routes — where each camera's
   packets go vs. which adapter it answers on, with a generated fix script.
-- **Notifications** — system notifications for motion and detections, with
-  quiet hours.
+- **Notifications** — alerts for motion and detections with thresholds (AI
+  confidence, event duration, objects in frame), cooldown and quiet hours.
+  Desktop: the app's own toast with a built-in or custom sound and volume, or
+  native Windows notifications managed in Windows Settings.
+- **External actions** — react to an event outside the app: a TCP/UDP signal
+  (text or raw hex) to an alarm panel or relay, an HTTP webhook, an e-mail or
+  a local program/script. E-mail goes over SMTP everywhere — the login is kept
+  in Windows Credential Manager on Windows and in the app's encrypted secrets
+  store elsewhere — and on Windows also via the default mail client (MAPI) or
+  classic Outlook.
 - **Desktop niceties** — tray icon with quick actions, optional
   close-to-tray, choice of start page (Library or Live) and startup layout,
   light/dark themes with accent colors.
@@ -121,8 +130,12 @@ installer is required for the beta — download, extract, run:
 | Android x64 | `org.openipc.viewer-x64-Signed.apk` | the same for emulators and x86-64 Android devices — phones want the arm64 one |
 
 Each build is self-contained (bundles the .NET runtime), so there's nothing
-to install alongside it. Native installers and in-app auto-update may come in
-a later release.
+to install alongside it. When a newer release is published, a strip at the top
+of the window offers it: *Download* saves the archive for your platform into
+Downloads (hash-checked), and you unpack it in place of the old folder — your
+cameras and settings live in the user data folder, not next to the app. On
+Android the APK opens in the browser. Turn the check off in *Settings → About*.
+Native installers may come in a later release.
 
 ### Runtime requirements
 
@@ -140,8 +153,12 @@ a later release.
   `/dev/dri/renderD128` and your user in the `render` (or `video`) group.
   Credentials use `secret-tool` against the GNOME/KDE keyring, with an AES-GCM
   file fallback if D-Bus is unavailable.
-- **macOS** — Homebrew FFmpeg (`brew install ffmpeg`). VideoToolbox HW decode
-  works on any Mac 12+. Credentials live in the Keychain via `security`.
+- **macOS** — Homebrew FFmpeg 7 (`brew install ffmpeg@7`). The app binds the
+  FFmpeg 7.x ABI (`libavcodec.61`), and Homebrew's plain `ffmpeg` formula is
+  newer than that, so it won't load. `ffmpeg@7` is keg-only; the app finds it
+  under the Homebrew prefix by itself, no `DYLD_LIBRARY_PATH` needed.
+  VideoToolbox HW decode works on any Mac 12+; a stream it can't decode falls
+  back to software. Credentials live in the Keychain via `security`.
 
 > **Validation caveat.** Linux / macOS / Android / iOS code paths build + link
 > in CI but aren't yet end-to-end tested on real devices for every commit.
@@ -186,7 +203,7 @@ Node the build still succeeds and the server runs API-only; pass
 Run the FFmpeg fetch script for your OS once — it downloads the bundled
 shared-build (`n7.1` ABI) from `BtbN/FFmpeg-Builds` into `runtimes/<rid>/native/`:
 `tools/fetch-ffmpeg.ps1` (Windows → `win-x64`) or `tools/fetch-ffmpeg-linux.sh`
-(Linux → `linux-x64`). macOS uses the system Homebrew FFmpeg (see
+(Linux → `linux-x64`). macOS uses Homebrew's `ffmpeg@7` (see
 [Runtime requirements](#runtime-requirements)).
 
 ### Android

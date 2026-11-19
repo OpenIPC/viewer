@@ -220,6 +220,19 @@ public sealed partial class GridPage : UserControl
         WeakReferenceMessenger.Default.Send(new OpenCameraMessage(tile.Camera.Id));
     }
 
+    // TV remote / keyboard: OK on the D-pad arrives as Space (Avalonia.Android maps
+    // DpadCenter to Key.Space), Enter as Enter. Keys from the tile's own buttons have
+    // another Source and are left to them.
+    private void OnTileKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || e.Key is not (Key.Enter or Key.Space)) return;
+        if (!ReferenceEquals(e.Source, sender)) return;
+        if (sender is not Control { DataContext: CameraTileViewModel tile }) return;
+
+        WeakReferenceMessenger.Default.Send(new OpenCameraMessage(tile.Camera.Id));
+        e.Handled = true;
+    }
+
     // Drag start. Source is the inner tile Grid (DataContext is the tile VM);
     // we look up its index in Tiles via the parent ItemsControl so VM-driven
     // reorders stay the single source of truth for ordering.

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -7,27 +8,58 @@ using OpenIPC.Viewer.Core.Notifications;
 
 namespace OpenIPC.Viewer.App.Services;
 
-// Desktop notification sink (Phase 19.3): stacks Telegram-style toast windows in
-// the bottom-right of the primary screen. The coordinator already vetted the
-// notification (cooldown / quiet hours / type) — we just present it. Marshals to
-// the UI thread since events arrive off the decode/event pipeline.
+// Desktop notification sink (Phase 19.3). The coordinator already vetted the
+// notification (thresholds / cooldown / quiet hours / type); this decides how it
+// looks and sounds, per the "Notification style" setting:
+//   "app"     — Telegram-style toast windows stacked bottom-right of the primary
+//               screen, plus the app's own sound at the chosen volume;
+//   "windows" — a native Windows toast (ISystemNotificationSink); banners, sound
+//               and Do Not Disturb are then governed by Windows Settings.
+// Marshals to the UI thread since events arrive off the decode/event pipeline.
 public sealed class DesktopNotificationService : INotificationService
 {
+    public const string StyleApp = "app";
+    public const string StyleWindows = "windows";
+
     // Newest at the bottom; older ones float up. Cap so a burst doesn't paper
     // over the whole screen — the oldest is dropped when the cap is hit.
     private const int MaxVisible = 4;
     private const double MarginDip = 16;
     private const double GapDip = 10;
 
+    private readonly UserSettingsService _settings;
+    private readonly NotificationSoundService _sound;
+    private readonly ISystemNotificationSink? _system;
     private readonly List<ToastWindow> _active = new();
+
+    public DesktopNotificationService(
+        UserSettingsService settings,
+        NotificationSoundService sound,
+        ISystemNotificationSink? system = null)
+    {
+        _settings = settings;
+        _sound = sound;
+        _system = system;
+    }
 
     // Always available on desktop — this sink is only registered in the desktop
     // head. (We can't probe Application.Current here: the coordinator is Start()ed
     // during composition, before the Avalonia lifetime exists.)
     public bool IsAvailable => true;
 
+    public bool UsesSystemNotifications =>
+        _system is { IsSupported: true } &&
+        string.Equals(_settings.Current.NotificationStyle, StyleWindows, StringComparison.OrdinalIgnoreCase);
+
     public void Show(NotificationRequest request)
     {
+        if (UsesSystemNotifications)
+        {
+            _system!.Show(request);
+            return;
+        }
+
+        _sound.PlayForNotification();
         if (Dispatcher.UIThread.CheckAccess()) ShowCore(request);
         else Dispatcher.UIThread.Post(() => ShowCore(request));
     }

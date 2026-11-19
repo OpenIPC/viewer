@@ -22,10 +22,14 @@ public interface IMotionEventSource
 
 // Kind/Summary default to a plain motion tick; analytics sources set Kind to
 // Detection and Summary to the class counts (Phase 15.7) so the same ingestion
-// path produces both motion and detection events.
+// path produces both motion and detection events. Confidence (0..1, best box in
+// the frame) and Objects (boxes in the frame) feed the notification thresholds;
+// a plain motion tick has neither.
 public readonly record struct MotionTick(
     CameraId CameraId,
     DateTime At,
     string Source,
     EventKind Kind = EventKind.Motion,
-    string? Summary = null);
+    string? Summary = null,
+    float? Confidence = null,
+    int Objects = 0);

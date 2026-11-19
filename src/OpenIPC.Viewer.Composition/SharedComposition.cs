@@ -1,6 +1,7 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using OpenIPC.Viewer.App.Services;
 using OpenIPC.Viewer.App.ViewModels;
 using OpenIPC.Viewer.Core.Events;
@@ -203,15 +204,42 @@ public static class SharedComposition
         services.AddSingleton<EventIngestionService>();
 
         // Notifications (Phase 19.3). Native sink per head (TryAdd Null fallback);
-        // the coordinator applies cooldown / quiet-hours / type toggles over the
-        // event stream. Eager-Start()ed by each platform host after build.
+        // the coordinator applies thresholds / cooldown / quiet-hours / type
+        // toggles over the event stream and fans out to the sink and the external
+        // actions. Eager-Start()ed by each platform host after build.
         services.TryAddSingleton<OpenIPC.Viewer.Core.Notifications.INotificationService,
             OpenIPC.Viewer.Core.Notifications.NullNotificationService>();
+        // Custom notification sound import (any format FFmpeg reads) + playback.
+        // The player itself is registered by heads that own an audio device.
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.IAudioClipDecoder,
+            OpenIPC.Viewer.Video.Pipeline.FfmpegAudioClipDecoder>();
+        services.AddSingleton<NotificationSoundService>();
+        // External actions: SMTP login lives in Windows Credential Manager on
+        // Windows, in the platform secrets store elsewhere.
+        services.TryAddSingleton<OpenIPC.Viewer.Core.Notifications.IMailCredentialStore>(sp =>
+        {
+            if (OperatingSystem.IsWindows())
+                return new OpenIPC.Viewer.Infrastructure.Notifications.WindowsCredentialMailStore();
+            return new OpenIPC.Viewer.Infrastructure.Notifications.SecretsStoreMailCredentialStore(
+                sp.GetRequiredService<ISecretsStore>());
+        });
+        services.AddSingleton<OpenIPC.Viewer.Core.Notifications.IEventActionDispatcher,
+            OpenIPC.Viewer.Infrastructure.Notifications.EventActionDispatcher>();
         services.AddSingleton<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>(sp =>
-            new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
+        {
+            var cameras = sp.GetRequiredService<CameraDirectoryService>();
+            var coordinator = new OpenIPC.Viewer.Core.Notifications.NotificationCoordinator(
                 sp.GetRequiredService<EventIngestionService>().Events,
                 sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.INotificationService>(),
-                sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>()));
+                sp.GetRequiredService<OpenIPC.Viewer.Core.Settings.IUserSettingsAccessor>(),
+                actions: sp.GetRequiredService<OpenIPC.Viewer.Core.Notifications.IEventActionDispatcher>(),
+                cameraName: async (id, ct) => (await cameras.GetAsync(id, ct).ConfigureAwait(false))?.Name);
+            // Core has no logger; the coordinator reports sink/dispatcher failures.
+            var log = sp.GetRequiredService<ILoggerFactory>()
+                .CreateLogger<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>();
+            coordinator.DeliveryFailed += (_, ex) => log.LogWarning(ex, "Notification delivery failed");
+            return coordinator;
+        });
 
         // UI services
         services.AddSingleton<IDialogService, DialogService>();
@@ -246,6 +274,23 @@ public static class SharedComposition
         // shared file at startup. Run from StartupViewModel and Settings.
         services.AddSingleton<ConfigSyncService>();
 
+        // Update notifications (Phase 11.5). The feed comes from the build's UpdateFeed
+        // property — GitHub Releases by default, a latest.json manifest for builds published
+        // elsewhere, none for store builds — so UpdateService takes it nullable and goes quiet without one.
+        services.AddSingleton<OpenIPC.Viewer.Core.Updates.IUpdateDownloader>(sp =>
+            new OpenIPC.Viewer.Infrastructure.Updates.UpdateDownloader(
+                // A full archive is ~200 MB; the user can cancel, so no overall timeout.
+                new System.Net.Http.HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan },
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OpenIPC.Viewer.Infrastructure.Updates.UpdateDownloader>>()));
+        services.AddSingleton(sp => new UpdateService(
+            OpenIPC.Viewer.Infrastructure.Updates.UpdateFeedFactory.Create(
+                OpenIPC.Viewer.Infrastructure.Updates.UpdateFeedFactory.ConfiguredSpec,
+                new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(20) }),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.Updates.IUpdateDownloader>(),
+            sp.GetRequiredService<UserSettingsService>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<UpdateService>>()));
+        services.AddSingleton<UpdateBannerViewModel>();
+
         // ViewModels — singletons so navigation preserves state across
         // sidebar/tab switches and messenger registrations stay alive.
         services.AddSingleton<MainWindowViewModel>();
@@ -256,6 +301,7 @@ public static class SharedComposition
         services.AddSingleton<SnapshotBrowserPageViewModel>();
         services.AddSingleton<EventsPageViewModel>();
         services.AddSingleton<AnalyticsPageViewModel>();
+        services.AddSingleton<NotificationSettingsViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<NetworkHealthPageViewModel>();
 

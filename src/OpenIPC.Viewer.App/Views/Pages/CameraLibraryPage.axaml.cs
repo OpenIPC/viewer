@@ -139,6 +139,21 @@ public sealed partial class CameraLibraryPage : UserControl
             vm.OpenCameraCommand.Execute(row);
     }
 
+    // TV remote / keyboard: OK on the D-pad arrives as Space (Avalonia.Android maps
+    // DpadCenter to Key.Space), Enter as Enter. Keys from the row's own buttons have
+    // another Source and are left to them.
+    private void OnCameraCardKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || e.Key is not (Key.Enter or Key.Space)) return;
+        if (!ReferenceEquals(e.Source, sender)) return;
+        if (sender is not Control { DataContext: CameraRowViewModel row }) return;
+        if (DataContext is not CameraLibraryPageViewModel vm) return;
+
+        if (vm.OpenCameraCommand.CanExecute(row))
+            vm.OpenCameraCommand.Execute(row);
+        e.Handled = true;
+    }
+
     private static bool IsInsideInteractive(Visual? source, Visual? stopAt)
     {
         for (var v = source; v is not null && v != stopAt; v = v.GetVisualParent())

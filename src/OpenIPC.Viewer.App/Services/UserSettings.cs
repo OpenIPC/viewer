@@ -88,6 +88,26 @@ public sealed record UserSettings(
     bool QuietHoursEnabled = false,
     int QuietHoursStartHour = 22,
     int QuietHoursEndHour = 7,
+    // How a notification is shown (desktop): "app" = the app's own corner toast
+    // with its own sound (NotificationSound/Volume below); "windows" = a native
+    // Windows toast, so banners, sound, Do Not Disturb and priority are managed
+    // in Windows Settings → System → Notifications. Ignored off Windows.
+    string NotificationStyle = "app",
+    // In-app sound: "chime" (built-in), "custom" (NotificationSoundFile, a WAV
+    // the app copied into AppDataDir/sounds) or "off". Volume is 0..100 %.
+    string NotificationSound = "chime",
+    int NotificationVolume = 70,
+    string NotificationSoundFile = "",
+    string NotificationSoundName = "",
+    // Thresholds an event must clear before it notifies or fires an action.
+    // Confidence (%) and object count apply to AI detections; duration (s) to
+    // every event. 0 / 1 = no threshold.
+    int NotifyMinConfidencePercent = 0,
+    int NotifyMinDurationSeconds = 0,
+    int NotifyMinObjects = 1,
+    // External actions: TCP/UDP signal, webhook, e-mail, program. Null in files
+    // written before this existed → defaults (all off).
+    OpenIPC.Viewer.Core.Notifications.EventActionSettings? EventActions = null,
     // Main window geometry (desktop only). Null position = never saved yet →
     // center on first run. Size is the client area in DIPs; defaults match the
     // MainWindow.axaml fallback. WindowMaximized restores a maximized window
@@ -121,7 +141,12 @@ public sealed record UserSettings(
     // or a streamer that stopped answering — off by default: it drops every
     // viewer of that camera for a few seconds.
     bool LinkHealthAutoCheck = true,
-    bool LinkHealthAutoFix = false)
+    bool LinkHealthAutoFix = false,
+    // Update notifications: check the build's feed (GitHub Releases or a release manifest) on launch and
+    // once a day after. SkippedUpdateVersion is a release the user dismissed with "Skip" —
+    // the banner stays quiet until a newer one comes out; a manual check still shows it.
+    bool CheckForUpdates = true,
+    string SkippedUpdateVersion = "")
 {
     public static UserSettings Default => new();
 }

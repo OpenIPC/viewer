@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using FFmpeg.AutoGen.Abstractions;
@@ -20,14 +21,31 @@ internal static class FfmpegRuntime
     // FfmpegException ctor on that same thread consumes it.
     [ThreadStatic] private static string? _lastNativeError;
 
+    // Fallback when nothing logged at error level: the RTSP demuxer reports a
+    // stalled handshake only as a warning ("Failed reading RTSP data: ...")
+    // and then returns a bare "Invalid data found" (#90).
+    [ThreadStatic] private static string? _lastNativeWarning;
+
     // Held so the GC can't collect the delegate while native code holds it.
     private static av_log_set_callback_callback? _logCallback;
 
-    internal static string? TakeLastNativeError()
+    // includeWarning: only for avformat_open_input, which clears the state
+    // right before the call — anywhere else a warning from an earlier call
+    // that succeeded would be pinned on an unrelated failure.
+    internal static string? TakeLastNativeError(bool includeWarning = false)
     {
-        var v = _lastNativeError;
+        var v = includeWarning ? _lastNativeError ?? _lastNativeWarning : _lastNativeError;
         _lastNativeError = null;
+        _lastNativeWarning = null;
         return v;
+    }
+
+    // Drops whatever an earlier call on this thread left behind, so the next
+    // failure isn't explained by a stale line.
+    internal static void ClearLastNativeError()
+    {
+        _lastNativeError = null;
+        _lastNativeWarning = null;
     }
     // Serializes the one-time native init. The old design used an Interlocked
     // CompareExchange flag, but that let the *second* caller return "ready"
@@ -104,8 +122,9 @@ internal static class FfmpegRuntime
                     $"(run tools/build-ffmpeg-android.sh via WSL or pull .so from a CI APK artifact). " +
                     $"Desktop: keep the runtimes/ folder from the release archive next to the exe, " +
                     $"or run tools/fetch-ffmpeg.ps1 (Windows) / tools/fetch-ffmpeg-linux.sh (Linux) / " +
-                    $"brew install ffmpeg (macOS). NOTE: the app needs FFmpeg 7.x (libavcodec.so.61); " +
-                    $"distro packages like Ubuntu 24.04's are FFmpeg 6.1 (libavcodec.so.60) and will not load. " +
+                    $"brew install ffmpeg@7 (macOS). NOTE: the app needs FFmpeg 7.x (libavcodec 61); " +
+                    $"distro packages like Ubuntu 24.04's are FFmpeg 6.1 (libavcodec.so.60) and will not load, " +
+                    $"and neither does Homebrew's current `ffmpeg` formula (8.x+). " +
                     $"Underlying: {DescribeChain(ex)}", ex);
                 _ready = true;
                 throw _initFailure;
@@ -135,8 +154,10 @@ internal static class FfmpegRuntime
         ffmpeg.av_log_format_line2(avcl, level, fmt, vl, buf, bufSize, &printPrefix);
         var msg = Marshal.PtrToStringAnsi((IntPtr)buf)?.Trim();
         if (string.IsNullOrEmpty(msg)) return;
+        msg = FfmpegError.Humanize(msg);
 
         if (level <= ffmpeg.AV_LOG_ERROR) _lastNativeError = msg;
+        else _lastNativeWarning = msg;
 
         // A logging sink must never throw back into native FFmpeg.
         try { NativeLog?.Invoke(level, msg); }
@@ -180,10 +201,36 @@ internal static class FfmpegRuntime
                 return candidate;
         }
 
-        // Fall back to "" — FFmpeg.AutoGen then uses the platform loader path
+        if (OperatingSystem.IsMacOS() && FindMacFfmpegDir() is { } macDir)
+            return macDir;
+
+        // Fall back to ""— FFmpeg.AutoGen then uses the platform loader path
         // (apt/brew-installed libs on Linux/macOS, DLLs next to the exe on Windows,
         // and the bundled .so files added via <AndroidNativeLibrary> on Android).
         return "";
+    }
+
+    // macOS has no bundled FFmpeg. Homebrew's plain `ffmpeg` formula has moved
+    // past 7.x, and `ffmpeg@7` is keg-only — its libs aren't on any default
+    // dlopen path, so without this users had to export DYLD_LIBRARY_PATH (#94).
+    // DYLD_LIBRARY_PATH entries go first so an explicit choice still wins.
+    private static string? FindMacFfmpegDir()
+    {
+        // Must match the libavcodec major FFmpeg.AutoGen 7.1 binds against.
+        const string probeLib = "libavcodec.61.dylib";
+
+        var dirs = (Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH") ?? "")
+            .Split(':', StringSplitOptions.RemoveEmptyEntries)
+            .Concat(new[]
+            {
+                "/opt/homebrew/opt/ffmpeg@7/lib", // Apple Silicon Homebrew
+                "/usr/local/opt/ffmpeg@7/lib",    // Intel Homebrew
+                "/opt/homebrew/lib",
+                "/usr/local/lib",
+                "/opt/local/lib",                 // MacPorts
+            });
+
+        return dirs.FirstOrDefault(d => File.Exists(Path.Combine(d, probeLib)));
     }
 }
 
