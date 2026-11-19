@@ -102,6 +102,17 @@
               <TextBlock Text="{Binding [Nav.Settings], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
             </StackPanel>
           </RadioButton>
+          <!-- Link health (connection counters, link checks, fixes) — right under Settings. -->
+          <RadioButton Classes="sidebar" GroupName="DesktopNav"
+                       IsChecked="{Binding IsHealthSelected, Mode=OneWay}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="health">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Path Classes="lucide" Data="{StaticResource IconActivity}"
+                    Stroke="{StaticResource TextPrimaryBrush}" Width="16" Height="16" />
+              <TextBlock Text="{Binding [Nav.Health], Source={x:Static svc:Localizer.Instance}}" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
         </StackPanel>
 
       </DockPanel>

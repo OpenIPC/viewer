@@ -113,7 +113,15 @@ public sealed record UserSettings(
     // With "live", StartupLayoutId picks the layout the grid opens on; 0 = the
     // one that was active when the app was last closed.
     string StartupPage = "library",
-    int StartupLayoutId = 0)
+    int StartupLayoutId = 0,
+    // Link health (Health page). AutoCheck runs a one-off diagnosis after
+    // ConnectionJournal.FailureThreshold failed connect attempts in a row and
+    // again once the camera is back. AutoFix lets that diagnosis restart the
+    // camera's streamer when it finds leftover RTSP sessions from this computer
+    // or a streamer that stopped answering — off by default: it drops every
+    // viewer of that camera for a few seconds.
+    bool LinkHealthAutoCheck = true,
+    bool LinkHealthAutoFix = false)
 {
     public static UserSettings Default => new();
 }

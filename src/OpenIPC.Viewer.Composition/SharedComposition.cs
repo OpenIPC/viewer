@@ -51,6 +51,31 @@ public static class SharedComposition
         services.AddSingleton<IReachabilityProbe, TcpReachabilityProbe>();
         // Process-wide status merge point — grid sessions write, library + Health read.
         services.AddSingleton<OpenIPC.Viewer.Core.Status.CameraStatusRegistry>();
+        // Link health (Health page): connection journal fed by the registry's raw
+        // session reports, the probes a check uses, and the automatic checks.
+        services.AddSingleton(sp => new OpenIPC.Viewer.Core.LinkHealth.ConnectionJournal(
+            sp.GetRequiredService<OpenIPC.Viewer.Core.Status.CameraStatusRegistry>()));
+        services.AddSingleton<OpenIPC.Viewer.Core.LinkHealth.IPingProbe, OpenIPC.Viewer.Infrastructure.Net.IcmpPingProbe>();
+        services.AddSingleton<OpenIPC.Viewer.Core.LinkHealth.IHostLinkProbe, OpenIPC.Viewer.Infrastructure.Net.HostLinkProbe>();
+        services.AddSingleton<OpenIPC.Viewer.Core.LinkHealth.ICameraLinkClient, OpenIPC.Viewer.Devices.LinkHealth.SshCameraLinkClient>();
+        // GetService: the route reader is per-platform (registered further down
+        // for Windows/Linux only); without it pinned host routes just aren't seen.
+        services.AddSingleton<OpenIPC.Viewer.Core.LinkHealth.IHostRoutingProbe>(sp =>
+            new OpenIPC.Viewer.Devices.LinkHealth.HostRoutingProbe(
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OpenIPC.Viewer.Devices.LinkHealth.HostRoutingProbe>>(),
+                sp.GetService<OpenIPC.Viewer.Devices.Discovery.Routes.IRouteTableReader>()));
+        services.AddSingleton(sp => new OpenIPC.Viewer.Core.LinkHealth.LinkHealthService(
+            sp.GetRequiredService<CameraDirectoryService>(),
+            sp.GetRequiredService<IReachabilityProbe>(),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.LinkHealth.IPingProbe>(),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.LinkHealth.IHostLinkProbe>(),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.LinkHealth.ICameraLinkClient>(),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.LinkHealth.IHostRoutingProbe>(),
+            sp.GetRequiredService<OpenIPC.Viewer.Core.LinkHealth.ConnectionJournal>()));
+        services.AddSingleton<LinkHealthStore>();
+        // Platform hosts resolve this eagerly so the journal is loaded and the
+        // automatic checks are armed from the first session report on.
+        services.AddSingleton<LinkHealthMonitor>();
 
         // Snapshots (Phase 14): HD-always capture + thumbnail generation.
         services.AddSingleton<IThumbnailGenerator, OpenIPC.Viewer.Video.Imaging.SkiaThumbnailGenerator>();
@@ -232,6 +257,7 @@ public static class SharedComposition
         services.AddSingleton<EventsPageViewModel>();
         services.AddSingleton<AnalyticsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
+        services.AddSingleton<NetworkHealthPageViewModel>();
 
         return services;
     }

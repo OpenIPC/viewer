@@ -64,6 +64,8 @@ internal static class Composition
         var provider = services.BuildServiceProvider(validateScopes: true);
         HookUserSettingsToLogLevel(provider, levelSwitch);
         _ = provider.GetRequiredService<LiveStreamSettingsBridge>();
+        // Link health: loads the connection journal and arms the automatic checks.
+        _ = provider.GetRequiredService<OpenIPC.Viewer.App.Services.LinkHealthMonitor>();
         provider.GetRequiredService<OpenIPC.Viewer.Core.Notifications.NotificationCoordinator>().Start();
         return provider;
     }

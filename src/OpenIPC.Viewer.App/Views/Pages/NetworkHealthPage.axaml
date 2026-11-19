@@ -1,0 +1,279 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenIPC.Viewer.App.ViewModels"
+             xmlns:svc="using:OpenIPC.Viewer.App.Services"
+             xmlns:sys="using:System"
+             x:Class="OpenIPC.Viewer.App.Views.Pages.NetworkHealthPage"
+             x:DataType="vm:NetworkHealthPageViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderWeakBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <Style Selector="Border.status">
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.metric">
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinWidth" Value="120" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Button.act">
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="{StaticResource Bg3Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMediumBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Header -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding [LinkHealth.Title], Source={x:Static svc:Localizer.Instance}}"
+                   FontSize="{StaticResource FontSizeXl}" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}" />
+        <TextBlock Classes="muted" Text="{Binding [LinkHealth.Subtitle], Source={x:Static svc:Localizer.Instance}}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+        <Button Classes="act" Command="{Binding CheckAllCommand}"
+                Content="{Binding [LinkHealth.CheckAll], Source={x:Static svc:Localizer.Instance}}" />
+        <Button Classes="row-icon" Command="{Binding RefreshCommand}"
+                ToolTip.Tip="{Binding [Common.Refresh], Source={x:Static svc:Localizer.Instance}}">
+          <Path Classes="lucide" Data="{StaticResource IconRefresh}"
+                Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1">
+      <StackPanel Spacing="16" Margin="0,0,4,16">
+
+        <!-- Automation -->
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding [LinkHealth.Auto.Title], Source={x:Static svc:Localizer.Instance}}"
+                       FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+            <CheckBox IsChecked="{Binding AutoCheck, Mode=TwoWay}">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding [LinkHealth.Auto.Check], Source={x:Static svc:Localizer.Instance}}"
+                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" Text="{Binding [LinkHealth.Auto.CheckHint], Source={x:Static svc:Localizer.Instance}}" />
+              </StackPanel>
+            </CheckBox>
+            <CheckBox IsChecked="{Binding AutoFix, Mode=TwoWay}">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding [LinkHealth.Auto.Fix], Source={x:Static svc:Localizer.Instance}}"
+                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" Text="{Binding [LinkHealth.Auto.FixHint], Source={x:Static svc:Localizer.Instance}}" />
+              </StackPanel>
+            </CheckBox>
+          </StackPanel>
+        </Border>
+
+        <!-- This computer's routes: which adapter packets leave by vs. where each camera answers -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding [LinkHealth.Routes.Title], Source={x:Static svc:Localizer.Instance}}"
+                           FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Classes="muted" Text="{Binding RoutesSummary}" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="act" Command="{Binding CheckRoutesCommand}" VerticalAlignment="Top"
+                      Content="{Binding [LinkHealth.Routes.Check], Source={x:Static svc:Localizer.Instance}}" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding RouteLines}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RouteLineViewModel">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Ellipse Width="8" Height="8" Fill="{Binding Brush}" VerticalAlignment="Top" Margin="0,6,10,0" />
+                    <StackPanel Grid.Column="1" Spacing="1">
+                      <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                      <TextBlock Classes="muted" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                                 FontFamily="{StaticResource FontMono}" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Spacing="8" IsVisible="{Binding HasFix}">
+              <TextBlock Classes="muted" Text="{Binding [LinkHealth.Routes.FixHint], Source={x:Static svc:Localizer.Instance}}" />
+              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                <Button Classes="act" Command="{Binding RunFixScriptCommand}" IsVisible="{Binding CanRunFixElevated}"
+                        Content="{Binding [LinkHealth.Routes.Run], Source={x:Static svc:Localizer.Instance}}" />
+                <Button Classes="act" Command="{Binding SaveFixScriptCommand}"
+                        Content="{Binding [LinkHealth.Routes.Save], Source={x:Static svc:Localizer.Instance}}" />
+              </WrapPanel>
+              <SelectableTextBlock Classes="muted" Text="{Binding FixScriptPath}" TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource FontSizeSm}" />
+              <Expander Header="{Binding [LinkHealth.Routes.Show], Source={x:Static svc:Localizer.Instance}}"
+                        HorizontalAlignment="Stretch">
+                <TextBox Text="{Binding FixScriptText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                         TextWrapping="NoWrap" FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                         MaxHeight="360" />
+              </Expander>
+            </StackPanel>
+
+            <TextBlock Classes="muted" Text="{Binding RoutesStatus}" />
+            <Border Classes="metric" IsVisible="{Binding HasFixLog}">
+              <SelectableTextBlock Text="{Binding FixLogText}" TextWrapping="Wrap"
+                                   FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeSm}"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- Shared segment analysis -->
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding [LinkHealth.Topo.Title], Source={x:Static svc:Localizer.Instance}}"
+                         FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="act" Command="{Binding ResetCountersCommand}"
+                      Content="{Binding [LinkHealth.Reset], Source={x:Static svc:Localizer.Instance}}" />
+            </Grid>
+            <TextBlock Text="{Binding TopologyTitle}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+            <TextBlock Classes="muted" Text="{Binding TopologyHint}" />
+            <ItemsControl ItemsSource="{Binding TopologyLines}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="sys:String">
+                  <TextBlock Classes="muted" Text="{Binding}" FontFamily="{StaticResource FontMono}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- Limits of what software can measure -->
+        <Border Classes="card">
+          <Grid ColumnDefinitions="Auto,*">
+            <Path Classes="lucide" Data="{StaticResource IconAbout}"
+                  Stroke="{StaticResource TextSecondaryBrush}" Width="16" Height="16"
+                  VerticalAlignment="Top" Margin="0,2,10,0" />
+            <TextBlock Grid.Column="1" Classes="muted"
+                       Text="{Binding [LinkHealth.Limits], Source={x:Static svc:Localizer.Instance}}" />
+          </Grid>
+        </Border>
+
+        <TextBlock Classes="muted" IsVisible="{Binding IsEmpty}"
+                   Text="{Binding [Health.Empty], Source={x:Static svc:Localizer.Instance}}" />
+
+        <!-- Cameras -->
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="12" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LinkHealthRowViewModel">
+              <Border Classes="card">
+                <StackPanel Spacing="10">
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource FontSizeMd}"
+                                 Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="muted" Text="{Binding Host}" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="status">
+                      <TextBlock Text="{Binding StatusText, StringFormat='● {0}'}"
+                                 Foreground="{Binding StatusBrush}" FontSize="{StaticResource FontSizeSm}" />
+                    </Border>
+                  </Grid>
+
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding CountersText}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                    <TextBlock Classes="muted" Text="{Binding LastDropText}" />
+                    <TextBlock Classes="muted" Text="{Binding LastCheckText}" IsVisible="{Binding HasReport}" />
+                  </StackPanel>
+
+                  <ItemsControl ItemsSource="{Binding Metrics}" IsVisible="{Binding HasReport}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MetricViewModel">
+                        <Border Classes="metric">
+                          <StackPanel Spacing="1">
+                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource FontSizeSm}"
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBlock Text="{Binding Value}" Foreground="{StaticResource TextPrimaryBrush}" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <ItemsControl ItemsSource="{Binding Findings}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="6" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FindingViewModel">
+                        <Grid ColumnDefinitions="Auto,*">
+                          <Ellipse Width="8" Height="8" Fill="{Binding Brush}" VerticalAlignment="Top" Margin="0,6,10,0" />
+                          <StackPanel Grid.Column="1" Spacing="1">
+                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock Classes="muted" Text="{Binding Hint}" IsVisible="{Binding HasHint}" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                    <Button Classes="act" Command="{Binding CheckCommand}"
+                            Content="{Binding [LinkHealth.Check], Source={x:Static svc:Localizer.Instance}}" />
+                    <Button Classes="act" Command="{Binding StressCommand}"
+                            Content="{Binding [LinkHealth.Stress], Source={x:Static svc:Localizer.Instance}}"
+                            ToolTip.Tip="{Binding [LinkHealth.StressTip], Source={x:Static svc:Localizer.Instance}}" />
+                    <Button Classes="act" Command="{Binding RestartStreamerCommand}"
+                            Content="{Binding [LinkHealth.Fix.Restart], Source={x:Static svc:Localizer.Instance}}"
+                            ToolTip.Tip="{Binding [LinkHealth.Fix.RestartTip], Source={x:Static svc:Localizer.Instance}}" />
+                    <Button Classes="act" Command="{Binding SetSlowLinkCommand}"
+                            Content="{Binding [LinkHealth.Fix.Slow], Source={x:Static svc:Localizer.Instance}}"
+                            ToolTip.Tip="{Binding [LinkHealth.Fix.SlowTip], Source={x:Static svc:Localizer.Instance}}" />
+                    <Button Classes="act" Command="{Binding SetAutoLinkCommand}"
+                            Content="{Binding [LinkHealth.Fix.Auto], Source={x:Static svc:Localizer.Instance}}" />
+                  </WrapPanel>
+                  <TextBlock Classes="muted" Text="{Binding ActionText}" />
+
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

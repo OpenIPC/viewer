@@ -65,6 +65,14 @@ Built with .NET 9 / 10 and Avalonia 12.
   snapshots over SSH.
 - **Health & status** — unified per-camera verdict (online / attention /
   offline) across grid, library and a Health Center overview.
+- **Connection health** — per-camera connection, drop and failed-attempt
+  counters that survive restarts; a link check (ping with small and full-size
+  frames, this computer's adapter, and over SSH the camera's link speed, CRC
+  errors, link drops, uptime and RTSP sessions) and a test under load; an
+  automatic check after 3 failed attempts and again on recovery, which tells a
+  power loss from a data-link fault; which cameras drop together (shared
+  segment vs. one branch); and this computer's routes — where each camera's
+  packets go vs. which adapter it answers on, with a generated fix script.
 - **Notifications** — system notifications for motion and detections, with
   quiet hours.
 - **Desktop niceties** — tray icon with quick actions, optional

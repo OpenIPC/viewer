@@ -101,6 +101,26 @@ loopback. Anything else has to be reached from the desktop app instead.
 
 ## Cross-platform
 
+**A camera is plugged in but unreachable, and restarting the computer
+sometimes fixes it — sometimes breaks it.** Usually two adapters of the
+computer share the cameras' subnet: Wi-Fi from the home router and the
+camera Ethernet port both on `192.168.1.x`. The OS sends the whole subnet out
+of the adapter with the better metric, so a camera on the cable is looked for
+on Wi-Fi; which adapter wins can change after a reboot. Open **Health →
+Routes of this computer**: it asks every adapter where each camera answers
+(ARP and the stream port) and shows where its packets actually go. When they
+go the wrong way, the card prepares a fix script that pins each camera's
+address to its adapter (one `/32` route per camera). On Windows *Run the fix
+as administrator* runs it after a UAC prompt; it can also be saved and run by
+hand (`-WhatIf` to preview, `-Undo` to remove the routes). The cleaner
+long-term fix is giving the cameras a subnet of their own.
+
+**Health page: "the camera rebooted during the last outage".** The camera's
+uptime is shorter than the time since it dropped, so it lost power — typically
+a PoE injector or splitter that can't feed every camera (IR lights at night
+draw more) or voltage drop on a long cable. Camera-side counters (uptime, CRC
+errors, link drops) need an SSH login for the camera.
+
 **Every camera shows offline, but the video plays.** Fixed in `v0.3.10`: the
 status probe used an IPv6 socket that failed on IPv4 cameras when IPv6 was
 disabled or dropped by a VPN. Update.

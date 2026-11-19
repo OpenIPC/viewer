@@ -41,6 +41,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     public EventsPageViewModel Events { get; }
     public AnalyticsPageViewModel Analytics { get; }
     public SettingsPageViewModel Settings { get; }
+    public NetworkHealthPageViewModel Health { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLiveSelected))]
@@ -49,6 +50,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     [NotifyPropertyChangedFor(nameof(IsEventsSelected))]
     [NotifyPropertyChangedFor(nameof(IsAnalyticsSelected))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSelected))]
+    [NotifyPropertyChangedFor(nameof(IsHealthSelected))]
     private ViewModelBase _currentPage;
 
     // Orientation-driven fullscreen (mobile only). MainView reports whether
@@ -74,6 +76,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
     public bool IsEventsSelected => CurrentPage is EventsPageViewModel;
     public bool IsAnalyticsSelected => CurrentPage is AnalyticsPageViewModel;
     public bool IsSettingsSelected => CurrentPage is SettingsPageViewModel;
+    public bool IsHealthSelected => CurrentPage is NetworkHealthPageViewModel;
 
     public MainWindowViewModel(
         GridPageViewModel live,
@@ -82,6 +85,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         EventsPageViewModel events,
         AnalyticsPageViewModel analytics,
         SettingsPageViewModel settings,
+        NetworkHealthPageViewModel health,
         CameraDirectoryService directory,
         SingleCameraPageFactory singleCameraFactory,
         RecordingPlayerPageFactory playerFactory,
@@ -94,6 +98,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
         Events = events;
         Analytics = analytics;
         Settings = settings;
+        Health = health;
         _directory = directory;
         _singleCameraFactory = singleCameraFactory;
         _playerFactory = playerFactory;
@@ -258,6 +263,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase,
             "events" => Events,
             "analytics" => Analytics,
             "settings" => Settings,
+            "health" => Health,
             _ => CurrentPage,
         };
     }
