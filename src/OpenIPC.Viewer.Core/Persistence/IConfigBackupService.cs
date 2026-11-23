@@ -20,8 +20,9 @@ public interface IConfigBackupService
     Task<ConfigImportPreview> PreviewAsync(string json, CancellationToken ct);
 
     // Applies the import (upsert cameras by id, append layouts) and returns the
-    // same counts.
-    Task<ConfigImportPreview> ImportAsync(string json, CancellationToken ct);
+    // same counts. credentialPassphrase != null decrypts EncCreds into the local
+    // secrets store (camera logins and SSH logins). null leaves passwords untouched.
+    Task<ConfigImportPreview> ImportAsync(string json, CancellationToken ct, string? credentialPassphrase = null);
 
     // Authoritative sync for managed-fleet network auto-update (Phase 20): the
     // file is the source of truth. Cameras in the file are upserted by id,

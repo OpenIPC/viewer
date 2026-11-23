@@ -77,7 +77,12 @@ public sealed partial class SshTerminalContent : UserControl
 
         // The soft keyboard is dismissed with the system Back gesture and nothing on screen
         // obviously brings it back — a tap on the terminal does, but only if you think to try.
-        this.FindControl<Button>("KeyShowKeyboard")!.Click += (_, _) => FocusInput();
+        this.FindControl<Button>("KeyShowKeyboard")!.Click += (_, _) =>
+        {
+            FocusInput();
+            // On a TV the system keyboard never opens for this programmatic focus.
+            if (_proxy is not null) TvOnScreenKeyboard.ShowRequested(_proxy);
+        };
 
         _ctrlKey = this.FindControl<ToggleButton>("KeyCtrl");
         WireKey("KeyEsc", () => "\x1b");

@@ -96,8 +96,11 @@
     </Grid.ColumnDefinitions>
 
     <!-- ===== Master / list pane (column 0) ===== -->
+    <!-- Focusable=False: a ScrollViewer is focusable by default, and on a TV the
+         D-pad's Right lands on it instead of the controls inside. -->
     <ScrollViewer Grid.Column="0"
                   IsVisible="{Binding ShowList}"
+                  Focusable="False"
                   HorizontalScrollBarVisibility="Disabled">
       <!-- ALL inset lives on the content, never on ScrollViewer.Padding: the
            padding is deducted from the viewport but never added to the extent,
@@ -110,7 +113,7 @@
                    Foreground="{StaticResource TextPrimaryBrush}"
                    Margin="0,0,0,4" />
 
-        <ListBox Classes="sections"
+        <ListBox x:Name="SectionList" Classes="sections"
                  SelectedIndex="{Binding SelectedSectionIndex, Mode=TwoWay}">
           <ListBoxItem>
             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -158,6 +161,19 @@
                     Margin="0,0,12,0" />
               <TextBlock Grid.Column="1"
                          Text="{Binding [Settings.Discovery], Source={x:Static svc:Localizer.Instance}}"
+                         VerticalAlignment="Center" />
+              <Path Grid.Column="2" Classes="lucide tile-chevron"
+                    Data="{StaticResource IconChevronRight}"
+                    IsVisible="{Binding !IsWide}" />
+            </Grid>
+          </ListBoxItem>
+          <ListBoxItem>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Path Grid.Column="0" Classes="lucide tile-icon"
+                    Data="{StaticResource IconCamera}"
+                    Margin="0,0,12,0" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding [Settings.Cameras], Source={x:Static svc:Localizer.Instance}}"
                          VerticalAlignment="Center" />
               <Path Grid.Column="2" Classes="lucide tile-chevron"
                     Data="{StaticResource IconChevronRight}"
@@ -221,8 +237,9 @@
     </ScrollViewer>
 
     <!-- ===== Detail pane (column 1) ===== -->
-    <ScrollViewer Grid.Column="1"
+    <ScrollViewer x:Name="DetailScroller" Grid.Column="1"
                   IsVisible="{Binding ShowDetail}"
+                  Focusable="False"
                   HorizontalScrollBarVisibility="Disabled">
       <!-- See the master pane above: every inset goes on the content, or combo
            boxes and wrapped paragraphs run past the right edge on a phone. -->
@@ -406,6 +423,43 @@
           <CheckBox IsChecked="{Binding AutoScanLanOnStartup}"
                     Content="{Binding [Settings.Discovery.AutoScan], Source={x:Static svc:Localizer.Instance}}"
                     Foreground="{StaticResource TextPrimaryBrush}" />
+        </StackPanel>
+
+        <!-- Copy cameras from another Viewer on the LAN -->
+        <StackPanel IsVisible="{Binding IsCameras}" Spacing="16">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Path Classes="lucide section-icon" Data="{StaticResource IconCamera}" />
+            <TextBlock Classes="section-title"
+                       Text="{Binding [Settings.Cameras], Source={x:Static svc:Localizer.Instance}}" />
+          </StackPanel>
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     TextWrapping="Wrap"
+                     Text="{Binding [Settings.Transfer.Description], Source={x:Static svc:Localizer.Instance}}" />
+          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+            <Button Classes="outlined"
+                    Content="{Binding ShareButtonText}"
+                    Command="{Binding ShareCamerasCommand}" />
+            <Button Classes="outlined"
+                    Content="{Binding [Settings.Transfer.Find], Source={x:Static svc:Localizer.Instance}}"
+                    Command="{Binding FindTransferHostsCommand}" />
+          </WrapPanel>
+          <ItemsControl ItemsSource="{Binding TransferHosts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TransferHostItem">
+                <Button Classes="outlined"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="0,0,0,8"
+                        Content="{Binding Name}"
+                        Command="{Binding PullCommand}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                     FontSize="{StaticResource FontSizeSm}"
+                     TextWrapping="Wrap"
+                     Text="{Binding TransferStatus}"
+                     IsVisible="{Binding TransferStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
 
         <!-- SSH (Phase 13) -->
