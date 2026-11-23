@@ -46,8 +46,9 @@ Built with .NET 9 / 10 and Avalonia 12.
 - **Camera library** — dense list with search by name / IP / group, status
   filters with live counts, a pager, and a per-row menu (edit, device tools,
   files, which layouts the camera is in).
-- **Recording & archive** — segmented MP4 via `-c copy`. Recordings are
-  grouped by day with camera / period / motion-only filters and an activity
+- **Recording & archive** — segmented MP4 (video copied without re-encoding;
+  desktop transcodes audio to AAC so G.711 cameras record cleanly). Recordings
+  are grouped by day with camera / period / motion-only filters and an activity
   calendar. The player has 0.5×–8× speed, frame stepping, sound, fullscreen,
   clip export, save-frame-to-snapshots and auto-continue into the next
   recording, all with keyboard shortcuts.
@@ -81,6 +82,10 @@ Built with .NET 9 / 10 and Avalonia 12.
   light/dark themes with accent colors.
 - **Camera groups**, English / Russian UI (runtime switch), responsive layout
   (sidebar on desktop, bottom tab strip and bottom sheets on phones).
+- **Android TV** — D-pad navigation with a built-in on-screen keyboard for the
+  remote, plus encrypted LAN camera copy from a PC (*Settings → Cameras*) so
+  you don't have to retype camera credentials on the TV. Ships for both 64-bit
+  (`arm64`) and 32-bit (`armeabi-v7a`) Android TV devices.
 - **Web console (self-host)** — run the same binary with `--server-only` for a
   browser UI to your cameras over the LAN: live grid with saved layouts, PTZ,
   network discovery, camera management, config backup, and accounts with
