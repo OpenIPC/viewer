@@ -18,8 +18,18 @@ internal static class RuntimeIds
         if (OperatingSystem.IsWindows())
             return ("win-x64", "ffmpeg.exe");
         if (OperatingSystem.IsAndroid())
-            return (RuntimeInformation.OSArchitecture == Architecture.Arm64
-                ? "android-arm64" : "android-x64", "ffmpeg");
+        {
+            // 32-bit Android TV (armeabi-v7a) is Architecture.Arm. Treating
+            // every non-arm64 device as android-x64 made the loader look for
+            // the emulator libs on those sets.
+            var rid = RuntimeInformation.OSArchitecture switch
+            {
+                Architecture.Arm64 => "android-arm64",
+                Architecture.Arm => "android-arm",
+                _ => "android-x64",
+            };
+            return (rid, "ffmpeg");
+        }
         if (OperatingSystem.IsMacOS())
             return (RuntimeInformation.OSArchitecture == Architecture.Arm64
                 ? "osx-arm64" : "osx-x64", "ffmpeg");

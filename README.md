@@ -119,6 +119,7 @@ installer is required for the beta — download, extract, run:
 | Linux x64 | `openipc-viewer-linux-x64.tar.gz` | extract, `chmod +x`, run `./OpenIPC.Viewer.Desktop` |
 | macOS arm64 | `openipc-viewer-osx-arm64.tar.gz` | extract, right-click the app → *Open* (Gatekeeper blocks unsigned builds on first launch) |
 | Android arm64 | `org.openipc.viewer-Signed.apk` | sideload on Android 12+ (not on Google Play yet) |
+| Android armeabi-v7a | `org.openipc.viewer-arm-Signed.apk` | 32-bit Android TV and boxes (many TCL Google TVs). Phones want the arm64 one |
 | Android x64 | `org.openipc.viewer-x64-Signed.apk` | the same for emulators and x86-64 Android devices — phones want the arm64 one |
 
 Each build is self-contained (bundles the .NET runtime), so there's nothing
@@ -205,7 +206,7 @@ dotnet workload install android
 dotnet build src/OpenIPC.Viewer.Android/OpenIPC.Viewer.Android.csproj -c Release
 ```
 
-CI cross-compiles FFmpeg `n7.1` for `android-arm64` via NDK r27c on every
+CI cross-compiles FFmpeg `n7.1` for `android-arm`, `android-arm64` and `android-x64` via NDK r27c on every
 build (cached when version/script unchanged). Recording uses in-process
 libavformat + a foreground service (`foregroundServiceType=dataSync`) and
 needs `POST_NOTIFICATIONS` on Android 13+, prompted on first record.

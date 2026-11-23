@@ -30,11 +30,12 @@
          individually, which sidesteps the broken store. The CI build now also
          hard-verifies APK integrity (unzip -t) so a corrupt APK can't ship again. -->
     <AndroidUseAssemblyStore>false</AndroidUseAssemblyStore>
-    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>android-arm;android-arm64;android-x64</RuntimeIdentifiers>
     <!--
       FFmpeg native libs are produced by tools/build-ffmpeg-android.sh from
-      upstream git.ffmpeg.org (tag n7.1), cross-compiled for arm64-v8a and
-      x86_64 via the Android NDK and dropped into runtimes/android-*/native/.
+      upstream git.ffmpeg.org (tag n7.1), cross-compiled for arm64-v8a,
+      armeabi-v7a and x86_64 via the Android NDK and dropped into
+      runtimes/android-*/native/.
       The AndroidNativeLibrary ItemGroup at the bottom of this file pulls
       them in. AOT will be added in a later polish phase.
 
@@ -100,15 +101,18 @@
   </ItemGroup>
 
   <!--
-    FFmpeg natives for android-arm64 + android-x64. Built by
+    FFmpeg natives for android-arm, android-arm64 and android-x64. Built by
     tools/build-ffmpeg-android.sh (cross-compile from upstream git.ffmpeg.org,
     pinned to n7.1 matching FFmpeg.AutoGen 7.1.1). The Condition guards against
     contributors without local NDK builds — empty directory means the APK
     ships without FFmpeg natives and video playback throws
     FfmpegNativeLibsMissingException at runtime, but the build still succeeds.
-    CI cache hits the same paths; misses run the build script for both ABIs.
+    CI cache hits the same paths; misses run the build script for all three ABIs.
   -->
   <ItemGroup>
+    <AndroidNativeLibrary Include="..\..\runtimes\android-arm\native\*.so"
+                          Abi="armeabi-v7a"
+                          Condition="Exists('..\..\runtimes\android-arm\native')" />
     <AndroidNativeLibrary Include="..\..\runtimes\android-arm64\native\*.so"
                           Abi="arm64-v8a"
                           Condition="Exists('..\..\runtimes\android-arm64\native')" />

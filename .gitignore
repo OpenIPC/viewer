@@ -45,6 +45,7 @@ runtimes/win-x64/native/
 runtimes/linux-x64/native/
 runtimes/osx-x64/native/
 runtimes/osx-arm64/native/
+runtimes/android-arm/native/
 runtimes/android-arm64/native/
 runtimes/android-x64/native/
 # FFmpeg cross-compile scratch tree (build-ffmpeg-android.sh output)
